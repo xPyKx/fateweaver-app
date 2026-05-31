@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   Settings,
@@ -725,12 +726,12 @@ function CardViewer({ items, index, onIndex, onClose }) {
   const imageUrl = item.fateAbility?.cardImageUrl || item.imageUrl;
   const previous = () => onIndex((index - 1 + items.length) % items.length);
   const next = () => onIndex((index + 1) % items.length);
-  return (
-    <div className="fixed inset-0 z-[9999] grid bg-black p-4">
-      <button onClick={onClose} className="absolute right-4 top-4 z-10 grid h-11 w-11 place-items-center border border-[#a8752a]/55 bg-black text-[#f4ead7]" title="Schließen"><X className="h-5 w-5" /></button>
-      <button onClick={previous} className="absolute left-4 top-1/2 z-10 grid h-12 w-12 -translate-y-1/2 place-items-center border border-[#a8752a]/55 bg-black text-[#ffd88c]" title="Vorherige Karte"><ChevronLeft className="h-6 w-6" /></button>
-      <button onClick={next} className="absolute right-4 top-1/2 z-10 grid h-12 w-12 -translate-y-1/2 place-items-center border border-[#a8752a]/55 bg-black text-[#ffd88c]" title="Nächste Karte"><ChevronRight className="h-6 w-6" /></button>
-      <div className="relative z-[1] mx-auto grid h-full w-full max-w-5xl grid-rows-[1fr_auto] gap-4 bg-black">
+  const viewer = (
+    <div className="fixed inset-0 z-[2147483647] isolate grid bg-black/96 p-4">
+      <button onClick={onClose} className="absolute right-4 top-4 z-30 grid h-11 w-11 place-items-center border border-[#a8752a]/55 bg-black text-[#f4ead7]" title="Schließen"><X className="h-5 w-5" /></button>
+      <button onClick={previous} className="absolute left-4 top-1/2 z-30 grid h-12 w-12 -translate-y-1/2 place-items-center border border-[#a8752a]/55 bg-black text-[#ffd88c]" title="Vorherige Karte"><ChevronLeft className="h-6 w-6" /></button>
+      <button onClick={next} className="absolute right-4 top-1/2 z-30 grid h-12 w-12 -translate-y-1/2 place-items-center border border-[#a8752a]/55 bg-black text-[#ffd88c]" title="Nächste Karte"><ChevronRight className="h-6 w-6" /></button>
+      <div className="relative z-20 mx-auto grid h-full w-full max-w-5xl grid-rows-[1fr_auto] gap-4 bg-black">
         <div className="grid min-h-0 place-items-center">
           <div className="grid max-h-full max-w-full place-items-center bg-black shadow-[0_0_80px_rgba(0,0,0,1)]">
             {imageUrl ? <img src={imageUrl} alt="" className="max-h-[calc(100vh-150px)] max-w-full object-contain" /> : <div className="border border-[#a8752a]/45 p-10 text-[#cfc2aa]">{item.name}</div>}
@@ -749,6 +750,7 @@ function CardViewer({ items, index, onIndex, onClose }) {
       </div>
     </div>
   );
+  return createPortal(viewer, document.body);
 }
 
 const MAX_OWNED_WEAPONS = 5;

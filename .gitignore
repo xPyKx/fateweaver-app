@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.vercel/
+.codex_prompt*/
+.codex_*.log
+*.tsbuildinfo
+~$*
+*.docx
+Bilder/

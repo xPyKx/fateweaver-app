@@ -1,0 +1,497 @@
+import { CircleDot, Info, Save, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Field } from "../../components/Field";
+import type { AttributeKey, BackgroundQuestionKind, CatalogItem, CatalogType, FateAbilityKind, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget } from "../../types/domain";
+import { ImageInput, MagicItemKindField, RarityField, Select, SignedNumberField } from "./GMControls";
+import {
+  attributes,
+  backgroundQuestionKinds,
+  catalogTypes,
+  defaultsForMagicKind,
+  effectTargets,
+  fateAbilityKinds,
+  gameOptionKinds,
+  labelForFateAbilityKind,
+  labelForGameOptionKind,
+  labelForType,
+  normalizeWeapon,
+  optionIcon,
+  optionPair,
+  optionsByKind,
+  optionText,
+  splitList,
+  supportsProperties,
+  supportsRarity
+} from "./gmCatalogMeta";
+
+export function EntryRow({ item, active, hint, onSelect, onInfo, onDelete }: { item: CatalogItem; active: boolean; hint?: InfoHint; onSelect: () => void; onInfo: () => void; onDelete: () => void }) {
+  return (
+    <div className={`grid grid-cols-[1fr_auto_auto] items-center gap-2 border p-2 ${active ? "border-[#d6a14d]/70 bg-[#d6a14d]/12" : "border-[#a8752a]/25 bg-black/25"}`}>
+      <button onClick={onSelect} className="min-w-0 text-left text-[#f4ead7]">
+        <div className="truncate font-semibold">{item.name}</div>
+        <div className="truncate text-xs text-[#8c8170]">{item.description || "Keine Beschreibung"}</div>
+      </button>
+      <button onClick={onInfo} className={`grid h-9 w-9 place-items-center border ${hint ? "border-[#d6a14d]/60 text-[#ffd88c]" : "border-[#a8752a]/35 text-[#8c8170]"}`} title="Info-Hinweis">
+        <Info className="h-4 w-4" />
+      </button>
+      <button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-400/45 text-red-200" title="Eintrag loeschen">
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+export function Editor({ item, properties, gameOptions, savePatch, onSaved }: { item: CatalogItem; properties: CatalogItem[]; gameOptions: CatalogItem[]; savePatch: (patch: Partial<CatalogItem>) => void; onSaved: () => void }) {
+  return (
+    <div className="grid gap-4">
+      <div className="border-b border-[#a8752a]/30 pb-3">
+        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">{labelForType(item.type)}</div>
+        <h2 className="text-2xl font-light text-white">{item.name}</h2>
+      </div>
+      <Field label="Name" value={item.name} onChange={(name) => savePatch({ name })} />
+      <TextArea label="Beschreibung" value={item.description} onChange={(description) => savePatch({ description })} />
+      <ImageInput label="Bild" value={item.imageUrl ?? ""} onChange={(imageUrl) => savePatch({ imageUrl })} />
+      {supportsRarity(item.type) && <RarityField value={item.rarity ?? "common"} onChange={(rarity) => savePatch({ rarity })} />}
+      {item.type === "magicItem" && <MagicItemKindField value={item.magicItemKind ?? "item"} onChange={(magicItemKind) => savePatch({ magicItemKind, ...defaultsForMagicKind(magicItemKind) })} />}
+
+      {(item.type === "weapon" || (item.type === "magicItem" && item.magicItemKind === "weapon")) && <WeaponFields item={item} gameOptions={gameOptions} properties={properties} savePatch={savePatch} />}
+      {(item.type === "armor" || (item.type === "magicItem" && item.magicItemKind === "armor")) && <ArmorFields item={item} savePatch={savePatch} />}
+      {item.type === "range" && <RangeFields item={item} savePatch={savePatch} />}
+      {item.type === "gameOption" && <GameOptionFields item={item} savePatch={savePatch} />}
+      {item.type === "property" && <PropertyEffectEditor item={item} savePatch={savePatch} />}
+      {item.type === "sheetTab" && <SheetTabFields item={item} savePatch={savePatch} />}
+      {item.type === "fate" && <FateFields item={item} gameOptions={gameOptions} savePatch={savePatch} />}
+      {item.type === "fateAbility" && <FateAbilityFields item={item} savePatch={savePatch} />}
+      {item.type === "fateCard" && <TagFields item={item} savePatch={savePatch} />}
+      {item.type === "restOption" && <RestFields item={item} savePatch={savePatch} />}
+      {item.type === "backgroundQuestion" && <BackgroundQuestionFields item={item} savePatch={savePatch} />}
+
+      {supportsProperties(item.type) && (
+        <>
+          <PropertyPicker item={item} properties={properties} savePatch={savePatch} />
+          <TextArea label="Eigenschaft Freitext" value={item.propertyText ?? ""} onChange={(propertyText) => savePatch({ propertyText })} />
+          <label className="flex items-center gap-3 border border-[#a8752a]/35 bg-black/25 p-3 text-[#cfc2aa]">
+            <input type="checkbox" checked={item.attunementRequired ?? false} onChange={(event) => savePatch({ attunementRequired: event.target.checked })} />
+            <CircleDot className="h-4 w-4 text-[#f2ca75]" />
+            Einstimmung erforderlich
+          </label>
+        </>
+      )}
+
+      <button type="button" onClick={onSaved} className="inline-flex h-11 items-center justify-center gap-2 border border-[#a8752a]/35 bg-black/30 px-4 text-sm font-bold uppercase tracking-wide text-[#cfc2aa]">
+        <Save size={18} /> Automatisch gespeichert
+      </button>
+    </div>
+  );
+}
+
+function PropertyEffectEditor({ item, savePatch }: SpecificEditorProps) {
+  const effects = item.propertyEffects ?? [];
+
+  function updateEffect(effect: PropertyEffect) {
+    savePatch({ propertyEffects: effects.map((entry) => (entry.id === effect.id ? effect : entry)) });
+  }
+
+  function addEffect() {
+    savePatch({
+      propertyEffects: [
+        ...effects,
+        { id: crypto.randomUUID(), target: "dodge", value: 0 }
+      ]
+    });
+  }
+
+  return (
+    <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-black uppercase tracking-[0.16em] text-[#f2ca75]">Werteffekte</div>
+        <button type="button" onClick={addEffect} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Effekt +</button>
+      </div>
+      {effects.map((effect) => (
+        <div key={effect.id} className="grid gap-2">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_130px_minmax(0,1fr)_auto]">
+            <Select
+              label="Ziel"
+              value={effect.target}
+              onChange={(target) => updateEffect({ ...effect, target: target as PropertyEffectTarget })}
+              options={effectTargets.map((target) => [target.key, target.label])}
+            />
+            <SignedNumberField label="Wert" value={effect.value} onChange={(value) => updateEffect({ ...effect, value })} />
+            <Field label="Notiz optional" value={effect.condition ?? ""} onChange={(condition) => updateEffect({ ...effect, condition })} />
+            <button
+              type="button"
+              onClick={() => savePatch({ propertyEffects: effects.filter((entry) => entry.id !== effect.id) })}
+              className="self-end border border-red-400/45 px-3 py-3 text-red-200"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+          {(item.name.toLowerCase().includes("vielseitig") || effect.attributeOptions?.length) && (
+            <div className="grid gap-2 md:grid-cols-2">
+              {[0, 1].map((index) => (
+                <Select
+                  key={index}
+                  label={`Vielseitig Attribut ${index + 1}`}
+                  value={effect.attributeOptions?.[index] ?? ""}
+                  onChange={(attribute) => {
+                    const next = [...(effect.attributeOptions ?? [])];
+                    next[index] = attribute as AttributeKey;
+                    updateEffect({ ...effect, attributeOptions: next.filter(Boolean) });
+                  }}
+                  options={[["", "Attribut waehlen"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+      {!effects.length && <div className="text-sm text-[#8c8170]">Keine Werteffekte. Die Beschreibung bleibt trotzdem als Regeltext nutzbar.</div>}
+      <div className="text-xs leading-relaxed text-[#8c8170]">Notiz optional ist nur erklaerender Text, z. B. "nur bei Einstimmung" oder "bis zur Rast". Automatisch berechnet wird ueber Ziel und Wert.</div>
+    </div>
+  );
+}
+
+export function FateAbilityKindColumn({ activeKind, abilities, onSelect }: { activeKind: FateAbilityKind; abilities: CatalogItem[]; onSelect: (kind: FateAbilityKind) => void }) {
+  return (
+    <aside className="border border-[#a8752a]/35 bg-black/24 p-4">
+      <div className="mb-3">
+        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Faehigkeitsarten</div>
+        <h2 className="text-xl font-light text-white">Fate-Inhalte</h2>
+      </div>
+      <div className="grid gap-2">
+        {fateAbilityKinds.map((kind) => (
+          <button key={kind.key} onClick={() => onSelect(kind.key)} className={`flex items-center justify-between border px-3 py-3 text-left text-sm ${activeKind === kind.key ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}>
+            <span>{kind.label}</span>
+            <span className="text-xs text-[#8c8170]">{abilities.filter((item) => item.fateAbility?.kind === kind.key).length}</span>
+          </button>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+export function FateAbilityColumn({ fate, kind, abilities, activeId, deleteCatalogItem, selectAbility }: { fate: CatalogItem; kind: FateAbilityKind; abilities: CatalogItem[]; activeId?: string; deleteCatalogItem: (id: string) => void; selectAbility: (id: string) => void }) {
+  return (
+    <aside className="border border-[#a8752a]/35 bg-black/24 p-4">
+      <div className="mb-3">
+        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">{labelForFateAbilityKind(kind)}</div>
+        <h2 className="text-xl font-light text-white">{fate.name}</h2>
+        <p className="mt-1 text-xs text-[#8c8170]">Ueber "+ Neuer Eintrag" oben wird hier eine Faehigkeit angelegt.</p>
+      </div>
+      <div className="mt-4 grid gap-2">
+        {abilities.map((ability) => (
+          <div key={ability.id} className={`grid grid-cols-[1fr_auto] gap-2 border p-2 ${activeId === ability.id ? "border-[#d6a14d]/70 bg-[#d6a14d]/12" : "border-[#a8752a]/25 bg-black/25"}`}>
+            <button onClick={() => selectAbility(ability.id)} className="min-w-0 text-left">
+              <div className="truncate text-sm font-semibold text-white">{ability.name}</div>
+              <div className="truncate text-xs text-[#8c8170]">{labelForFateAbilityKind(ability.fateAbility?.kind)}</div>
+            </button>
+            <button onClick={() => deleteCatalogItem(ability.id)} className="grid h-8 w-8 place-items-center border border-red-400/45 text-red-200">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+        {!abilities.length && <div className="border border-dashed border-[#a8752a]/30 p-4 text-sm text-[#8c8170]">Keine Eintraege in dieser Faehigkeitsart.</div>}
+      </div>
+    </aside>
+  );
+}
+
+function WeaponFields({ item, gameOptions, properties, savePatch }: SpecificEditorProps & { gameOptions: CatalogItem[]; properties: CatalogItem[] }) {
+  const weapon = normalizeWeapon(item);
+  const ranges = optionsByKind(gameOptions, "range");
+  const damageDice = optionsByKind(gameOptions, "damageDie");
+  const damageTypes = optionsByKind(gameOptions, "damageType");
+  const hands = optionsByKind(gameOptions, "weaponHand");
+  const hasVersatile = properties
+    .filter((property) => (item.propertyIds ?? []).includes(property.id))
+    .some((property) => property.name.toLowerCase().includes("vielseitig"));
+  function selectRange(rangeId: string) {
+    const range = gameOptions.find((entry) => entry.id === rangeId);
+    savePatch({
+      weapon: {
+        ...weapon,
+        rangeId,
+        range: optionText(range),
+        rangeIconUrl: optionIcon(range)
+      }
+    });
+  }
+
+  function selectSecondaryRange(secondaryRangeId: string) {
+    const range = gameOptions.find((entry) => entry.id === secondaryRangeId);
+    savePatch({
+      weapon: {
+        ...weapon,
+        secondaryRangeId,
+        secondaryRange: optionText(range),
+        secondaryRangeIconUrl: optionIcon(range)
+      }
+    });
+  }
+
+  function selectDamageDie(damageDieId: string) {
+    const die = gameOptions.find((entry) => entry.id === damageDieId);
+    savePatch({ weapon: { ...weapon, damageDieId, damageDie: optionText(die), damageDieIconUrl: optionIcon(die) } });
+  }
+
+  function selectDamageType(damageTypeId: string) {
+    const damageType = gameOptions.find((entry) => entry.id === damageTypeId);
+    savePatch({ weapon: { ...weapon, damageTypeId, damageType: optionText(damageType), damageTypeIconUrl: optionIcon(damageType) } });
+  }
+
+  function selectHand(handId: string) {
+    const handOption = gameOptions.find((entry) => entry.id === handId);
+    const hand = optionText(handOption).toLowerCase().includes("zwei") ? "twoHand" : "oneHand";
+    savePatch({ weapon: { ...weapon, handId, hand: hand as "oneHand" | "twoHand" } });
+  }
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <Select label="Hand" value={weapon.hand} onChange={(hand) => savePatch({ weapon: { ...weapon, hand: hand as "oneHand" | "twoHand" } })} options={[["oneHand", "Einhaendig"], ["twoHand", "Zweihaendig"]]} />
+      <Select label="Slot" value={weapon.slot} onChange={(slot) => savePatch({ weapon: { ...weapon, slot: slot as "primary" | "secondary" } })} options={[["primary", "Primaerwaffe"], ["secondary", "Sekundaerwaffe"]]} />
+      <Select label="Reichweite" value={weapon.rangeId ?? ""} onChange={selectRange} options={[["", "Reichweite waehlen"], ...ranges.map((range) => [range.id, range.name] as [string, string])]} />
+      <Select label="Weitere Reichweite" value={weapon.secondaryRangeId ?? ""} onChange={selectSecondaryRange} options={[["", "Keine zweite Reichweite"], ...ranges.map((range) => [range.id, range.name] as [string, string])]} />
+      <Field label="Angriffsbonus optional" type="number" value={weapon.attackBonus ?? 0} onChange={(value) => savePatch({ weapon: { ...weapon, attackBonus: Number(value) } })} />
+      <Field label="Schadenswuerfel" value={weapon.damageDie ?? weapon.damage ?? ""} onChange={(damageDie) => savePatch({ weapon: { ...weapon, damageDie } })} />
+      <Select label="Waffenhand Icon" value={weapon.handId ?? ""} onChange={selectHand} options={[["", "Hand waehlen"], ...hands.map(optionPair)]} />
+      <Select label="Schadenswuerfel Icon" value={weapon.damageDieId ?? ""} onChange={selectDamageDie} options={[["", "Wuerfel waehlen"], ...damageDice.map(optionPair)]} />
+      <Select label="Schadensart" value={weapon.damageTypeId ?? ""} onChange={selectDamageType} options={[["", "Schadensart waehlen"], ...damageTypes.map(optionPair)]} />
+      <AttributeMultiSelect selected={weapon.damageBonusAttributes ?? []} onChange={(damageBonusAttributes) => savePatch({ weapon: { ...weapon, damageBonusAttributes } })} />
+      {hasVersatile && (
+        <div className="grid gap-2 md:col-span-2 md:grid-cols-2">
+          {[0, 1].map((index) => (
+            <Select
+              key={index}
+              label={`Vielseitig Attribut ${index + 1}`}
+              value={weapon.versatileAttributeOptions?.[index] ?? ""}
+              onChange={(attribute) => {
+                const next = [...(weapon.versatileAttributeOptions ?? [])];
+                next[index] = attribute as AttributeKey;
+                savePatch({ weapon: { ...weapon, versatileAttributeOptions: next.filter(Boolean) } });
+              }}
+              options={[["", "Attribut waehlen"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArmorFields({ item, savePatch }: SpecificEditorProps) {
+  const armor = item.armor ?? { armorValue: 0, baseThresholdLight: 0, baseThresholdHeavy: 0 };
+  return (
+    <div className="grid gap-3 md:grid-cols-3">
+      <Field label="Ruestungswert" type="number" value={armor.armorValue} onChange={(value) => savePatch({ armor: { ...armor, armorValue: Number(value) } })} />
+      <div className="md:col-span-2">
+        <div className="mb-1.5 text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#f2ca75]">Basisgrenzwerte</div>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <input className="min-h-11 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" type="number" value={armor.baseThresholdLight} onChange={(event) => savePatch({ armor: { ...armor, baseThresholdLight: Number(event.target.value) } })} />
+          <span className="text-2xl text-[#8c8170]">/</span>
+          <input className="min-h-11 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" type="number" value={armor.baseThresholdHeavy ?? 0} onChange={(event) => savePatch({ armor: { ...armor, baseThresholdHeavy: Number(event.target.value) } })} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RangeFields({ item, savePatch }: SpecificEditorProps) {
+  const range = item.range ?? { text: item.description };
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <Field label="Reichweiten-Text" value={range.text ?? ""} onChange={(text) => savePatch({ range: { ...range, text } })} />
+      <ImageInput label="Reichweiten-Icon" value={range.iconUrl ?? ""} onChange={(iconUrl) => savePatch({ range: { ...range, iconUrl } })} />
+    </div>
+  );
+}
+
+function GameOptionFields({ item, savePatch }: SpecificEditorProps) {
+  const option = item.gameOption ?? { kind: "range" as const, text: item.description };
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <Select label="Unterkategorie" value={option.kind} onChange={(kind) => savePatch({ gameOption: { ...option, kind: kind as GameOptionKind } })} options={Array.from(new Set([...gameOptionKinds.map((entry) => entry.key), option.kind])).map((kind) => [kind, labelForGameOptionKind(kind)])} />
+      <Field label="Text" value={option.text ?? ""} onChange={(text) => savePatch({ gameOption: { ...option, text } })} />
+      <ImageInput label="Icon" value={option.iconUrl ?? ""} onChange={(iconUrl) => savePatch({ gameOption: { ...option, iconUrl } })} />
+    </div>
+  );
+}
+
+function SheetTabFields({ item, savePatch }: SpecificEditorProps) {
+  const sheetTab = item.sheetTab ?? { contentType: "freeText" as const };
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <Select
+        label="Reiter-Inhalt"
+        value={sheetTab.contentType}
+        onChange={(contentType) => savePatch({ sheetTab: { ...sheetTab, contentType: contentType as "freeText" | "catalogList" } })}
+        options={[["freeText", "Freier Reiter"], ["catalogList", "Katalogliste"]]}
+      />
+      {sheetTab.contentType === "catalogList" && (
+        <Select
+          label="Katalog anzeigen"
+          value={sheetTab.catalogType ?? "equipment"}
+          onChange={(catalogType) => savePatch({ sheetTab: { ...sheetTab, catalogType: catalogType as CatalogType } })}
+          options={catalogTypes.filter((entry) => !["sheetTab", "range"].includes(entry)).map((entry) => [entry, labelForType(entry)] as [string, string])}
+        />
+      )}
+    </div>
+  );
+}
+
+function FateFields({ item, gameOptions, savePatch }: SpecificEditorProps & { gameOptions: CatalogItem[] }) {
+  const fate = item.fate ?? { levelOneCards: [] };
+  const symbols = optionsByKind(gameOptions, "fateSymbol");
+  function selectSymbol(symbolItemId: string) {
+    const symbol = gameOptions.find((entry) => entry.id === symbolItemId);
+    savePatch({ fate: { ...fate, symbolItemId, symbolUrl: optionIcon(symbol) || symbol?.imageUrl || "" } });
+  }
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <Select label="Fatesymbol" value={fate.symbolItemId ?? ""} onChange={selectSymbol} options={[["", "Kein Symbol"], ...symbols.map(optionPair)]} />
+      <ImageInput label="Fatesymbol direkt" value={fate.symbolUrl ?? ""} onChange={(symbolUrl) => savePatch({ fate: { ...fate, symbolUrl } })} />
+      <Select label="Zauberattribut" value={fate.spellAttribute ?? ""} onChange={(spellAttribute) => savePatch({ fate: { ...fate, spellAttribute: spellAttribute as AttributeKey | "" } })} options={[["", "Kein Zauberattribut"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
+      <Field label="Level-1 Fatekarten IDs" value={fate.levelOneCards.join(", ")} onChange={(value) => savePatch({ fate: { ...fate, levelOneCards: splitList(value) } })} />
+    </div>
+  );
+}
+
+function FateAbilityFields({ item, savePatch }: SpecificEditorProps) {
+  const ability = item.fateAbility ?? { fateId: "", kind: "startAbility" as const };
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <Select
+        label="Unterkategorie"
+        value={ability.kind}
+        onChange={(kind) => savePatch({ fateAbility: { ...ability, kind: kind as FateAbilityKind } })}
+        options={fateAbilityKinds.map((kind) => [kind.key, kind.label])}
+      />
+      {ability.kind === "specialization" && <Select label="Spezialisierung" value={ability.specializationTier ?? "lehrling"} onChange={(specializationTier) => savePatch({ fateAbility: { ...ability, specializationTier: specializationTier as "lehrling" | "gelehrter" | "meister" } })} options={[["lehrling", "Lehrling"], ["gelehrter", "Gelehrter"], ["meister", "Meister"]]} />}
+      {ability.kind === "fateCard" && <Select label="Level" value={String(ability.level ?? 1)} onChange={(level) => savePatch({ fateAbility: { ...ability, level: Number(level) } })} options={Array.from({ length: 20 }, (_, index) => [String(index + 1), `Level ${index + 1}`])} />}
+      <label className="flex min-h-11 items-center gap-2 border border-[#a8752a]/30 bg-black/25 px-3 text-sm text-[#cfc2aa]">
+        <input
+          type="checkbox"
+          checked={Boolean(ability.showTitleOnSheet)}
+          onChange={(event) => savePatch({ fateAbility: { ...ability, showTitleOnSheet: event.target.checked } })}
+        />
+        Überschrift im Inventar anzeigen
+      </label>
+      <ImageInput label="Kartenbild" value={ability.cardImageUrl ?? ""} onChange={(cardImageUrl) => savePatch({ fateAbility: { ...ability, cardImageUrl } })} />
+    </div>
+  );
+}
+
+function BackgroundQuestionFields({ item, savePatch }: SpecificEditorProps) {
+  const backgroundQuestion = item.backgroundQuestion ?? { kind: "appearance" as const, question: item.name };
+  return (
+    <div className="grid gap-3">
+      <Select label="Unterkategorie" value={backgroundQuestion.kind} onChange={(kind) => savePatch({ backgroundQuestion: { ...backgroundQuestion, kind: kind as BackgroundQuestionKind } })} options={backgroundQuestionKinds.map((kind) => [kind.key, kind.label])} />
+      <TextArea label="Frage" value={backgroundQuestion.question} onChange={(question) => savePatch({ backgroundQuestion: { ...backgroundQuestion, question }, name: question || item.name })} />
+    </div>
+  );
+}
+
+function TagFields({ item, savePatch }: SpecificEditorProps) {
+  return <Field label="Tags" value={item.tags?.join(", ") ?? ""} onChange={(value) => savePatch({ tags: splitList(value) })} />;
+}
+
+function RestFields({ item, savePatch }: SpecificEditorProps) {
+  const rest = item.rest ?? { restKind: "short" as const, effect: "" };
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <Select label="Rastart" value={rest.restKind} onChange={(restKind) => savePatch({ rest: { ...rest, restKind: restKind as "short" | "long" } })} options={[["short", "Kurze Rast"], ["long", "Lange Rast"]]} />
+      <Field label="Effekt" value={rest.effect} onChange={(effect) => savePatch({ rest: { ...rest, effect } })} />
+    </div>
+  );
+}
+
+function PropertyPicker({ item, properties, savePatch }: { item: CatalogItem; properties: CatalogItem[]; savePatch: (patch: Partial<CatalogItem>) => void }) {
+  const selectedIds = item.propertyIds ?? [];
+  const selected = properties.filter((property) => selectedIds.includes(property.id));
+  return (
+    <div className="grid gap-2">
+      <Select label="Eigenschaft" value="" onChange={(id) => id && savePatch({ propertyIds: Array.from(new Set([...selectedIds, id])) })} options={[["", "Eigenschaft waehlen"], ...properties.map((property) => [property.id, property.name] as [string, string])]} />
+      <div className="flex flex-wrap gap-2">
+        {selected.map((property) => (
+          <button key={property.id} onClick={() => savePatch({ propertyIds: selectedIds.filter((id) => id !== property.id) })} className="border border-[#a8752a]/40 bg-black/30 px-2 py-1 text-sm text-[#ffd88c]">
+            {property.name} x
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AttributeMultiSelect({ selected, onChange }: { selected: AttributeKey[]; onChange: (value: AttributeKey[]) => void }) {
+  return (
+    <div className="grid gap-2">
+      <Select label="Schadensbonus Attribute" value="" onChange={(key) => key && onChange([...selected, key as AttributeKey])} options={[["", "Attribut waehlen"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
+      <div className="flex flex-wrap gap-2">
+        {selected.map((key, index) => (
+          <button key={`${key}-${index}`} onClick={() => onChange(selected.filter((_, entryIndex) => entryIndex !== index))} className="border border-[#a8752a]/40 bg-black/30 px-2 py-1 text-sm text-[#ffd88c]">
+            {attributes.find((attribute) => attribute.key === key)?.label ?? key} x
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function HintDialog({ target, hint, item, itemName, onSave, onPatchItem, onClose }: { target: string; hint?: InfoHint; item?: CatalogItem; itemName: string; onSave: (target: string, title: string, body: string) => void; onPatchItem: (item: CatalogItem) => void; onClose: () => void }) {
+  const [title, setTitle] = useState(hint?.title ?? "");
+  const [body, setBody] = useState(hint?.body ?? "");
+
+  useEffect(() => {
+    setTitle(hint?.title ?? "");
+    setBody(hint?.body ?? "");
+  }, [hint?.title, hint?.body, target]);
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-2xl border border-[#d6a14d]/60 bg-[#0c111b] p-5 shadow-2xl shadow-black/70" onClick={(event) => event.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between border-b border-[#a8752a]/30 pb-3">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Info-Hinweis</div>
+            <h2 className="text-2xl font-light text-white">{itemName}</h2>
+          </div>
+          <button onClick={onClose} className="grid h-10 w-10 place-items-center border border-[#a8752a]/45 text-[#f2ca75]"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="grid gap-4">
+          <Field label="Titel" value={title} onChange={setTitle} />
+          <TextArea label="Text" value={body} onChange={setBody} />
+          {item?.type === "fate" && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <ImageInput
+                label="Fatesymbol"
+                value={item.fate?.symbolUrl ?? ""}
+                onChange={(symbolUrl) => onPatchItem({ ...item, fate: { ...(item.fate ?? { levelOneCards: [] }), symbolUrl } })}
+              />
+              <Select
+                label="Zauberattribut"
+                value={item.fate?.spellAttribute ?? ""}
+                onChange={(spellAttribute) => onPatchItem({ ...item, fate: { ...(item.fate ?? { levelOneCards: [] }), spellAttribute: spellAttribute as AttributeKey | "" } })}
+                options={[["", "Kein Zauberattribut"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]}
+              />
+            </div>
+          )}
+          <button onClick={() => onSave(target, title, body)} className="inline-flex h-11 items-center justify-center gap-2 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 text-sm font-bold uppercase tracking-wide text-[#ffd88c]">
+            <Save size={18} /> Hinweis speichern
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="grid gap-1.5 text-sm text-[#cfc2aa]">
+      <span className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#f2ca75]">{label}</span>
+      <textarea className="min-h-28 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none transition focus:border-[#f2ca75]" value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+interface SpecificEditorProps {
+  item: CatalogItem;
+  savePatch: (patch: Partial<CatalogItem>) => void;
+}

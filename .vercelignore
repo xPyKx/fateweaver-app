@@ -1,0 +1,9 @@
+.codex_prompt*/
+.codex_*.log
+.env
+node_modules/
+dist/
+*.docx
+~$*
+*.tsbuildinfo
+Bilder/

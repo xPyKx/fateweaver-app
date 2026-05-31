@@ -1,0 +1,358 @@
+export type AttributeKey =
+  | "kraft"
+  | "agilitaet"
+  | "konstitution"
+  | "intelligenz"
+  | "willenskraft"
+  | "charisma"
+  | "wahrnehmung"
+  | "geschick";
+
+export type Attributes = Record<AttributeKey, number>;
+
+export type WeaponHand = "oneHand" | "twoHand";
+export type WeaponSlot = "primary" | "secondary";
+export type ItemRarity = "common" | "uncommon" | "epic" | "legendary";
+export type MagicItemKind = "weapon" | "armor" | "item";
+export type CatalogType =
+  | "weapon"
+  | "armor"
+  | "equipment"
+  | "material"
+  | "potion"
+  | "magicItem"
+  | "range"
+  | "gameOption"
+  | "property"
+  | "fate"
+  | "fateAbility"
+  | "fateCard"
+  | "sheetTab"
+  | "backgroundQuestion"
+  | "folk"
+  | "society"
+  | "transmutation"
+  | "levelOption"
+  | "restOption";
+
+export interface BonusSource {
+  id: string;
+  label: string;
+  value: number;
+  description: string;
+}
+
+export type PropertyEffectTarget =
+  | AttributeKey
+  | "dodge"
+  | "armorValue"
+  | "lightThreshold"
+  | "heavyThreshold"
+  | "attackBonus"
+  | "damageBonus"
+  | "damageDice"
+  | "damageDiceMultiplier"
+  | "healingDuringRest";
+
+export interface PropertyEffect {
+  id: string;
+  target: PropertyEffectTarget;
+  value: number;
+  condition?: string;
+  attributeOptions?: AttributeKey[];
+}
+
+export interface WeaponData {
+  hand: WeaponHand;
+  slot: WeaponSlot;
+  handId?: string;
+  rangeId?: string;
+  range?: string;
+  rangeIconUrl?: string;
+  secondaryRangeId?: string;
+  secondaryRange?: string;
+  secondaryRangeIconUrl?: string;
+  damageDieId?: string;
+  damageDieIconUrl?: string;
+  damageTypeId?: string;
+  damageType?: string;
+  damageTypeIconUrl?: string;
+  attackBonus?: number;
+  damageDie?: string;
+  damageBonusAttributes?: AttributeKey[];
+  versatileAttributeOptions?: AttributeKey[];
+  damage?: string;
+  masteryBonus: number;
+}
+
+export interface ArmorData {
+  armorValue: number;
+  dodgeBonus?: number;
+  baseThresholdLight: number;
+  baseThresholdHeavy?: number;
+}
+
+export interface FateData {
+  levelOneCards: string[];
+  symbolUrl?: string;
+  symbolItemId?: string;
+  spellAttribute?: AttributeKey | "";
+}
+
+export type FateAbilityKind =
+  | "startAbility"
+  | "inspirationAbility"
+  | "specialization"
+  | "specializationFeature"
+  | "fateCard";
+export type FateSpecializationTier = "lehrling" | "gelehrter" | "meister";
+export type BackgroundQuestionKind = "appearance" | "background" | "connections";
+
+export interface FateAbilityData {
+  fateId: string;
+  kind: FateAbilityKind;
+  level?: number;
+  showTitleOnSheet?: boolean;
+  specializationTier?: FateSpecializationTier;
+  cardImageUrl?: string;
+  iconUrl?: string;
+  resourceName?: string;
+  resourceAmount?: number;
+  requiresAttributeChoice?: boolean;
+  attributeOptions?: AttributeKey[];
+  markerMax?: number;
+  stressCost?: number;
+}
+
+export interface RestData {
+  restKind: "short" | "long";
+  effect: string;
+}
+
+export interface RangeData {
+  iconUrl?: string;
+  text: string;
+}
+
+export type GameOptionKind = "range" | "damageDie" | "damageType" | "weaponHand" | string;
+
+export interface GameOptionData {
+  kind: GameOptionKind;
+  iconUrl?: string;
+  text: string;
+}
+
+export interface SheetTabData {
+  contentType: "freeText" | "catalogList";
+  catalogType?: CatalogType;
+}
+
+export interface BackgroundQuestionData {
+  kind: BackgroundQuestionKind;
+  question: string;
+}
+
+export interface ExperienceEntry {
+  id: string;
+  text: string;
+  bonus: number;
+}
+
+export type LevelUpOptionKey =
+  | "attributes"
+  | "hp"
+  | "stress"
+  | "experiences"
+  | "evasion"
+  | "fateCard"
+  | "proficiency"
+  | "specialization"
+  | "fateWeaver";
+
+export interface LevelUpChoice {
+  option?: LevelUpOptionKey;
+  attributeIncreases?: AttributeKey[];
+  experienceIncreases?: string[];
+  fateCardId?: string;
+  levelFateCardId?: string;
+  levelSpellBuilder?: boolean;
+  extraFateId?: string;
+  fateWeaverCardId?: string;
+  specializationId?: string;
+}
+
+export interface CatalogItem {
+  id: string;
+  type: CatalogType;
+  name: string;
+  description: string;
+  imageUrl?: string;
+  localImageId?: string;
+  tags?: string[];
+  rarity?: ItemRarity;
+  magicItemKind?: MagicItemKind;
+  propertyIds?: string[];
+  propertyText?: string;
+  propertyEffects?: PropertyEffect[];
+  attunementRequired?: boolean;
+  weapon?: WeaponData;
+  armor?: ArmorData;
+  fate?: FateData;
+  fateAbility?: FateAbilityData;
+  range?: RangeData;
+  gameOption?: GameOptionData;
+  sheetTab?: SheetTabData;
+  rest?: RestData;
+  backgroundQuestion?: BackgroundQuestionData;
+}
+
+export interface CharacterAppearance {
+  kleidung: string;
+  augen: string;
+  figur: string;
+  merkmale: string;
+}
+
+export interface CharacterChoices {
+  mainFateId?: string;
+  sideFateId?: string;
+  attributeVariant?: number[];
+  attributeAssignments?: Record<string, AttributeKey>;
+  selectedWeapons: string[];
+  storedWeaponIds?: string[];
+  weaponAttributeSelections?: Record<string, AttributeKey>;
+  selectedArmorId?: string;
+  selectedPotionId?: string;
+  selectedMagicItemIds?: string[];
+  selectedMaterialIds?: string[];
+  selectedEquipmentIds: string[];
+  selectedEquipmentText?: string[];
+  selectedEquipmentCounts?: Record<string, number>;
+  selectedMaterialCounts?: Record<string, number>;
+  selectedFateCardIds: string[];
+  inventoryCollapsed?: boolean;
+  dismissedShopIds?: string[];
+  levelUps?: Record<string, LevelUpChoice>;
+  folkId?: string;
+  societyId?: string;
+  transmutationId?: string;
+  experiences: Array<string | ExperienceEntry>;
+  backgroundQuestions: Record<string, string>;
+  appearance: CharacterAppearance;
+  connections: string;
+}
+
+export type InventoryTargetType = "magicItem" | "weapon" | "armor" | "equipment" | "potion" | "material";
+export type ShopRequestStatus = "pending" | "confirmed" | "declined" | "withdrawn";
+
+export interface InventoryHistoryEntry {
+  id: string;
+  characterId: string;
+  itemId?: string;
+  itemName: string;
+  itemType: InventoryTargetType;
+  note?: string;
+  shopName?: string;
+  action: "given" | "returned" | "shopConfirmed" | "shopDeclined" | "shopWithdrawn";
+  createdAt: string;
+}
+
+export interface ShopListing {
+  id: string;
+  itemId: string;
+  quantity: number;
+  sold?: boolean;
+  reservedBy?: string[];
+}
+
+export interface ShopVisitRequest {
+  id: string;
+  shopId: string;
+  listingId: string;
+  itemId: string;
+  characterId: string;
+  status: ShopRequestStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GmShop {
+  id: string;
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  interiorDescription?: string;
+  interiorImageUrls?: string[];
+  ownerName?: string;
+  ownerDescription?: string;
+  ownerImageUrls?: string[];
+  releasedTo?: string[];
+  active: boolean;
+  listings: ShopListing[];
+}
+
+export interface GmShopGroup {
+  id: string;
+  name: string;
+  shopIds: string[];
+  releasedTo?: string[];
+}
+
+export interface GmSessionData {
+  shops: GmShop[];
+  shopGroups?: GmShopGroup[];
+  shopRequests: ShopVisitRequest[];
+  inventoryHistory: InventoryHistoryEntry[];
+}
+
+export interface Character {
+  id: string;
+  ownerId?: string;
+  name: string;
+  level: number;
+  portraitUrl?: string;
+  localPortraitId?: string;
+  attributes: Attributes;
+  hpBonus: number;
+  stressBonus: number;
+  dodgeBonuses: BonusSource[];
+  weaponBonuses: Record<string, BonusSource[]>;
+  choices: CharacterChoices;
+  updatedAt: string;
+}
+
+export interface SessionState {
+  id: string;
+  characterId: string;
+  shortRestUsed: boolean;
+  longRestUsed: boolean;
+  updatedAt: string;
+}
+
+export interface InfoHint {
+  id: string;
+  target: string;
+  title: string;
+  body: string;
+}
+
+export interface AppData {
+  characters: Character[];
+  deletedCharacterIds?: string[];
+  activeCharacterId?: string;
+  catalog: CatalogItem[];
+  infoHints: InfoHint[];
+  session: SessionState[];
+  gmSession?: GmSessionData;
+}
+
+export interface UserProfile {
+  userId: string;
+  email: string;
+  isAdmin: boolean;
+  isGm: boolean;
+  isPlayer: boolean;
+  updatedAt: string;
+}
+
+export type ViewKey = "sheet" | "create" | "level" | "rest" | "gm" | "gmSession";

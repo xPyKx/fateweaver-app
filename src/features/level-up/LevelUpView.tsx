@@ -378,7 +378,8 @@ function NewExperienceEditor({ level, character, updateCharacter }: { level: num
 }
 
 function LevelFateCardChoice({ level, character, catalog, choice, patchLevel, upsertCatalogItem }: { level: number; character: Character; catalog: CatalogItem[]; choice: LevelUpChoice; patchLevel: (patch: Partial<LevelUpChoice>) => void; upsertCatalogItem: (item: CatalogItem) => void }) {
-  const [cardsOpen, setCardsOpen] = useState(!choice.levelSpellBuilder);
+  const [cardsOpen, setCardsOpen] = useState(true);
+  const [builderOpen, setBuilderOpen] = useState(Boolean(choice.levelSpellBuilder));
   const spellFates = [character.choices.mainFateId, character.choices.sideFateId]
     .map((id) => catalog.find((item) => item.id === id && item.type === "fate"))
     .filter((item): item is CatalogItem => Boolean(item?.fate?.spellTemplateImageUrl));
@@ -386,20 +387,37 @@ function LevelFateCardChoice({ level, character, catalog, choice, patchLevel, up
     <div className="grid gap-5">
       <PickerShell title="Level-Fatekarte" current={choice.levelFateCardId || choice.levelSpellBuilder ? 1 : 0} total={1}>
         <div className="grid gap-2">
-          <button
-            onClick={() => patchLevel({ levelSpellBuilder: true, levelFateCardId: undefined })}
-            className={`flex items-center justify-between border p-3 text-left ${choice.levelSpellBuilder ? "border-[#d6a14d] bg-[#45208a] text-white" : "border-[#d6a14d]/45 bg-white/80 text-[#111827]"}`}
-          >
-            <span className="font-black uppercase">Zauberbaukasten statt Karte</span>
-            <Wand2 className="h-4 w-4" />
-          </button>
+          <div className="border border-[#d6a14d]/45 bg-white/80 p-3 text-sm text-[#374151]">Waehle zuerst eine Level-Fatekarte aus Haupt- oder Nebenfate. Alternativ kannst du darunter den Zauberbaukasten oeffnen.</div>
           {(choice.levelFateCardId || choice.levelSpellBuilder) && (
             <button onClick={() => patchLevel({ levelFateCardId: undefined, levelSpellBuilder: false })} className="inline-flex w-fit items-center gap-2 border border-red-300 px-3 py-2 text-sm font-bold text-red-700"><RotateCcw className="h-4 w-4" /> Auswahl zurücksetzen</button>
           )}
         </div>
       </PickerShell>
-      {choice.levelSpellBuilder && <SpellBuilderPanel level={level} character={character} fates={spellFates} upsertCatalogItem={upsertCatalogItem} patchLevel={patchLevel} />}
-      {!choice.levelSpellBuilder && <CollapsibleFateCardPicker title="Karte aus Haupt- oder Nebenfate" open={cardsOpen} setOpen={setCardsOpen} level={level} character={character} catalog={catalog} selectedId={choice.levelFateCardId} onSelect={(levelFateCardId) => patchLevel({ levelFateCardId, levelSpellBuilder: false })} includeSelectedId={choice.levelFateCardId} />}
+      <CollapsibleFateCardPicker
+        title="Karte aus Haupt- oder Nebenfate"
+        open={cardsOpen}
+        setOpen={setCardsOpen}
+        level={level}
+        character={character}
+        catalog={catalog}
+        selectedId={!choice.levelSpellBuilder ? choice.levelFateCardId : undefined}
+        onSelect={(levelFateCardId) => {
+          patchLevel({ levelFateCardId, levelSpellBuilder: false });
+          setBuilderOpen(false);
+        }}
+        includeSelectedId={!choice.levelSpellBuilder ? choice.levelFateCardId : undefined}
+      />
+      <div className="grid gap-3 border border-[#d6a14d]/45 bg-white/75 p-3">
+        <button
+          type="button"
+          onClick={() => setBuilderOpen(!builderOpen)}
+          className={`flex items-center justify-between border p-3 text-left ${builderOpen ? "border-[#45208a] bg-[#45208a] text-white" : "border-[#d6a14d]/45 bg-white text-[#111827]"}`}
+        >
+          <span className="font-black uppercase">Alternative: Zauberbaukasten</span>
+          <Wand2 className="h-4 w-4" />
+        </button>
+        {builderOpen && <SpellBuilderPanel level={level} character={character} fates={spellFates} upsertCatalogItem={upsertCatalogItem} patchLevel={patchLevel} />}
+      </div>
     </div>
   );
 }

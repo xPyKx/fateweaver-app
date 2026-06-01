@@ -331,6 +331,12 @@ function MessageRow({ message, character }) {
   return <div className="border border-[#a8752a]/30 bg-black/25 p-3"><div className="flex flex-wrap items-center gap-2"><span className="text-sm font-bold uppercase text-[#f2ca75]">{message.fromRole === "gm" ? "GM" : "Spieler"}</span><span className="text-sm text-[#8c8170]">an {character?.name ?? "Charakter"}</span><span className="ml-auto text-xs text-[#8c8170]">{formatDateTime(message.createdAt)}</span></div><p className="mt-2 whitespace-pre-wrap text-[#cfc2aa]">{message.body}</p><div className="mt-2 text-xs uppercase tracking-wide text-[#8c8170]">{message.status}</div></div>;
 }
 
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "unbekannt";
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(date);
+}
+
 function MessageComposerModal({ title, onSend, onClose }) {
   const [body, setBody] = useState("");
   return <div className="fixed inset-0 z-[260] grid place-items-center bg-black/80 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="grid w-full max-w-xl gap-3 border border-[#a8752a]/60 bg-[#070b12] p-4"><div className="flex items-center justify-between gap-3"><div className="text-xl font-light text-white">{title}</div><button onClick={onClose} className="grid h-9 w-9 place-items-center border border-[#a8752a]/45"><X className="h-4 w-4" /></button></div><textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} className="min-h-36 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none" /><button onClick={() => body.trim() && onSend(body)} disabled={!body.trim()} className="flex min-h-10 items-center justify-center gap-2 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]"><Send className="h-4 w-4" /> Senden</button></div></div>;

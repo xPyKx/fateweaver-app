@@ -1,7 +1,7 @@
 import { CircleDot, Info, Save, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Field } from "../../components/Field";
-import type { AttributeKey, BackgroundQuestionKind, CatalogItem, CatalogType, Character, FateAbilityKind, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget } from "../../types/domain";
+import type { AttributeKey, BackgroundQuestionKind, CatalogItem, CatalogType, Character, FateAbilityCategoryData, FateAbilityCategoryMode, FateAbilityCategoryTrigger, FateAbilityKind, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget } from "../../types/domain";
 import { ImageInput, MagicItemKindField, RarityField, Select, SignedNumberField } from "./GMControls";
 import {
   attributes,
@@ -11,6 +11,7 @@ import {
   effectTargets,
   fateAbilityKinds,
   gameOptionKinds,
+  isDefaultFateAbilityKind,
   labelForFateAbilityKind,
   labelForGameOptionKind,
   labelForType,
@@ -60,7 +61,7 @@ export function Editor({ item, catalog, characters = [], properties, gameOptions
       {item.type === "gameOption" && <GameOptionFields item={item} savePatch={savePatch} />}
       {item.type === "property" && <PropertyEffectEditor item={item} savePatch={savePatch} />}
       {item.type === "sheetTab" && <SheetTabFields item={item} characters={characters} savePatch={savePatch} />}
-      {item.type === "fate" && <FateFields item={item} gameOptions={gameOptions} savePatch={savePatch} />}
+      {item.type === "fate" && <FateFields item={item} catalog={catalog} gameOptions={gameOptions} savePatch={savePatch} />}
       {item.type === "fateAbility" && <FateAbilityFields item={item} catalog={catalog} savePatch={savePatch} />}
       {item.type === "fateCard" && <TagFields item={item} savePatch={savePatch} />}
       {item.type === "restOption" && <RestFields item={item} savePatch={savePatch} />}
@@ -151,7 +152,7 @@ function PropertyEffectEditor({ item, savePatch }: SpecificEditorProps) {
   );
 }
 
-export function FateAbilityKindColumn({ activeKind, abilities, onSelect }: { activeKind: FateAbilityKind; abilities: CatalogItem[]; onSelect: (kind: FateAbilityKind) => void }) {
+export function FateAbilityKindColumn({ activeKind, abilities, categories = [], onSelect, onCreateCategory }: { activeKind: FateAbilityKind; abilities: CatalogItem[]; categories?: FateAbilityCategoryData[]; onSelect: (kind: FateAbilityKind) => void; onCreateCategory?: () => void }) {
   return (
     <aside className="border border-[#a8752a]/35 bg-black/24 p-4">
       <div className="mb-3">
@@ -165,18 +166,28 @@ export function FateAbilityKindColumn({ activeKind, abilities, onSelect }: { act
             <span className="text-xs text-[#8c8170]">{abilities.filter((item) => item.fateAbility?.kind === kind.key).length}</span>
           </button>
         ))}
+        {categories.map((category) => (
+          <button key={category.id} onClick={() => onSelect(category.id)} className={`flex items-center justify-between border px-3 py-3 text-left text-sm ${activeKind === category.id ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}>
+            <span>{category.name}</span>
+            <span className="text-xs text-[#8c8170]">{abilities.filter((item) => item.fateAbility?.kind === category.id || item.fateAbility?.categoryId === category.id).length}</span>
+          </button>
+        ))}
+        <button type="button" onClick={onCreateCategory} className="border border-[#a8752a]/40 bg-black/25 px-3 py-3 text-left text-xs font-bold uppercase text-[#ffd88c]">
+          + Kategorie
+        </button>
       </div>
     </aside>
   );
 }
 
 export function FateAbilityColumn({ fate, kind, abilities, activeId, deleteCatalogItem, selectAbility }: { fate: CatalogItem; kind: FateAbilityKind; abilities: CatalogItem[]; activeId?: string; deleteCatalogItem: (id: string) => void; selectAbility: (id: string) => void }) {
+  const category = fate.fate?.abilityCategories?.find((entry) => entry.id === kind);
   return (
     <aside className="border border-[#a8752a]/35 bg-black/24 p-4">
       <div className="mb-3">
-        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">{labelForFateAbilityKind(kind)}</div>
+        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">{category?.name ?? labelForFateAbilityKind(kind)}</div>
         <h2 className="text-xl font-light text-white">{fate.name}</h2>
-        <p className="mt-1 text-xs text-[#8c8170]">Ueber "+ Neuer Eintrag" oben wird hier eine Faehigkeit angelegt.</p>
+        <p className="mt-1 text-xs text-[#8c8170]">{category ? categorySummary(category) : `Ueber "+ Neuer Eintrag" oben wird hier eine Faehigkeit angelegt.`}</p>
       </div>
       <div className="mt-4 grid gap-2">
         {abilities.map((ability) => (
@@ -356,8 +367,8 @@ function SheetTabFields({ item, characters = [], savePatch }: SpecificEditorProp
   );
 }
 
-function FateFields({ item, gameOptions, savePatch }: SpecificEditorProps & { gameOptions: CatalogItem[] }) {
-  const fate = item.fate ?? { levelOneCards: [] };
+function FateFields({ item, catalog, gameOptions, savePatch }: SpecificEditorProps & { catalog: CatalogItem[]; gameOptions: CatalogItem[] }) {
+  const fate = item.fate ?? { levelOneCards: [], abilityCategories: [] };
   const symbols = optionsByKind(gameOptions, "fateSymbol");
   function selectSymbol(symbolItemId: string) {
     const symbol = gameOptions.find((entry) => entry.id === symbolItemId);
@@ -369,23 +380,91 @@ function FateFields({ item, gameOptions, savePatch }: SpecificEditorProps & { ga
       <ImageInput label="Fatesymbol direkt" value={fate.symbolUrl ?? ""} onChange={(symbolUrl) => savePatch({ fate: { ...fate, symbolUrl } })} />
       <Select label="Zauberattribut" value={fate.spellAttribute ?? ""} onChange={(spellAttribute) => savePatch({ fate: { ...fate, spellAttribute: spellAttribute as AttributeKey | "" } })} options={[["", "Kein Zauberattribut"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
       <Field label="Level-1 Fatekarten IDs" value={fate.levelOneCards.join(", ")} onChange={(value) => savePatch({ fate: { ...fate, levelOneCards: splitList(value) } })} />
+      <FateCategoryEditor item={item} catalog={catalog} savePatch={savePatch} />
+    </div>
+  );
+}
+
+function FateCategoryEditor({ item, catalog, savePatch }: SpecificEditorProps & { catalog: CatalogItem[] }) {
+  const fate = item.fate ?? { levelOneCards: [], abilityCategories: [] };
+  const categories = fate.abilityCategories ?? [];
+  const specializations = catalog
+    .filter((entry) => entry.type === "fateAbility" && entry.fateAbility?.kind === "specialization" && entry.fateAbility.fateId === item.id)
+    .sort(compareSpecializations);
+
+  function patchCategory(categoryId: string, patch: Partial<FateAbilityCategoryData>) {
+    savePatch({ fate: { ...fate, abilityCategories: categories.map((category) => category.id === categoryId ? { ...category, ...patch } : category) } });
+  }
+
+  function addCategory() {
+    const category: FateAbilityCategoryData = {
+      id: `fateCategory-${crypto.randomUUID()}`,
+      name: "Neue Kategorie",
+      mode: "automaticByLevel",
+      trigger: "mainFate",
+      targetTabName: "Neue Kategorie",
+      minLevel: 1,
+      selectionLimit: 1
+    };
+    savePatch({ fate: { ...fate, abilityCategories: [...categories, category] } });
+  }
+
+  function deleteCategory(categoryId: string) {
+    const confirmation = window.prompt("Kategorie wirklich loeschen? Tippe loeschen zur Bestaetigung.");
+    if (confirmation?.trim().toLowerCase() !== "loeschen" && confirmation?.trim().toLowerCase() !== "löschen") return;
+    savePatch({ fate: { ...fate, abilityCategories: categories.filter((category) => category.id !== categoryId) } });
+  }
+
+  return (
+    <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3 md:col-span-2">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-sm font-black uppercase tracking-[0.16em] text-[#f2ca75]">Fate-Inhaltskategorien</div>
+          <div className="text-xs text-[#8c8170]">Sonderkarten, Mechaniken oder automatische Inventar-Reiter fuer diesen Fate.</div>
+        </div>
+        <button type="button" onClick={addCategory} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Kategorie +</button>
+      </div>
+      {categories.map((category) => (
+        <div key={category.id} className="grid gap-3 border border-[#a8752a]/25 bg-black/20 p-3">
+          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+            <Field label="Name" value={category.name} onChange={(name) => patchCategory(category.id, { name, targetTabName: category.targetTabName || name })} />
+            <button type="button" onClick={() => deleteCategory(category.id)} className="self-end border border-red-400/45 px-3 py-3 text-red-200">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="grid gap-2 md:grid-cols-3">
+            <Select label="Typ" value={category.mode} onChange={(mode) => patchCategory(category.id, { mode: mode as FateAbilityCategoryMode })} options={fateCategoryModes} />
+            <Select label="Ausloeser" value={category.trigger} onChange={(trigger) => patchCategory(category.id, { trigger: trigger as FateAbilityCategoryTrigger })} options={fateCategoryTriggers} />
+            <Field label="Ziel-Reiter" value={category.targetTabName ?? category.name} onChange={(targetTabName) => patchCategory(category.id, { targetTabName })} />
+            <Field label="Mindestlevel" type="number" value={category.minLevel ?? 1} onChange={(minLevel) => patchCategory(category.id, { minLevel: Math.max(1, Number(minLevel) || 1) })} />
+            <Field label="Auswahllimit" type="number" value={category.selectionLimit ?? 1} onChange={(selectionLimit) => patchCategory(category.id, { selectionLimit: Math.max(0, Number(selectionLimit) || 0) })} />
+            <Select label="Spezialisierung" value={category.specializationId ?? ""} onChange={(specializationId) => patchCategory(category.id, { specializationId: specializationId || undefined, trigger: specializationId ? "specialization" : category.trigger })} options={[["", "Keine feste Spezialisierung"], ...specializations.map((spec) => [spec.id, `${specializationTierLabel(spec.fateAbility?.specializationTier)} - ${spec.name}`] as [string, string])]} />
+          </div>
+          <div className="text-xs leading-relaxed text-[#8c8170]">{categorySummary(category)}</div>
+        </div>
+      ))}
+      {!categories.length && <div className="text-sm text-[#8c8170]">Noch keine Sonderkategorien fuer diesen Fate.</div>}
     </div>
   );
 }
 
 function FateAbilityFields({ item, catalog, savePatch }: SpecificEditorProps & { catalog: CatalogItem[] }) {
   const ability = item.fateAbility ?? { fateId: "", kind: "startAbility" as const };
+  const fate = catalog.find((entry) => entry.id === ability.fateId && entry.type === "fate");
+  const customCategories = fate?.fate?.abilityCategories ?? [];
   const specializations = catalog
     .filter((entry) => entry.type === "fateAbility" && entry.fateAbility?.kind === "specialization" && entry.fateAbility.fateId === ability.fateId)
     .sort(compareSpecializations);
+  const category = customCategories.find((entry) => entry.id === (ability.categoryId ?? ability.kind));
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <Select
         label="Unterkategorie"
         value={ability.kind}
-        onChange={(kind) => savePatch({ fateAbility: { ...ability, kind: kind as FateAbilityKind } })}
-        options={fateAbilityKinds.map((kind) => [kind.key, kind.label])}
+        onChange={(kind) => savePatch({ fateAbility: { ...ability, kind: kind as FateAbilityKind, categoryId: isDefaultFateAbilityKind(kind) ? undefined : kind } })}
+        options={[...fateAbilityKinds.map((kind) => [kind.key, kind.label] as [string, string]), ...customCategories.map((category) => [category.id, category.name] as [string, string])]}
       />
+      {!isDefaultFateAbilityKind(ability.kind) && <div className="self-end border border-[#a8752a]/30 bg-black/20 p-3 text-sm text-[#cfc2aa]">{category ? categorySummary(category) : "Sonderkategorie"}</div>}
       {ability.kind === "specialization" && <Select label="Spezialisierung" value={ability.specializationTier ?? "lehrling"} onChange={(specializationTier) => savePatch({ fateAbility: { ...ability, specializationTier: specializationTier as "lehrling" | "gelehrter" | "meister" } })} options={[["lehrling", "Lehrling"], ["gelehrter", "Gelehrter"], ["meister", "Meister"]]} />}
       {ability.kind === "specializationFeature" && (
         <Select
@@ -395,7 +474,15 @@ function FateAbilityFields({ item, catalog, savePatch }: SpecificEditorProps & {
           options={[["", "Spezialisierung wählen"], ...specializations.map((spec) => [spec.id, `${specializationTierLabel(spec.fateAbility?.specializationTier)} - ${spec.name}`] as [string, string])]}
         />
       )}
-      {ability.kind === "fateCard" && <Select label="Level" value={String(ability.level ?? 1)} onChange={(level) => savePatch({ fateAbility: { ...ability, level: Number(level) } })} options={Array.from({ length: 20 }, (_, index) => [String(index + 1), `Level ${index + 1}`])} />}
+      {(ability.kind === "fateCard" || !isDefaultFateAbilityKind(ability.kind)) && <Select label="Level" value={String(ability.level ?? 1)} onChange={(level) => savePatch({ fateAbility: { ...ability, level: Number(level) } })} options={Array.from({ length: 20 }, (_, index) => [String(index + 1), `Level ${index + 1}`])} />}
+      {!isDefaultFateAbilityKind(ability.kind) && (
+        <Select
+          label="Spezialisierung optional"
+          value={ability.specializationId ?? ""}
+          onChange={(specializationId) => savePatch({ fateAbility: { ...ability, specializationId: specializationId || undefined } })}
+          options={[["", "Keine direkte Spezialisierung"], ...specializations.map((spec) => [spec.id, `${specializationTierLabel(spec.fateAbility?.specializationTier)} - ${spec.name}`] as [string, string])]}
+        />
+      )}
       <label className="flex min-h-11 items-center gap-2 border border-[#a8752a]/30 bg-black/25 px-3 text-sm text-[#cfc2aa]">
         <input
           type="checkbox"
@@ -411,10 +498,35 @@ function FateAbilityFields({ item, catalog, savePatch }: SpecificEditorProps & {
 
 function fateAbilityMeta(item: CatalogItem) {
   const kind = item.fateAbility?.kind;
+  if (kind && !isDefaultFateAbilityKind(kind)) return `Sonderinhalt - Level ${item.fateAbility?.level ?? 1}`;
   if (kind === "specialization") return `${labelForFateAbilityKind(kind)} - ${specializationTierLabel(item.fateAbility?.specializationTier)}`;
   if (kind === "specializationFeature") return `${labelForFateAbilityKind(kind)}${item.fateAbility?.specializationId ? "" : " - nicht verknuepft"}`;
   if (kind === "fateCard") return `${labelForFateAbilityKind(kind)} - Level ${item.fateAbility?.level ?? 1}`;
   return labelForFateAbilityKind(kind);
+}
+
+const fateCategoryModes: [string, string][] = [
+  ["automaticByLevel", "Automatisch nach Level"],
+  ["choicePool", "Auswahl aus Kartenpool"],
+  ["mechanic", "Mechanik / Tracker"],
+  ["reference", "Regeltext / Referenz"]
+];
+
+const fateCategoryTriggers: [string, string][] = [
+  ["mainFate", "Hauptfate gewaehlt"],
+  ["sideFate", "Nebenfate gewaehlt"],
+  ["anyFate", "Haupt- oder Nebenfate"],
+  ["specialization", "Spezialisierung gewaehlt"],
+  ["manual", "Manuelle Freigabe"]
+];
+
+function categorySummary(category: FateAbilityCategoryData) {
+  const mode = fateCategoryModes.find(([value]) => value === category.mode)?.[1] ?? category.mode;
+  const trigger = fateCategoryTriggers.find(([value]) => value === category.trigger)?.[1] ?? category.trigger;
+  const target = category.targetTabName || category.name;
+  const level = category.minLevel ? ` ab Level ${category.minLevel}` : "";
+  const limit = category.mode === "choicePool" && category.selectionLimit ? `, Auswahl ${category.selectionLimit}` : "";
+  return `${mode}, ${trigger}${level}${limit}, Ziel-Reiter: ${target}.`;
 }
 
 function specializationTierLabel(tier?: string) {

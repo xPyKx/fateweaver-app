@@ -97,6 +97,7 @@ export interface FateData {
   symbolUrl?: string;
   symbolItemId?: string;
   spellAttribute?: AttributeKey | "";
+  abilityCategories?: FateAbilityCategoryData[];
 }
 
 export type FateAbilityKind =
@@ -104,13 +105,29 @@ export type FateAbilityKind =
   | "inspirationAbility"
   | "specialization"
   | "specializationFeature"
-  | "fateCard";
+  | "fateCard"
+  | (string & {});
 export type FateSpecializationTier = "lehrling" | "gelehrter" | "meister";
 export type BackgroundQuestionKind = "appearance" | "background" | "connections";
+export type FateAbilityCategoryMode = "automaticByLevel" | "choicePool" | "mechanic" | "reference";
+export type FateAbilityCategoryTrigger = "mainFate" | "sideFate" | "anyFate" | "specialization" | "manual";
+
+export interface FateAbilityCategoryData {
+  id: string;
+  name: string;
+  mode: FateAbilityCategoryMode;
+  trigger: FateAbilityCategoryTrigger;
+  targetTabName?: string;
+  targetTabId?: string;
+  specializationId?: string;
+  minLevel?: number;
+  selectionLimit?: number;
+}
 
 export interface FateAbilityData {
   fateId: string;
   kind: FateAbilityKind;
+  categoryId?: string;
   specializationId?: string;
   level?: number;
   showTitleOnSheet?: boolean;

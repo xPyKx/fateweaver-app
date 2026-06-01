@@ -523,6 +523,18 @@ function normalizeGmSession(session?: GmSessionData): GmSessionData {
 function normalizeCatalogItems(items: CatalogItem[]) {
   return items.map((item) => {
     const timestamp = item.updatedAt ?? item.createdAt ?? new Date().toISOString();
+    if (item.type === "fate") {
+      return {
+        ...item,
+        fate: {
+          levelOneCards: item.fate?.levelOneCards ?? [],
+          ...item.fate,
+          abilityCategories: item.fate?.abilityCategories ?? []
+        },
+        createdAt: item.createdAt ?? timestamp,
+        updatedAt: item.updatedAt ?? timestamp
+      };
+    }
     return { ...item, createdAt: item.createdAt ?? timestamp, updatedAt: item.updatedAt ?? timestamp };
   });
 }

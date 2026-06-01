@@ -613,14 +613,30 @@ function newExperienceWritten(character: Character, level: number) {
 function availableFateCards(character: Character, catalog: CatalogItem[], level: number, allowedFateIds?: string[], includeSelectedId?: string) {
   const fateIds = allowedFateIds ?? [character.choices.mainFateId, character.choices.sideFateId].filter(Boolean) as string[];
   const selectedIds = new Set(character.choices.selectedFateCardIds ?? []);
+  const selectedSpecializations = new Set(Object.values(character.choices.levelUps ?? {}).map((choice) => choice.specializationId).filter(Boolean));
   return catalog
     .filter((item) => {
       if (selectedIds.has(item.id) && item.id !== includeSelectedId) return false;
-      if (item.type === "fateAbility") return item.fateAbility?.kind === "fateCard" && (item.fateAbility.level ?? 1) <= level && fateIds.includes(item.fateAbility.fateId);
+      if (item.type === "fateAbility") {
+        if ((item.fateAbility?.level ?? 1) > level || !fateIds.includes(item.fateAbility?.fateId ?? "")) return false;
+        if (item.fateAbility?.kind === "fateCard") return true;
+        return customChoicePoolCardAvailable(item, catalog, selectedSpecializations);
+      }
       if (item.type === "fateCard") return item.tags?.some((tag) => fateIds.includes(tag)) && (levelFromTags(item.tags) ?? 1) <= level;
       return false;
     })
     .sort((a, b) => (a.fateAbility?.level ?? levelFromTags(a.tags) ?? 1) - (b.fateAbility?.level ?? levelFromTags(b.tags) ?? 1) || a.name.localeCompare(b.name, "de", { sensitivity: "base" }));
+}
+
+function customChoicePoolCardAvailable(item: CatalogItem, catalog: CatalogItem[], selectedSpecializations: Set<string | undefined>) {
+  const fate = catalog.find((entry) => entry.id === item.fateAbility?.fateId && entry.type === "fate");
+  const category = fate?.fate?.abilityCategories?.find((entry) => entry.id === (item.fateAbility?.categoryId ?? item.fateAbility?.kind));
+  if (!category || category.mode !== "choicePool") return false;
+  if (category.trigger === "specialization") {
+    if (category.specializationId && !selectedSpecializations.has(category.specializationId)) return false;
+    if (item.fateAbility?.specializationId && !selectedSpecializations.has(item.fateAbility.specializationId)) return false;
+  }
+  return category.trigger !== "manual";
 }
 
 function levelFromTags(tags?: string[]) {

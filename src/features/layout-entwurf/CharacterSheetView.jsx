@@ -484,7 +484,8 @@ function BottomPanel() {
     .filter((item) => tabReleasedToCharacter(item, activeCharacter?.id))
     .sort((a, b) => a.name.localeCompare(b.name, "de", { sensitivity: "base" }))
     .map((item) => ({ name: item.name, icon: BookOpen, catalogItem: item }));
-  const allTabs = uniqueTabs([...BOTTOM_TABS, ...customTabs]);
+  const fateTabs = fateCategoryTabs(data.catalog, activeCharacter);
+  const allTabs = uniqueTabs([...BOTTOM_TABS, ...fateTabs, ...customTabs]);
   const tabStorageKey = `fateweaver-sheet-tabs:${activeCharacter?.id ?? "global"}`;
   const [tabPrefs, setTabPrefs] = useState(() => readTabPrefs(tabStorageKey, allTabs, BOTTOM_TABS.slice(0, 6).map((entry) => entry.name)));
   const [tab, setTab] = useState(BOTTOM_TABS[0].name);
@@ -655,7 +656,7 @@ function BottomPanel() {
         {tab === "Transmutation" && <CatalogCardPanel mode={activeMode} items={selectedByIds(data.catalog, activeCharacter?.choices.transmutationId ? [activeCharacter.choices.transmutationId] : [])} />}
         {tab === "Materialien" && <MaterialPanel character={activeCharacter} catalog={data.catalog} upsertCharacter={upsertCharacter} mode={activeMode} onReturn={returnInventoryItem} />}
         {tab === "Notizen" && <textarea className="min-h-44 w-full border border-[#a8752a]/30 bg-black/25 p-4 text-[#f4ead7] outline-none" placeholder="Notizen..." />}
-        {!BOTTOM_TABS.some((entry) => entry.name === tab) && <CustomTabPanel tab={customTabs.find((entry) => entry.name === tab)} mode={activeMode} catalog={data.catalog} />}
+        {!BOTTOM_TABS.some((entry) => entry.name === tab) && <CustomTabPanel tab={[...fateTabs, ...customTabs].find((entry) => entry.name === tab)} mode={activeMode} catalog={data.catalog} character={activeCharacter} />}
       </div>}
     </GoldPanel>
   );
@@ -1233,8 +1234,28 @@ function uniqueTabs(tabs) {
   return Array.from(new Map(tabs.map((entry) => [entry.name, entry])).values());
 }
 
-function CustomTabPanel({ tab, mode, catalog }) {
+function CustomTabPanel({ tab, mode, catalog, character }) {
   if (!tab) return <SortablePanel mode={mode} items={["Dieser Reiter ist leer."]} />;
+  if (tab.generatedByFateCategory) {
+    const category = tab.category;
+    const selectedIds = character?.choices?.selectedFateCardIds ?? [];
+    const items = category?.mode === "choicePool"
+      ? tab.items.filter((item) => selectedIds.includes(item.id))
+      : tab.items;
+    const fallback = category?.mode === "choicePool" && !items.length ? tab.items : [];
+    return (
+      <div className="grid gap-3">
+        {category?.mode === "choicePool" && (
+          <div className="border border-[#a8752a]/30 bg-black/20 p-3 text-sm text-[#cfc2aa]">
+            {items.length
+              ? `${items.length}${category.selectionLimit ? `/${category.selectionLimit}` : ""} gewaehlt.`
+              : `Noch keine Auswahl getroffen. Verfuegbarer Pool${category.selectionLimit ? `, waehle ${category.selectionLimit}` : ""}.`}
+          </div>
+        )}
+        <CatalogCardPanel mode={mode} items={items.length ? items : fallback} orderKey={panelOrderKey(character, tab.name)} />
+      </div>
+    );
+  }
   const item = tab.catalogItem;
   if (item.sheetTab?.contentType === "catalogList" && item.sheetTab.catalogType) {
     const entries = catalog
@@ -1248,6 +1269,47 @@ function CustomTabPanel({ tab, mode, catalog }) {
 function tabReleasedToCharacter(item, characterId) {
   const released = item.sheetTab?.releasedToCharacterIds ?? [];
   return !released.length || Boolean(characterId && released.includes(characterId));
+}
+
+function fateCategoryTabs(catalog, character) {
+  if (!character) return [];
+  const choices = character.choices ?? {};
+  const level = character.level ?? 1;
+  const selectedSpecializations = new Set(Object.values(choices.levelUps ?? {}).map((choice) => choice.specializationId).filter(Boolean));
+  const fateIds = [choices.mainFateId, choices.sideFateId].filter(Boolean);
+  const fates = fateIds.map((id) => catalog.find((item) => item.id === id && item.type === "fate")).filter(Boolean);
+
+  return fates.flatMap((fate) => (fate.fate?.abilityCategories ?? []).flatMap((category) => {
+    if (!categoryApplies(category, fate.id, choices, selectedSpecializations, catalog, level)) return [];
+    const items = catalog
+      .filter((item) => item.type === "fateAbility" && item.fateAbility?.fateId === fate.id)
+      .filter((item) => item.fateAbility?.categoryId === category.id || item.fateAbility?.kind === category.id)
+      .filter((item) => (item.fateAbility?.level ?? 1) <= level)
+      .filter((item) => !item.fateAbility?.specializationId || selectedSpecializations.has(item.fateAbility.specializationId))
+      .sort((a, b) => (a.fateAbility?.level ?? 1) - (b.fateAbility?.level ?? 1) || a.name.localeCompare(b.name, "de", { sensitivity: "base" }));
+    if (!items.length && category.mode !== "mechanic" && category.mode !== "reference") return [];
+    return [{
+      name: category.targetTabName || category.name,
+      icon: BookOpen,
+      generatedByFateCategory: true,
+      category,
+      fate,
+      items
+    }];
+  }));
+}
+
+function categoryApplies(category, fateId, choices, selectedSpecializations, catalog, level) {
+  if ((category.minLevel ?? 1) > level) return false;
+  if (category.trigger === "manual") return false;
+  if (category.trigger === "mainFate") return choices.mainFateId === fateId;
+  if (category.trigger === "sideFate") return choices.sideFateId === fateId;
+  if (category.trigger === "anyFate") return choices.mainFateId === fateId || choices.sideFateId === fateId;
+  if (category.trigger === "specialization") {
+    if (category.specializationId) return selectedSpecializations.has(category.specializationId);
+    return Array.from(selectedSpecializations).some((id) => catalog.find((item) => item.id === id && item.fateAbility?.fateId === fateId));
+  }
+  return false;
 }
 
 function PlayerShopModal({ character, catalog, characters, gmSession, updateGmSession, onClose }) {

@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { missingSeedCatalogItems } from "../../data/seeds";
 import { useGameStore } from "../../lib/store/GameStore";
-import type { BackgroundQuestionKind, CatalogItem, CatalogType, FateAbilityKind, GameOptionKind, MagicItemKind } from "../../types/domain";
+import type { BackgroundQuestionKind, CatalogItem, CatalogType, FateAbilityKind, FateAbilityCategoryData, GameOptionKind, MagicItemKind } from "../../types/domain";
 import { Select } from "./GMControls";
 import { Editor, EntryRow, FateAbilityColumn, FateAbilityKindColumn, HintDialog } from "./GMSettingsEditors";
 import {
@@ -14,6 +14,7 @@ import {
   gameOptionKinds,
   labelForGameOptionKind,
   labelForType,
+  isDefaultFateAbilityKind,
   optionKind
 } from "./gmCatalogMeta";
 
@@ -46,7 +47,8 @@ export function GMSettings() {
     .sort(compareByName);
   const gameOptionKindsForList = Array.from(new Set([...gameOptionKinds.map((entry) => entry.key), ...gameOptions.map(optionKind)])).filter(Boolean);
   const fateAbilities = data.catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.fateId === activeFateId).sort(compareFateAbilities);
-  const filteredFateAbilities = fateAbilities.filter((item) => item.fateAbility?.kind === activeFateAbilityKind);
+  const activeFateCategories = activeFate?.fate?.abilityCategories ?? [];
+  const filteredFateAbilities = fateAbilities.filter((item) => item.fateAbility?.kind === activeFateAbilityKind || item.fateAbility?.categoryId === activeFateAbilityKind);
   const hasSubcategoryColumn = type === "magicItem" || type === "gameOption" || type === "backgroundQuestion";
   const gridColumns = type === "fate" && activeFate
     ? "xl:grid-cols-[210px_280px_240px_300px_minmax(420px,1fr)]"
@@ -56,12 +58,13 @@ export function GMSettings() {
 
   function createItem() {
     if (type === "fate" && activeFate) {
+      const isCustomCategory = !isDefaultFateAbilityKind(activeFateAbilityKind);
       const ability: CatalogItem = {
         id: `fateAbility-${crypto.randomUUID()}`,
         type: "fateAbility",
-        name: "Neue Faehigkeit",
+        name: isCustomCategory ? "Neue Sonderkarte" : "Neue Faehigkeit",
         description: "",
-        fateAbility: { fateId: activeFate.id, kind: activeFateAbilityKind, level: activeFateAbilityKind === "fateCard" ? 1 : undefined }
+        fateAbility: { fateId: activeFate.id, kind: activeFateAbilityKind, categoryId: isCustomCategory ? activeFateAbilityKind : undefined, level: activeFateAbilityKind === "fateCard" || isCustomCategory ? 1 : undefined }
       };
       upsertCatalogItem(ability);
       setSelectedId(ability.id);
@@ -82,6 +85,31 @@ export function GMSettings() {
     if (type === "backgroundQuestion") item.backgroundQuestion = { kind: backgroundKindFilter, question: "Neue Frage" };
     upsertCatalogItem(item);
     setSelectedId(item.id);
+  }
+
+  function createFateCategory() {
+    if (!activeFate) return;
+    const label = window.prompt("Name der neuen Fate-Inhaltskategorie");
+    const name = label?.trim();
+    if (!name) return;
+    const category: FateAbilityCategoryData = {
+      id: `fateCategory-${crypto.randomUUID()}`,
+      name,
+      mode: "automaticByLevel",
+      trigger: "mainFate",
+      targetTabName: name,
+      minLevel: 1,
+      selectionLimit: 1
+    };
+    upsertCatalogItem({
+      ...activeFate,
+      fate: {
+        ...(activeFate.fate ?? { levelOneCards: [] }),
+        abilityCategories: [...(activeFate.fate?.abilityCategories ?? []), category]
+      }
+    });
+    setActiveFateAbilityKind(category.id);
+    showNotice(`Fate-Inhaltskategorie "${name}" angelegt.`);
   }
 
   function createGameOptionKind() {
@@ -258,10 +286,12 @@ export function GMSettings() {
           <FateAbilityKindColumn
             activeKind={activeFateAbilityKind}
             abilities={fateAbilities}
+            categories={activeFateCategories}
             onSelect={(kind) => {
               setActiveFateAbilityKind(kind);
               setSelectedId(undefined);
             }}
+            onCreateCategory={createFateCategory}
           />
         )}
 

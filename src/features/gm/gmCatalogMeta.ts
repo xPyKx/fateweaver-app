@@ -71,7 +71,7 @@ export function defaultsForType(type: CatalogType) {
   if (type === "magicItem") return { magicItemKind: "item" as const };
   if (type === "range") return { range: { text: "" } };
   if (type === "gameOption") return { gameOption: { kind: "range" as const, text: "" } };
-  if (type === "fate") return { fate: { levelOneCards: [] } };
+  if (type === "fate") return { fate: { levelOneCards: [], abilityCategories: [] } };
   if (type === "fateAbility") return { fateAbility: { fateId: "", kind: "startAbility" as const } };
   if (type === "sheetTab") return { sheetTab: { contentType: "freeText" as const } };
   if (type === "restOption") return { rest: { restKind: "short" as const, effect: "" } };
@@ -95,6 +95,10 @@ export function supportsRarity(type: CatalogType) {
 
 export function labelForFateAbilityKind(kind?: FateAbilityKind) {
   return fateAbilityKinds.find((entry) => entry.key === kind)?.label ?? "Fate-Inhalt";
+}
+
+export function isDefaultFateAbilityKind(kind?: string) {
+  return fateAbilityKinds.some((entry) => entry.key === kind);
 }
 
 export function normalizeWeapon(item: CatalogItem) {

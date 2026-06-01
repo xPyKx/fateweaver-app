@@ -111,6 +111,7 @@ export type BackgroundQuestionKind = "appearance" | "background" | "connections"
 export interface FateAbilityData {
   fateId: string;
   kind: FateAbilityKind;
+  specializationId?: string;
   level?: number;
   showTitleOnSheet?: boolean;
   specializationTier?: FateSpecializationTier;
@@ -257,6 +258,74 @@ export interface InventoryHistoryEntry {
   createdAt: string;
 }
 
+export type HistoryEventType =
+  | "character.created"
+  | "character.updated"
+  | "character.deleted"
+  | "character.levelChanged"
+  | "character.identityChanged"
+  | "character.fateChanged"
+  | "character.originChanged"
+  | "inventory.changed"
+  | "item.given"
+  | "item.returned"
+  | "shop.purchase"
+  | "shop.request"
+  | "message.sent"
+  | "message.replied"
+  | "campaign.created"
+  | "campaign.updated"
+  | "session.created"
+  | "session.updated"
+  | "customModule.updated"
+  | "session.note";
+
+export interface HistoryEvent {
+  id: string;
+  type: HistoryEventType;
+  characterId?: string;
+  actorUserId?: string;
+  actorRole?: "gm" | "player" | "system";
+  title: string;
+  summary: string;
+  details?: Array<{ label: string; before?: string; after?: string; value?: string }>;
+  createdAt: string;
+}
+
+export type MessageSenderRole = "gm" | "player" | "system";
+export type MessageStatus = "unread" | "read" | "answered" | "archived";
+
+export interface AppMessage {
+  id: string;
+  threadId: string;
+  parentId?: string;
+  campaignId?: string;
+  sessionId?: string;
+  characterId?: string;
+  fromUserId?: string;
+  fromRole: MessageSenderRole;
+  toUserId?: string;
+  toRole?: MessageSenderRole;
+  toCharacterId?: string;
+  body: string;
+  status: MessageStatus;
+  createdAt: string;
+  updatedAt: string;
+  readAt?: string;
+}
+
+export interface NewMessageInput {
+  characterId?: string;
+  toUserId?: string;
+  toRole?: MessageSenderRole;
+  toCharacterId?: string;
+  body: string;
+  parentId?: string;
+  threadId?: string;
+  campaignId?: string;
+  sessionId?: string;
+}
+
 export interface ShopListing {
   id: string;
   itemId: string;
@@ -305,6 +374,49 @@ export interface GmSessionData {
   inventoryHistory: InventoryHistoryEntry[];
 }
 
+export interface Campaign {
+  id: string;
+  name: string;
+  description?: string;
+  characterIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignSession {
+  id: string;
+  campaignId: string;
+  name: string;
+  scheduledAt?: string;
+  notes?: string;
+  shopIds: string[];
+  characterIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CustomModuleScope = "global" | "campaign" | "session" | "character";
+export type CustomModuleFieldType = "text" | "textarea" | "number" | "checkbox";
+
+export interface CustomModuleField {
+  id: string;
+  label: string;
+  type: CustomModuleFieldType;
+  value?: string | number | boolean;
+}
+
+export interface CustomGmModule {
+  id: string;
+  name: string;
+  scope: CustomModuleScope;
+  campaignId?: string;
+  sessionId?: string;
+  characterId?: string;
+  fields: CustomModuleField[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Character {
   id: string;
   ownerId?: string;
@@ -339,6 +451,12 @@ export interface InfoHint {
 export interface AppData {
   characters: Character[];
   deletedCharacterIds?: string[];
+  deletedCatalogItemIds?: string[];
+  historyEvents?: HistoryEvent[];
+  messages?: AppMessage[];
+  campaigns?: Campaign[];
+  campaignSessions?: CampaignSession[];
+  customGmModules?: CustomGmModule[];
   activeCharacterId?: string;
   catalog: CatalogItem[];
   infoHints: InfoHint[];
@@ -355,4 +473,4 @@ export interface UserProfile {
   updatedAt: string;
 }
 
-export type ViewKey = "sheet" | "create" | "level" | "rest" | "gm" | "gmSession";
+export type ViewKey = "sheet" | "create" | "level" | "rest" | "gm" | "gmDashboard";

@@ -414,7 +414,7 @@ function FateCardPicker({ title, level, character, catalog, selectedId, onSelect
   const cards = useMemo(() => availableFateCards(character, catalog, level, fateIds, includeSelectedId), [character, catalog, level, fateIds, includeSelectedId]);
   return (
     <PickerShell title={title} current={selectedId ? 1 : 0} total={1}>
-      <FateCardGrid cards={cards} selectedId={selectedId} onSelect={onSelect} />
+      <ExpandableFateCardGrid cards={cards} selectedId={selectedId} onSelect={onSelect} />
     </PickerShell>
   );
 }
@@ -427,14 +427,14 @@ function CollapsibleFateCardPicker({ title, open, setOpen, level, character, cat
         <span className="text-2xl font-black uppercase">{title}</span>
         <span className="inline-flex items-center gap-2"><CounterBadge current={selectedId ? 1 : 0} total={1} />{open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</span>
       </button>
-      {open && <FateCardGrid cards={cards} selectedId={selectedId} onSelect={onSelect} />}
+      {open && <ExpandableFateCardGrid cards={cards} selectedId={selectedId} onSelect={onSelect} />}
     </div>
   );
 }
 
 function FateCardGrid({ cards, selectedId, onSelect }: { cards: CatalogItem[]; selectedId?: string; onSelect: (id: string) => void }) {
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-3 md:grid-cols-2">
       {cards.map((card) => {
         const active = selectedId === card.id;
         const locked = Boolean(selectedId && !active);
@@ -454,6 +454,48 @@ function FateCardGrid({ cards, selectedId, onSelect }: { cards: CatalogItem[]; s
         );
       })}
       {!cards.length && <div className="border border-dashed border-[#d6a14d]/45 p-6 text-[#6b7280]">Keine verfügbare Level-Fatekarte gefunden.</div>}
+    </div>
+  );
+}
+
+function ExpandableFateCardGrid({ cards, selectedId, onSelect }: { cards: CatalogItem[]; selectedId?: string; onSelect: (id: string) => void }) {
+  const [viewer, setViewer] = useState<CatalogItem>();
+  return (
+    <>
+      <div className="grid gap-3 md:grid-cols-2">
+        {cards.map((card) => {
+          const active = selectedId === card.id;
+          const locked = Boolean(selectedId && !active);
+          const imageUrl = card.fateAbility?.cardImageUrl || card.imageUrl;
+          const showText = !imageUrl;
+          return (
+            <div key={card.id} className={`grid content-start gap-3 border border-[#d6a14d]/35 bg-white/85 p-3 ${locked ? "opacity-45" : ""}`}>
+              {showText && <div><div className="font-black uppercase">{card.name}</div><div className="text-xs font-bold uppercase text-[#6b7280]">Level {card.fateAbility?.level ?? levelFromTags(card.tags) ?? 1}</div></div>}
+              <button disabled={locked} onClick={() => onSelect(card.id)} className={`mx-auto border px-3 py-2 text-xs font-black uppercase ${active ? "border-[#d6a14d] bg-[#d6a14d] text-black" : "border-[#d6a14d]/70 bg-[#45208a] text-white disabled:bg-gray-500"}`}>Waehlen</button>
+              {imageUrl && <button onClick={() => setViewer(card)} className="grid place-items-center"><img src={imageUrl} alt="" className="max-h-80 w-full object-contain" /></button>}
+              {showText && <p className="text-sm leading-relaxed text-[#374151]">{card.description || "Keine Beschreibung hinterlegt."}</p>}
+            </div>
+          );
+        })}
+        {!cards.length && <div className="border border-dashed border-[#d6a14d]/45 p-6 text-[#6b7280]">Keine verfuegbare Level-Fatekarte gefunden.</div>}
+      </div>
+      {viewer && <LevelCardViewer item={viewer} onClose={() => setViewer(undefined)} />}
+    </>
+  );
+}
+
+function LevelCardViewer({ item, onClose }: { item: CatalogItem; onClose: () => void }) {
+  const imageUrl = item.fateAbility?.cardImageUrl || item.imageUrl;
+  return (
+    <div className="fixed inset-0 z-[240] grid place-items-center bg-black/85 p-4" onClick={onClose}>
+      <div className="grid max-h-[92vh] w-full max-w-5xl gap-3 border border-[#d6a14d]/70 bg-white p-4" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xl font-black uppercase text-[#111827]">{item.name}</div>
+          <button onClick={onClose} className="grid h-10 w-10 place-items-center border border-[#d6a14d]/60 text-[#111827]">x</button>
+        </div>
+        {imageUrl && <img src={imageUrl} alt="" className="max-h-[72vh] w-full object-contain" />}
+        <p className="text-sm text-[#374151]">{item.description}</p>
+      </div>
     </div>
   );
 }
@@ -480,7 +522,19 @@ function SpecializationPicker({ character, catalog, choice, patchLevel }: { char
   return (
     <PickerShell title="Spezialisierung" current={choice.specializationId ? 1 : 0} total={1}>
       <div className="grid gap-3">
-        {specs.map((spec) => <StepButton key={spec.id} active={choice.specializationId === spec.id} title={spec.name} value={spec.fateAbility?.specializationTier ?? "Lehrling"} onClick={() => patchLevel({ specializationId: spec.id })} />)}
+        {specs.map((spec) => {
+          const features = catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.kind === "specializationFeature" && (item.fateAbility.specializationId ?? item.fateAbility.fateId) === spec.id);
+          return (
+            <div key={spec.id} className="grid gap-2">
+              <StepButton active={choice.specializationId === spec.id} title={spec.name} value={spec.fateAbility?.specializationTier ?? "Lehrling"} onClick={() => patchLevel({ specializationId: spec.id })} />
+              {features.length > 0 && (
+                <div className="grid gap-2 border border-[#d6a14d]/30 bg-white/60 p-2">
+                  {features.map((feature) => <div key={feature.id} className="text-sm"><span className="font-bold">{feature.name}</span>{feature.description && <span className="text-[#374151]"> - {feature.description}</span>}</div>)}
+                </div>
+              )}
+            </div>
+          );
+        })}
         {!specs.length && <div className="border border-dashed border-[#d6a14d]/45 p-6 text-[#6b7280]">Keine Spezialisierungen für die gewählten Fates hinterlegt.</div>}
       </div>
     </PickerShell>

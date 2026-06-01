@@ -7,3 +7,6 @@ dist/
 ~$*
 *.tsbuildinfo
 Bilder/
+Backup/
+test-results/
+tests/

@@ -53,6 +53,7 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
   const mainFate = findItem(catalog, choices.mainFateId, "fate");
   const sideFate = findItem(catalog, choices.sideFateId, "fate");
   const folk = findItem(catalog, choices.folkId, "folk");
+  const society = findItem(catalog, choices.societyId, "society");
   const level = character.level ?? 1;
   const training = effectiveTrainingBonus(character);
 
@@ -83,6 +84,7 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
     sideFateSymbolUrl: fateSymbol(sideFate, catalog),
     spellAttributeName: attributeLabels[mainFate?.fate?.spellAttribute || sideFate?.fate?.spellAttribute] ?? "Offen",
     folkName: folk?.name ?? "Herkunft offen",
+    societyName: society?.name ?? "",
     attunementIconUrl: optionIcon(catalog.find((entry) => entry.type === "gameOption" && entry.gameOption?.kind === "attunementIcon")),
     weapons: normalizeWeapons(weapons, catalog, attributes, training, choices.weaponAttributeSelections ?? {}),
     armor: normalizeArmor(armorItem, armorData, catalog)

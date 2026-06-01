@@ -1,8 +1,8 @@
 import { ArrowLeft, ArrowRight, ChevronDown, ImagePlus } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CounterBadge } from "../../components/CounterBadge";
 import { Field } from "../../components/Field";
-import { fileToPersistentImageUrl } from "../../lib/images/persistentImage";
+import { canvasToPersistentImageUrl, fileToPreviewImageUrl } from "../../lib/images/persistentImage";
 import { attributeLabels, attributeVariants, createCharacter } from "../../lib/rules/characterRules";
 import { useGameStore } from "../../lib/store/GameStore";
 import type { AttributeKey, BackgroundQuestionKind, CatalogItem, Character, ExperienceEntry } from "../../types/domain";
@@ -66,8 +66,8 @@ export function CreationWizard({ onDone, onSheet, onLevelUp }: { onDone: () => v
     patchCharacter({ choices: { ...draft.choices, ...patch } }, force);
   }
 
-  function startCharacter() {
-    upsertCharacter({ ...draft, updatedAt: new Date().toISOString() });
+  function startCharacter(nextDraft = draft) {
+    upsertCharacter({ ...nextDraft, updatedAt: new Date().toISOString() });
     setAutosave(true);
     setMain("fates");
   }
@@ -119,15 +119,19 @@ export function CreationWizard({ onDone, onSheet, onLevelUp }: { onDone: () => v
   );
 }
 
-function StartPanel({ draft, patchCharacter, onStart }: { draft: Character; patchCharacter: (patch: Partial<Character>, force?: boolean) => void; onStart: () => void }) {
+function StartPanel({ draft, patchCharacter, onStart }: { draft: Character; patchCharacter: (patch: Partial<Character>, force?: boolean) => void; onStart: (nextDraft?: Character) => void }) {
   const [portraitSource, setPortraitSource] = useState<string>();
   const [zoom, setZoom] = useState(1);
   const [offsetX, setOffsetX] = useState(0);
   const [offsetY, setOffsetY] = useState(0);
+  const [portraitBusy, setPortraitBusy] = useState(false);
+  const [portraitMessage, setPortraitMessage] = useState("");
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; offsetX: number; offsetY: number }>();
 
   async function imageChanged(file?: File) {
     if (!file) return;
-    setPortraitSource(await fileToPersistentImageUrl(file));
+    setPortraitMessage("");
+    setPortraitSource(await fileToPreviewImageUrl(file));
     setZoom(1);
     setOffsetX(0);
     setOffsetY(0);
@@ -135,13 +139,53 @@ function StartPanel({ draft, patchCharacter, onStart }: { draft: Character; patc
 
   async function applyPortraitCrop() {
     if (!portraitSource) return;
-    patchCharacter({ portraitUrl: await cropPortrait(portraitSource, zoom, offsetX, offsetY) }, true);
-    setPortraitSource(undefined);
+    setPortraitBusy(true);
+    setPortraitMessage("");
+    try {
+      const portraitUrl = await cropPortrait(portraitSource, zoom, offsetX, offsetY);
+      patchCharacter({ portraitUrl }, true);
+      setPortraitSource(undefined);
+      return portraitUrl;
+    } catch {
+      setPortraitMessage("Portrait konnte nicht zugeschnitten werden.");
+    } finally {
+      setPortraitBusy(false);
+    }
   }
 
   async function startWithCurrentPortrait() {
-    if (portraitSource) await applyPortraitCrop();
+    if (portraitSource) {
+      setPortraitBusy(true);
+      setPortraitMessage("");
+      try {
+        const portraitUrl = await cropPortrait(portraitSource, zoom, offsetX, offsetY);
+        patchCharacter({ portraitUrl }, true);
+        setPortraitSource(undefined);
+        onStart({ ...draft, portraitUrl });
+      } catch {
+        setPortraitMessage("Portrait konnte nicht zugeschnitten werden.");
+      } finally {
+        setPortraitBusy(false);
+      }
+      return;
+    }
     onStart();
+  }
+
+  function startDrag(event: React.PointerEvent<HTMLDivElement>) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, offsetX, offsetY };
+  }
+
+  function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    setOffsetX(clamp(drag.offsetX + event.clientX - drag.startX, -120, 120));
+    setOffsetY(clamp(drag.offsetY + event.clientY - drag.startY, -120, 120));
+  }
+
+  function stopDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = undefined;
   }
 
   return (
@@ -160,17 +204,28 @@ function StartPanel({ draft, patchCharacter, onStart }: { draft: Character; patc
       </label>
       {portraitSource && (
         <div className="grid gap-3 border border-[#a8752a]/35 bg-black/25 p-3">
-          <div className="relative mx-auto h-64 w-64 overflow-hidden bg-black/40">
-            <img src={portraitSource} alt="" className="absolute left-1/2 top-1/2 max-w-none" style={{ width: `${256 * zoom}px`, transform: `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px))` }} />
+          <div
+            className="relative mx-auto h-64 w-64 touch-none overflow-hidden bg-black/40"
+            onPointerDown={startDrag}
+            onPointerMove={moveDrag}
+            onPointerUp={stopDrag}
+            onPointerCancel={stopDrag}
+          >
+            <img src={portraitSource} alt="" draggable={false} className="absolute left-1/2 top-1/2 max-w-none select-none" style={{ width: `${256 * zoom}px`, transform: `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px))` }} />
             <div className="pointer-events-none absolute inset-3 rounded-full border-2 border-dashed border-[#ffd88c]" />
           </div>
           <label className="grid gap-1 text-sm text-[#cfc2aa]">Zoom<input type="range" min="1" max="3" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /></label>
           <label className="grid gap-1 text-sm text-[#cfc2aa]">Horizontal<input type="range" min="-120" max="120" step="1" value={offsetX} onChange={(event) => setOffsetX(Number(event.target.value))} /></label>
           <label className="grid gap-1 text-sm text-[#cfc2aa]">Vertikal<input type="range" min="-120" max="120" step="1" value={offsetY} onChange={(event) => setOffsetY(Number(event.target.value))} /></label>
-          <button type="button" onClick={applyPortraitCrop} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 py-2 font-bold text-[#ffd88c]">Portrait übernehmen</button>
+          {portraitMessage && <div className="text-sm text-amber-200">{portraitMessage}</div>}
+          <button type="button" disabled={portraitBusy} onClick={applyPortraitCrop} className="min-h-11 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 py-2 font-bold text-[#ffd88c] disabled:cursor-not-allowed disabled:opacity-55">
+            {portraitBusy ? "Portrait wird gespeichert..." : "Portrait übernehmen"}
+          </button>
         </div>
       )}
-      <button onClick={startWithCurrentPortrait} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-3 font-bold uppercase tracking-wide text-[#ffd88c]">Los geht's</button>
+      <button disabled={portraitBusy} onClick={startWithCurrentPortrait} className="min-h-12 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-3 font-bold uppercase tracking-wide text-[#ffd88c] disabled:cursor-not-allowed disabled:opacity-55">
+        {portraitBusy ? "Speichert..." : "Los geht's"}
+      </button>
     </div>
   );
 }
@@ -282,7 +337,46 @@ function SelectableList({ title, items, catalog, selected, limit, meta, onChange
 }
 
 function CardSelection({ title, items, selected, limit, onChange }: { title: string; items: CatalogItem[]; selected: string[]; limit: number; onChange: (ids: string[]) => void }) {
-  return <div className="grid gap-3"><h2 className="text-3xl font-light text-white">{title}</h2><div className="grid gap-3 md:grid-cols-2">{items.map((item) => <div key={item.id} className={`border bg-black/25 p-3 ${selected.includes(item.id) ? "border-[#ffd88c]" : "border-[#a8752a]/30"}`}><div className="mb-2 flex items-center justify-between gap-2"><div className="font-semibold text-white">{item.name}</div><button onClick={() => onChange(selected.includes(item.id) ? selected.filter((id) => id !== item.id) : [...selected, item.id].slice(0, limit))} className="border border-[#a8752a]/45 px-3 py-1 text-sm text-[#ffd88c]">Waehlen</button></div>{(item.fateAbility?.cardImageUrl || item.imageUrl) ? <img src={item.fateAbility?.cardImageUrl || item.imageUrl} alt="" className="h-64 w-full object-contain" /> : <p className="text-sm text-[#cfc2aa]">{item.description}</p>}</div>)}</div></div>;
+  const [viewer, setViewer] = useState<CatalogItem>();
+  return (
+    <div className="grid gap-3">
+      <h2 className="text-3xl font-light text-white">{title}</h2>
+      <div className="grid gap-3 md:grid-cols-2">
+        {items.map((item) => {
+          const imageUrl = item.fateAbility?.cardImageUrl || item.imageUrl;
+          return (
+            <div key={item.id} className={`grid gap-3 border bg-black/25 p-3 ${selected.includes(item.id) ? "border-[#ffd88c]" : "border-[#a8752a]/30"}`}>
+              <button onClick={() => onChange(selected.includes(item.id) ? selected.filter((id) => id !== item.id) : [...selected, item.id].slice(0, limit))} className="mx-auto min-h-10 border border-[#a8752a]/45 px-5 py-2 text-sm font-bold text-[#ffd88c]">Waehlen</button>
+              {imageUrl ? (
+                <button onClick={() => setViewer(item)} className="grid min-h-64 place-items-center">
+                  <img src={imageUrl} alt="" className="h-64 w-full object-contain" />
+                </button>
+              ) : (
+                <div className="grid min-h-64 place-items-center border border-dashed border-[#a8752a]/25 text-sm text-[#8c8170]">{item.name}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {viewer && <ImageViewer item={viewer} onClose={() => setViewer(undefined)} />}
+    </div>
+  );
+}
+
+function ImageViewer({ item, onClose }: { item: CatalogItem; onClose: () => void }) {
+  const imageUrl = item.fateAbility?.cardImageUrl || item.imageUrl;
+  return (
+    <div className="fixed inset-0 z-[240] grid place-items-center bg-black/85 p-4" onClick={onClose}>
+      <div className="grid max-h-[92vh] w-full max-w-5xl gap-3 border border-[#a8752a]/60 bg-[#070b12] p-4" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xl font-semibold text-white">{item.name}</div>
+          <button onClick={onClose} className="grid h-10 w-10 place-items-center border border-[#a8752a]/45 text-[#ffd88c]">x</button>
+        </div>
+        {imageUrl && <img src={imageUrl} alt="" className="max-h-[72vh] w-full object-contain" />}
+        <p className="text-sm text-[#cfc2aa]">{item.description}</p>
+      </div>
+    </div>
+  );
 }
 
 function ItemDetail({ item, catalog }: { item: CatalogItem; catalog: CatalogItem[] }) {
@@ -457,6 +551,10 @@ function signed(value: number) {
   return value > 0 ? `+${value}` : String(value);
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function labelOrigin(category: OriginCategory) {
   if (category === "folk") return "Volk";
   if (category === "society") return "Gesellschaft";
@@ -473,21 +571,26 @@ function labelFateKind(kind: string) {
 function cropPortrait(source: string, zoom: number, offsetX: number, offsetY: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const image = new Image();
-    image.onload = () => {
-      const size = 512;
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const context = canvas.getContext("2d");
-      if (!context) {
-        resolve(source);
-        return;
+    if (!source.startsWith("data:")) image.crossOrigin = "anonymous";
+    image.onload = async () => {
+      try {
+        const size = 512;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          resolve(source);
+          return;
+        }
+        const scale = Math.max(size / image.width, size / image.height) * zoom;
+        const width = image.width * scale;
+        const height = image.height * scale;
+        context.drawImage(image, (size - width) / 2 + offsetX * 2, (size - height) / 2 + offsetY * 2, width, height);
+        resolve(await canvasToPersistentImageUrl(canvas, "webp", 0.82));
+      } catch (error) {
+        reject(error);
       }
-      const scale = Math.max(size / image.width, size / image.height) * zoom;
-      const width = image.width * scale;
-      const height = image.height * scale;
-      context.drawImage(image, (size - width) / 2 + offsetX * 2, (size - height) / 2 + offsetY * 2, width, height);
-      resolve(canvas.toDataURL("image/jpeg", 0.86));
     };
     image.onerror = reject;
     image.src = source;

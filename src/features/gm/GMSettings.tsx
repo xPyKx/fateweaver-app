@@ -42,7 +42,7 @@ export function GMSettings() {
     .filter((item) => item.type === "gameOption" || item.type === "range")
     .sort(compareByName);
   const gameOptionKindsForList = Array.from(new Set([...gameOptionKinds.map((entry) => entry.key), ...gameOptions.map(optionKind)])).filter(Boolean);
-  const fateAbilities = data.catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.fateId === activeFateId).sort(compareByName);
+  const fateAbilities = data.catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.fateId === activeFateId).sort(compareFateAbilities);
   const filteredFateAbilities = fateAbilities.filter((item) => item.fateAbility?.kind === activeFateAbilityKind);
   const hasSubcategoryColumn = type === "magicItem" || type === "gameOption" || type === "backgroundQuestion";
   const gridColumns = type === "fate" && activeFate
@@ -270,7 +270,7 @@ export function GMSettings() {
 
         <section className="border border-[#a8752a]/35 bg-black/24 p-4">
           {selected ? (
-            <Editor item={selected} properties={properties} gameOptions={gameOptions} savePatch={savePatch} onSaved={() => showNotice(`"${selected.name}" gespeichert.`)} />
+            <Editor item={selected} catalog={data.catalog} properties={properties} gameOptions={gameOptions} savePatch={savePatch} onSaved={() => showNotice(`"${selected.name}" gespeichert.`)} />
           ) : (
             <p className="text-[#cfc2aa]">Waehle einen Eintrag oder erstelle einen neuen.</p>
           )}
@@ -290,4 +290,20 @@ export function GMSettings() {
       )}
     </div>
   );
+}
+
+function compareFateAbilities(left: CatalogItem, right: CatalogItem) {
+  const level = (left.fateAbility?.level ?? 0) - (right.fateAbility?.level ?? 0);
+  if (level !== 0) return level;
+  const tier = specializationTierOrder(left) - specializationTierOrder(right);
+  if (tier !== 0) return tier;
+  return compareByName(left, right);
+}
+
+function specializationTierOrder(item: CatalogItem) {
+  const tier = item.fateAbility?.specializationTier;
+  if (tier === "lehrling") return 1;
+  if (tier === "gelehrter") return 2;
+  if (tier === "meister") return 3;
+  return 0;
 }

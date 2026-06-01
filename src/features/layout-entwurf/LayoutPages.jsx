@@ -1,5 +1,5 @@
 import { CreationWizard } from "../creation-wizard/CreationWizard";
-import { GMSessionView } from "../gm-session/GMSessionView";
+import { GMDashboardView } from "../gm-session/GMSessionView";
 import { GMSettings } from "../gm/GMSettings";
 import { LevelUpView } from "../level-up/LevelUpView";
 
@@ -50,15 +50,17 @@ export function GMPage({ onBack }) {
   );
 }
 
-export function GMSessionPage({ onBack }) {
+export function GMDashboardPage({ onBack }) {
   return (
     <Shell>
       <GoldPanel className="p-5">
-        <GMSessionView onBack={onBack} />
+        <GMDashboardView onBack={onBack} />
       </GoldPanel>
     </Shell>
   );
 }
+
+export const GMSessionPage = GMDashboardPage;
 
 export function LevelPage({ onBack }) {
   return (

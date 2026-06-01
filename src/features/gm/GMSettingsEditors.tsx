@@ -41,7 +41,7 @@ export function EntryRow({ item, active, hint, onSelect, onInfo, onDelete }: { i
   );
 }
 
-export function Editor({ item, properties, gameOptions, savePatch, onSaved }: { item: CatalogItem; properties: CatalogItem[]; gameOptions: CatalogItem[]; savePatch: (patch: Partial<CatalogItem>) => void; onSaved: () => void }) {
+export function Editor({ item, catalog, properties, gameOptions, savePatch, onSaved }: { item: CatalogItem; catalog: CatalogItem[]; properties: CatalogItem[]; gameOptions: CatalogItem[]; savePatch: (patch: Partial<CatalogItem>) => void; onSaved: () => void }) {
   return (
     <div className="grid gap-4">
       <div className="border-b border-[#a8752a]/30 pb-3">
@@ -61,7 +61,7 @@ export function Editor({ item, properties, gameOptions, savePatch, onSaved }: { 
       {item.type === "property" && <PropertyEffectEditor item={item} savePatch={savePatch} />}
       {item.type === "sheetTab" && <SheetTabFields item={item} savePatch={savePatch} />}
       {item.type === "fate" && <FateFields item={item} gameOptions={gameOptions} savePatch={savePatch} />}
-      {item.type === "fateAbility" && <FateAbilityFields item={item} savePatch={savePatch} />}
+      {item.type === "fateAbility" && <FateAbilityFields item={item} catalog={catalog} savePatch={savePatch} />}
       {item.type === "fateCard" && <TagFields item={item} savePatch={savePatch} />}
       {item.type === "restOption" && <RestFields item={item} savePatch={savePatch} />}
       {item.type === "backgroundQuestion" && <BackgroundQuestionFields item={item} savePatch={savePatch} />}
@@ -183,7 +183,7 @@ export function FateAbilityColumn({ fate, kind, abilities, activeId, deleteCatal
           <div key={ability.id} className={`grid grid-cols-[1fr_auto] gap-2 border p-2 ${activeId === ability.id ? "border-[#d6a14d]/70 bg-[#d6a14d]/12" : "border-[#a8752a]/25 bg-black/25"}`}>
             <button onClick={() => selectAbility(ability.id)} className="min-w-0 text-left">
               <div className="truncate text-sm font-semibold text-white">{ability.name}</div>
-              <div className="truncate text-xs text-[#8c8170]">{labelForFateAbilityKind(ability.fateAbility?.kind)}</div>
+              <div className="truncate text-xs text-[#8c8170]">{fateAbilityMeta(ability)}</div>
             </button>
             <button onClick={() => deleteCatalogItem(ability.id)} className="grid h-8 w-8 place-items-center border border-red-400/45 text-red-200">
               <Trash2 className="h-4 w-4" />
@@ -355,8 +355,11 @@ function FateFields({ item, gameOptions, savePatch }: SpecificEditorProps & { ga
   );
 }
 
-function FateAbilityFields({ item, savePatch }: SpecificEditorProps) {
+function FateAbilityFields({ item, catalog, savePatch }: SpecificEditorProps & { catalog: CatalogItem[] }) {
   const ability = item.fateAbility ?? { fateId: "", kind: "startAbility" as const };
+  const specializations = catalog
+    .filter((entry) => entry.type === "fateAbility" && entry.fateAbility?.kind === "specialization" && entry.fateAbility.fateId === ability.fateId)
+    .sort(compareSpecializations);
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <Select
@@ -366,6 +369,14 @@ function FateAbilityFields({ item, savePatch }: SpecificEditorProps) {
         options={fateAbilityKinds.map((kind) => [kind.key, kind.label])}
       />
       {ability.kind === "specialization" && <Select label="Spezialisierung" value={ability.specializationTier ?? "lehrling"} onChange={(specializationTier) => savePatch({ fateAbility: { ...ability, specializationTier: specializationTier as "lehrling" | "gelehrter" | "meister" } })} options={[["lehrling", "Lehrling"], ["gelehrter", "Gelehrter"], ["meister", "Meister"]]} />}
+      {ability.kind === "specializationFeature" && (
+        <Select
+          label="Gehört zu Spezialisierung"
+          value={ability.specializationId ?? ""}
+          onChange={(specializationId) => savePatch({ fateAbility: { ...ability, specializationId: specializationId || undefined } })}
+          options={[["", "Spezialisierung wählen"], ...specializations.map((spec) => [spec.id, `${specializationTierLabel(spec.fateAbility?.specializationTier)} - ${spec.name}`] as [string, string])]}
+        />
+      )}
       {ability.kind === "fateCard" && <Select label="Level" value={String(ability.level ?? 1)} onChange={(level) => savePatch({ fateAbility: { ...ability, level: Number(level) } })} options={Array.from({ length: 20 }, (_, index) => [String(index + 1), `Level ${index + 1}`])} />}
       <label className="flex min-h-11 items-center gap-2 border border-[#a8752a]/30 bg-black/25 px-3 text-sm text-[#cfc2aa]">
         <input
@@ -378,6 +389,33 @@ function FateAbilityFields({ item, savePatch }: SpecificEditorProps) {
       <ImageInput label="Kartenbild" value={ability.cardImageUrl ?? ""} onChange={(cardImageUrl) => savePatch({ fateAbility: { ...ability, cardImageUrl } })} />
     </div>
   );
+}
+
+function fateAbilityMeta(item: CatalogItem) {
+  const kind = item.fateAbility?.kind;
+  if (kind === "specialization") return `${labelForFateAbilityKind(kind)} - ${specializationTierLabel(item.fateAbility?.specializationTier)}`;
+  if (kind === "specializationFeature") return `${labelForFateAbilityKind(kind)}${item.fateAbility?.specializationId ? "" : " - nicht verknuepft"}`;
+  if (kind === "fateCard") return `${labelForFateAbilityKind(kind)} - Level ${item.fateAbility?.level ?? 1}`;
+  return labelForFateAbilityKind(kind);
+}
+
+function specializationTierLabel(tier?: string) {
+  if (tier === "gelehrter") return "Gelehrter";
+  if (tier === "meister") return "Meister";
+  return "Lehrling";
+}
+
+function compareSpecializations(left: CatalogItem, right: CatalogItem) {
+  const tier = specializationTierOrder(left.fateAbility?.specializationTier) - specializationTierOrder(right.fateAbility?.specializationTier);
+  if (tier !== 0) return tier;
+  return left.name.localeCompare(right.name, "de", { sensitivity: "base" });
+}
+
+function specializationTierOrder(tier?: string) {
+  if (tier === "lehrling") return 1;
+  if (tier === "gelehrter") return 2;
+  if (tier === "meister") return 3;
+  return 0;
 }
 
 function BackgroundQuestionFields({ item, savePatch }: SpecificEditorProps) {

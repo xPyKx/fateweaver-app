@@ -18,12 +18,14 @@ import {
   CircleDot,
   Grid2X2,
   List,
+  MessageSquare,
   Minus,
   MoreHorizontal,
   MoveDiagonal2,
   ChevronLeft,
   ChevronRight,
   SlidersHorizontal,
+  Send,
   Trash2,
 } from "lucide-react";
 import { BOTTOM_TABS, ATTRIBUTES } from "./layoutConstants";
@@ -1184,7 +1186,7 @@ function mainFateAbilityCards(catalog, character) {
 function selectedSpecializationCards(catalog, character) {
   const specializationIds = Array.from(new Set(Object.values(character?.choices?.levelUps ?? {}).map((choice) => choice.specializationId).filter(Boolean)));
   const specializationItems = selectedByIds(catalog, specializationIds);
-  const featureItems = catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.kind === "specializationFeature" && specializationIds.includes(item.fateAbility?.fateId));
+  const featureItems = catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.kind === "specializationFeature" && specializationIds.includes(item.fateAbility?.specializationId ?? item.fateAbility?.fateId));
   return [...specializationItems, ...featureItems];
 }
 
@@ -1412,12 +1414,74 @@ function SortablePanel({ items, mode = "grid" }) {
   );
 }
 
+function PlayerMessagePopup({ message, character, onReply, onRead, onClose }) {
+  const [reply, setReply] = useState("");
+  return (
+    <div className="fixed inset-0 z-[280] grid place-items-center bg-black/80 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="grid w-full max-w-xl gap-3 border border-[#a8752a]/60 bg-[#070b12] p-4 shadow-xl shadow-black/60">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Nachricht vom GM</div>
+            <div className="text-xl font-light text-white">{character.name}</div>
+          </div>
+          <button onClick={onClose} className="grid h-9 w-9 place-items-center border border-[#a8752a]/45 text-[#cfc2aa]"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="border border-[#a8752a]/30 bg-black/25 p-3 text-[#cfc2aa]">
+          <div className="mb-2 text-xs text-[#8c8170]">{formatMessageDate(message.createdAt)}</div>
+          <p className="whitespace-pre-wrap">{message.body}</p>
+        </div>
+        <textarea value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Antwort schreiben" className="min-h-28 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none" />
+        <div className="flex flex-wrap justify-end gap-2">
+          <button onClick={onRead} className="border border-[#a8752a]/45 px-4 py-2 text-sm text-[#cfc2aa]">Gelesen</button>
+          <button onClick={() => reply.trim() && onReply(reply)} disabled={!reply.trim()} className="flex items-center gap-2 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 text-sm font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]"><Send className="h-4 w-4" /> Antworten</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlayerMessageComposer({ character, messages, onSend, onClose }) {
+  const [body, setBody] = useState("");
+  const recent = messages.slice(0, 5);
+  return (
+    <div className="fixed inset-0 z-[270] grid place-items-center bg-black/80 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="grid w-full max-w-2xl gap-4 border border-[#a8752a]/60 bg-[#070b12] p-4 shadow-xl shadow-black/60">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Nachricht an GM</div>
+            <div className="text-xl font-light text-white">{character.name}</div>
+          </div>
+          <button onClick={onClose} className="grid h-9 w-9 place-items-center border border-[#a8752a]/45 text-[#cfc2aa]"><X className="h-4 w-4" /></button>
+        </div>
+        <textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} placeholder="Nachricht schreiben" className="min-h-32 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none" />
+        <button onClick={() => body.trim() && onSend(body)} disabled={!body.trim()} className="flex min-h-10 items-center justify-center gap-2 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]"><Send className="h-4 w-4" /> Senden</button>
+        <div className="grid gap-2 border-t border-[#a8752a]/25 pt-3">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Letzte Nachrichten</div>
+          {recent.length ? recent.map((message) => (
+            <div key={message.id} className="border border-[#a8752a]/25 bg-black/25 p-3 text-sm text-[#cfc2aa]">
+              <div className="mb-1 flex flex-wrap gap-2 text-xs text-[#8c8170]"><span>{message.fromRole === "gm" ? "GM" : "Spieler"}</span><span>{formatMessageDate(message.createdAt)}</span></div>
+              <p className="whitespace-pre-wrap">{message.body}</p>
+            </div>
+          )) : <div className="text-sm text-[#8c8170]">Noch keine Nachrichten.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatMessageDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("de-DE");
+}
+
 export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter, onLevelUp }) {
-  const { data, activeCharacter, upsertCharacter, updateGmSession } = useGameStore();
+  const { data, activeCharacter, upsertCharacter, updateGmSession, sendMessage, markMessageRead } = useGameStore();
   const character = data.characters.find((entry) => entry.id === selectedCharacter) ?? activeCharacter;
   const [inspiration, setInspiration] = useState(2);
   const [detailItem, setDetailItem] = useState(null);
   const [shopOpen, setShopOpen] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [dismissedMessageId, setDismissedMessageId] = useState(null);
   if (!character) {
     return (
       <Shell>
@@ -1436,6 +1500,10 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
   const activeShop = availableShops[0];
   const dismissedShopIds = character.choices.dismissedShopIds ?? [];
   const hasNewShop = availableShops.some((shop) => !dismissedShopIds.includes(shop.id));
+  const characterMessages = (data.messages ?? [])
+    .filter((message) => message.characterId === character.id || message.toCharacterId === character.id)
+    .sort((left, right) => Date.parse(right.createdAt ?? "") - Date.parse(left.createdAt ?? ""));
+  const unreadGmMessage = characterMessages.find((message) => message.fromRole === "gm" && message.status === "unread" && message.id !== dismissedMessageId);
 
   function openShop() {
     upsertCharacter({
@@ -1462,6 +1530,10 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
                 {hasNewShop && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500" />}
               </div>
             )}
+            <div className="relative">
+              <ActionButton icon={<MessageSquare className="h-4 w-4" />} onClick={() => setMessageOpen(true)}>Nachricht</ActionButton>
+              {unreadGmMessage && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500" />}
+            </div>
             <ActionButton icon={<ChevronsUp className="h-4 w-4" />} onClick={onLevelUp}>Level Up</ActionButton>
             <ActionButton icon={<Moon className="h-4 w-4" />}>Rast</ActionButton>
             <ActionButton icon={<Settings className="h-4 w-4" />} onClick={onEditCharacter}>Charakter Editor</ActionButton>
@@ -1479,7 +1551,7 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
               <div className="flex flex-wrap items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <h1 className="text-4xl font-light text-white">{character?.name || "Lyrien Veyra"}</h1>
-                  <div className="mt-2 text-[#cfc2aa]">{sheet.folkName}</div>
+                  <div className="mt-2 text-[#cfc2aa]">{[sheet.folkName, sheet.societyName].filter(Boolean).join(", ")}</div>
                   <div className="mt-4 flex flex-wrap gap-5">
                     <FateSymbolBadge name={sheet.mainFateName} symbolUrl={sheet.mainFateSymbolUrl} />
                     <FateSymbolBadge name={sheet.sideFateName} symbolUrl={sheet.sideFateSymbolUrl} />
@@ -1541,6 +1613,33 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
           </button>
         )}
         {shopOpen && <PlayerShopModal character={character} characters={data.characters} catalog={data.catalog} gmSession={data.gmSession} updateGmSession={updateGmSession} onClose={() => setShopOpen(false)} />}
+        {unreadGmMessage && (
+          <PlayerMessagePopup
+            message={unreadGmMessage}
+            character={character}
+            onClose={() => setDismissedMessageId(unreadGmMessage.id)}
+            onRead={() => {
+              markMessageRead(unreadGmMessage.id);
+              setDismissedMessageId(unreadGmMessage.id);
+            }}
+            onReply={(body) => {
+              sendMessage({ body, parentId: unreadGmMessage.id, threadId: unreadGmMessage.threadId, characterId: character.id, toRole: "gm" });
+              markMessageRead(unreadGmMessage.id);
+              setDismissedMessageId(unreadGmMessage.id);
+            }}
+          />
+        )}
+        {messageOpen && (
+          <PlayerMessageComposer
+            character={character}
+            messages={characterMessages}
+            onClose={() => setMessageOpen(false)}
+            onSend={(body) => {
+              sendMessage({ body, characterId: character.id, toRole: "gm" });
+              setMessageOpen(false);
+            }}
+          />
+        )}
         <DetailModal item={detailItem} character={character} upsertCharacter={upsertCharacter} attunementIconUrl={sheet.attunementIconUrl} onClose={() => setDetailItem(null)} />
       </div>
     </Shell>

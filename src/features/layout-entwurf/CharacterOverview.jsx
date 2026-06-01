@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Edit3, Plus, ScrollText, Settings, Sparkles, Trash2, UserRound } from "lucide-react";
+import { ChevronDown, ChevronRight, Edit3, Plus, ScrollText, Settings, Sparkles, Trash2, UserRound, Users } from "lucide-react";
 import { DeleteCharacterDialog } from "./DeleteCharacterDialog";
 import { SupabaseStatus } from "./SupabaseStatus";
 import { ActionButton, GoldPanel, Shell } from "./layoutPrimitives";
@@ -134,13 +134,26 @@ function UserCharacterGroup({ group, catalog, open, onToggle, onOpenCharacter, o
 }
 
 export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, onCreateCharacter }) {
-  const { data, ready, authLoading, profile, currentUserId, deleteCharacter, setActiveCharacter, upsertCharacter } = useGameStore();
+  const { data, ready, authLoading, profile, currentUserId, activeWorkspace, setActiveWorkspace, createWorkspace, inviteWorkspaceMember, acceptWorkspaceInvite, attachCharacterToCampaign, revokeWorkspaceInvite, removeWorkspaceMember, deleteCharacter, setActiveCharacter, upsertCharacter } = useGameStore();
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [confirmation, setConfirmation] = useState("");
   const [managedUsers, setManagedUsers] = useState([]);
   const [openOwnerId, setOpenOwnerId] = useState("");
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("player");
+  const [inviteCampaignId, setInviteCampaignId] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [joinCampaignId, setJoinCampaignId] = useState("");
+  const activeWorkspaceId = activeWorkspace?.id ?? data.activeWorkspaceId;
+  const workspaceInvites = (data.workspaceInvites ?? []).filter((invite) => invite.workspaceId === activeWorkspaceId && invite.status === "open");
+  const workspaceMembers = (activeWorkspace?.members ?? []).filter((member) => member.status !== "removed");
+  const workspaceCampaigns = (data.campaigns ?? []).filter((campaign) => campaign.workspaceId === activeWorkspaceId);
+  const joinedCampaigns = (data.campaigns ?? []).filter((campaign) => campaign.members?.some((member) => member.userId === currentUserId && member.status === "active"));
   const characters = data.characters
+    .filter((character) => !activeWorkspaceId || character.workspaceId === activeWorkspaceId)
     .filter((character) => currentUserId && (profile?.isGm || !character.ownerId || character.ownerId === currentUserId));
+  const ownCharacters = data.characters.filter((character) => currentUserId && (!character.ownerId || character.ownerId === currentUserId));
   const showUserGroups = Boolean(profile?.isGm || profile?.isAdmin);
   const userGroups = useMemo(() => buildUserGroups(characters, managedUsers, currentUserId, profile), [characters, managedUsers, currentUserId, profile]);
 
@@ -182,11 +195,109 @@ export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, 
             )}
           </div>
         </GoldPanel>
+        {ready && currentUserId && profile?.isGm && (
+          <GoldPanel className="p-4">
+            <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-[#f2ca75]"><Users className="h-4 w-4" /> Spielrunde</div>
+                <div className="flex flex-wrap gap-2">
+                  {(data.workspaces ?? []).map((workspace) => (
+                    <button key={workspace.id} onClick={() => setActiveWorkspace(workspace.id)} className={`border px-3 py-2 text-sm ${workspace.id === activeWorkspaceId ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{workspace.name}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[220px_auto]">
+                <input value={newWorkspaceName} onChange={(event) => setNewWorkspaceName(event.target.value)} placeholder="Neue Spielrunde" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+                <button onClick={() => { createWorkspace(newWorkspaceName); setNewWorkspaceName(""); }} disabled={!newWorkspaceName.trim()} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Erstellen</button>
+              </div>
+            </div>
+            {activeWorkspace && (
+              <div className="mt-4 grid gap-4 border-t border-[#a8752a]/25 pt-4 xl:grid-cols-2">
+                <div className="grid gap-2">
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Mitglieder</div>
+                  <div className="grid gap-2">
+                    {workspaceMembers.map((member) => (
+                      <div key={member.userId} className="flex flex-wrap items-center gap-2 border border-[#a8752a]/25 bg-black/20 px-3 py-2 text-sm text-[#cfc2aa]">
+                        <span className="min-w-0 flex-1 truncate">{member.email || member.userId}</span>
+                        <span className="border border-[#a8752a]/30 px-2 py-1 text-xs text-[#8c8170]">{member.role}</span>
+                        {member.userId !== currentUserId && <button onClick={() => removeWorkspaceMember(member.userId)} className="text-xs text-red-200">Entfernen</button>}
+                      </div>
+                    ))}
+                    {!workspaceMembers.length && <div className="text-sm text-[#8c8170]">Noch keine Mitglieder.</div>}
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Spieler einladen</div>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_150px_auto]">
+                    <input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="E-Mail" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+                    <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none">
+                      <option value="player">Spieler</option>
+                      <option value="assistant_gm">Co-GM</option>
+                      <option value="gm">GM</option>
+                    </select>
+                    <button onClick={() => { inviteWorkspaceMember(inviteEmail, inviteRole, inviteCampaignId || undefined); setInviteEmail(""); }} disabled={!inviteEmail.trim()} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Einladen</button>
+                  </div>
+                  <select value={inviteCampaignId} onChange={(event) => setInviteCampaignId(event.target.value)} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none">
+                    <option value="">Nur Spielrunde</option>
+                    {workspaceCampaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+                  </select>
+                  <div className="grid gap-2">
+                    {workspaceInvites.map((invite) => (
+                      <div key={invite.id} className="flex flex-wrap items-center gap-2 border border-[#a8752a]/25 bg-black/20 px-3 py-2 text-sm text-[#cfc2aa]">
+                        <span className="min-w-0 flex-1 truncate">{invite.email}</span>
+                        <span className="border border-[#ffd88c]/45 px-2 py-1 text-xs text-[#ffd88c]">{invite.code}</span>
+                        <span className="border border-[#a8752a]/30 px-2 py-1 text-xs text-[#8c8170]">{invite.role}</span>
+                        {invite.campaignId && <span className="border border-[#a8752a]/30 px-2 py-1 text-xs text-[#8c8170]">{workspaceCampaigns.find((campaign) => campaign.id === invite.campaignId)?.name ?? "Kampagne"}</span>}
+                        <button onClick={() => revokeWorkspaceInvite(invite.id)} className="text-xs text-red-200">Widerrufen</button>
+                      </div>
+                    ))}
+                    {!workspaceInvites.length && <div className="text-sm text-[#8c8170]">Keine offenen Einladungen.</div>}
+                  </div>
+                </div>
+              </div>
+            )}
+          </GoldPanel>
+        )}
         {ready && authLoading && (
           <GoldPanel className="p-5 text-[#cfc2aa]">Anmeldung und Synchronisation werden geprueft...</GoldPanel>
         )}
         {ready && !authLoading && !currentUserId && (
           <GoldPanel className="p-5 text-[#cfc2aa]">Bitte einloggen, um Charaktere zu sehen oder zu erstellen.</GoldPanel>
+        )}
+        {ready && !authLoading && currentUserId && !profile?.isGm && (
+          <GoldPanel className="p-4">
+            <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+              <div className="grid content-start gap-2">
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Einladung annehmen</div>
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <input value={inviteCode} onChange={(event) => setInviteCode(event.target.value.toUpperCase())} placeholder="Einladungscode" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+                  <button onClick={() => { acceptWorkspaceInvite(inviteCode); setInviteCode(""); }} disabled={!inviteCode.trim()} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Annehmen</button>
+                </div>
+              </div>
+              <div className="grid content-start gap-2">
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Charakter in Kampagne holen</div>
+                {joinedCampaigns.length ? (
+                  <div className="grid gap-2">
+                    <select value={joinCampaignId} onChange={(event) => setJoinCampaignId(event.target.value)} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none">
+                      <option value="">Kampagne waehlen</option>
+                      {joinedCampaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
+                    </select>
+                    <div className="flex flex-wrap gap-2">
+                      {ownCharacters.map((character) => <button key={character.id} onClick={() => joinCampaignId && attachCharacterToCampaign(joinCampaignId, character.id)} disabled={!joinCampaignId} className="border border-[#a8752a]/35 px-3 py-2 text-sm text-[#cfc2aa] disabled:text-[#8c8170]">{character.name}</button>)}
+                      <button onClick={() => {
+                        if (!joinCampaignId) return;
+                        const campaign = joinedCampaigns.find((entry) => entry.id === joinCampaignId);
+                        const character = { ...createCharacter(), workspaceId: campaign?.workspaceId };
+                        upsertCharacter(character);
+                        attachCharacterToCampaign(joinCampaignId, character.id);
+                        onCreateCharacter ? onCreateCharacter(character.id) : onOpenCharacter(character.id);
+                      }} disabled={!joinCampaignId} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 py-2 text-sm font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Neuen Charakter erstellen</button>
+                    </div>
+                  </div>
+                ) : <div className="text-sm text-[#8c8170]">Noch keine angenommene Kampagnen-Einladung.</div>}
+              </div>
+            </div>
+          </GoldPanel>
         )}
         {ready && !authLoading && currentUserId && showUserGroups && (
           <div className="grid gap-4">

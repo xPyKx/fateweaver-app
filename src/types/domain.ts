@@ -184,6 +184,7 @@ export interface LevelUpChoice {
 
 export interface CatalogItem {
   id: string;
+  workspaceId?: string;
   type: CatalogType;
   name: string;
   description: string;
@@ -283,6 +284,7 @@ export type HistoryEventType =
 export interface HistoryEvent {
   id: string;
   type: HistoryEventType;
+  workspaceId?: string;
   characterId?: string;
   actorUserId?: string;
   actorRole?: "gm" | "player" | "system";
@@ -297,6 +299,7 @@ export type MessageStatus = "unread" | "read" | "answered" | "archived";
 
 export interface AppMessage {
   id: string;
+  workspaceId?: string;
   threadId: string;
   parentId?: string;
   campaignId?: string;
@@ -315,6 +318,7 @@ export interface AppMessage {
 }
 
 export interface NewMessageInput {
+  workspaceId?: string;
   characterId?: string;
   toUserId?: string;
   toRole?: MessageSenderRole;
@@ -376,15 +380,24 @@ export interface GmSessionData {
 
 export interface Campaign {
   id: string;
+  workspaceId?: string;
   name: string;
   description?: string;
   characterIds: string[];
+  members?: Array<{
+    userId: string;
+    role: WorkspaceMemberRole;
+    characterIds: string[];
+    activeCharacterId?: string;
+    status: "active" | "inactive" | "removed";
+  }>;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CampaignSession {
   id: string;
+  workspaceId?: string;
   campaignId: string;
   name: string;
   scheduledAt?: string;
@@ -397,6 +410,9 @@ export interface CampaignSession {
 
 export type CustomModuleScope = "global" | "campaign" | "session" | "character";
 export type CustomModuleFieldType = "text" | "textarea" | "number" | "checkbox";
+export type GmBuilderItemType = "npc" | "location" | "faction" | "quest" | "note" | "handout" | "encounter" | "threat" | "riddle" | "rule";
+export type GmBuilderItemStatus = "draft" | "active" | "done" | "archived";
+export type GmBuilderVisibility = "gm" | "players";
 
 export interface CustomModuleField {
   id: string;
@@ -407,11 +423,19 @@ export interface CustomModuleField {
 
 export interface CustomGmModule {
   id: string;
+  workspaceId?: string;
   name: string;
+  itemType?: GmBuilderItemType;
+  status?: GmBuilderItemStatus;
+  visibility?: GmBuilderVisibility;
   scope: CustomModuleScope;
   campaignId?: string;
   sessionId?: string;
   characterId?: string;
+  tags?: string[];
+  summary?: string;
+  gmNotes?: string;
+  playerText?: string;
   fields: CustomModuleField[];
   createdAt: string;
   updatedAt: string;
@@ -419,7 +443,9 @@ export interface CustomGmModule {
 
 export interface Character {
   id: string;
+  workspaceId?: string;
   ownerId?: string;
+  campaignStatus?: "active" | "inactive" | "dead" | "archived";
   name: string;
   level: number;
   portraitUrl?: string;
@@ -443,12 +469,47 @@ export interface SessionState {
 
 export interface InfoHint {
   id: string;
+  workspaceId?: string;
   target: string;
   title: string;
   body: string;
 }
 
+export type WorkspaceMemberRole = "owner" | "gm" | "player" | "assistant_gm";
+
+export interface WorkspaceMember {
+  userId: string;
+  email?: string;
+  role: WorkspaceMemberRole;
+  status: "active" | "invited" | "removed";
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  ownerId?: string;
+  members: WorkspaceMember[];
+  presetPackIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceInvite {
+  id: string;
+  workspaceId: string;
+  campaignId?: string;
+  email: string;
+  code: string;
+  role: WorkspaceMemberRole;
+  status: "open" | "accepted" | "revoked";
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AppData {
+  workspaces?: Workspace[];
+  workspaceInvites?: WorkspaceInvite[];
+  activeWorkspaceId?: string;
   characters: Character[];
   deletedCharacterIds?: string[];
   deletedCatalogItemIds?: string[];

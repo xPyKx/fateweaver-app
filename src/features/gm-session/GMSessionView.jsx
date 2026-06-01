@@ -7,11 +7,27 @@ import { buildSheetModel } from "../layout-entwurf/sheetModel";
 
 const GIVE_TYPES = [["magicItem", "Magische Gegenstaende"], ["equipment", "Ausruestung"], ["weapon", "Waffen"], ["armor", "Ruestung"], ["potion", "Traenke"]];
 const DEFAULT_SESSION = { shops: [], shopGroups: [], shopRequests: [], inventoryHistory: [] };
+const BUILDER_TYPES = [
+  ["npc", "NSC"],
+  ["location", "Ort"],
+  ["faction", "Fraktion"],
+  ["quest", "Quest"],
+  ["note", "Notiz"],
+  ["handout", "Handout"],
+  ["encounter", "Begegnung"],
+  ["threat", "Bedrohung"],
+  ["riddle", "Raetsel"],
+  ["rule", "Regel/Hausregel"]
+];
+const BUILDER_STATUS = [["draft", "Entwurf"], ["active", "Aktiv"], ["done", "Erledigt"], ["archived", "Archiviert"]];
+const BUILDER_VISIBILITY = [["gm", "Nur GM"], ["players", "Fuer Spieler freigegeben"]];
 
 export function GMDashboardView({ onBack }) {
-  const { data, upsertCharacter, updateGmSession, sendMessage, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule } = useGameStore();
+  const { data, activeWorkspace, upsertCharacter, updateGmSession, sendMessage, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule } = useGameStore();
+  const workspaceId = activeWorkspace?.id ?? data.activeWorkspaceId;
+  const workspaceData = selectWorkspaceData(data, workspaceId);
   const gmSession = { ...DEFAULT_SESSION, ...(data.gmSession ?? {}) };
-  const historyEvents = buildTimelineEvents(data, gmSession.inventoryHistory);
+  const historyEvents = buildTimelineEvents(workspaceData, gmSession.inventoryHistory);
   const [module, setModule] = useState("players");
 
   function saveSession(patch) {
@@ -50,13 +66,13 @@ export function GMDashboardView({ onBack }) {
   }
 
   const pending = gmSession.shopRequests.filter((request) => request.status === "pending");
-  const unreadMessages = (data.messages ?? []).filter((message) => message.fromRole === "player" && message.status === "unread").length;
+  const unreadMessages = (workspaceData.messages ?? []).filter((message) => message.fromRole === "player" && message.status === "unread").length;
   const dashboardModules = [
-    { key: "players", label: "Spieler", description: "Charaktere, Inventar und Kurzwerte", icon: <Gift className="h-4 w-4" />, count: data.characters.length },
-    { key: "campaigns", label: "Kampagnen", description: "Kampagnen, Sessions und Zuordnungen", icon: <CalendarDays className="h-4 w-4" />, count: (data.campaigns ?? []).length },
+    { key: "players", label: "Spieler", description: "Charaktere, Inventar und Kurzwerte", icon: <Gift className="h-4 w-4" />, count: workspaceData.characters.length },
+    { key: "campaigns", label: "Kampagnen", description: "Kampagnen, Sessions und Zuordnungen", icon: <CalendarDays className="h-4 w-4" />, count: (workspaceData.campaigns ?? []).length },
     { key: "shops", label: "Shops", description: "Shops, Gruppen und Freigaben", icon: <Store className="h-4 w-4" />, count: gmSession.shops.length },
-    { key: "messages", label: "Nachrichten", description: "GM- und Spieler-Kommunikation", icon: <MessageSquare className="h-4 w-4" />, count: unreadMessages || (data.messages ?? []).length },
-    { key: "customModules", label: "Module", description: "Eigene GM-Felder und Notizen", icon: <LayoutGrid className="h-4 w-4" />, count: (data.customGmModules ?? []).length },
+    { key: "messages", label: "Nachrichten", description: "GM- und Spieler-Kommunikation", icon: <MessageSquare className="h-4 w-4" />, count: unreadMessages || (workspaceData.messages ?? []).length },
+    { key: "customModules", label: "GM-Baukasten", description: "NSC, Orte, Fraktionen und eigene Bausteine", icon: <LayoutGrid className="h-4 w-4" />, count: (workspaceData.customGmModules ?? []).length },
     { key: "history", label: "History", description: "Timeline aller Ereignisse", icon: <PackagePlus className="h-4 w-4" />, count: historyEvents.length }
   ];
   const activeModule = dashboardModules.find((entry) => entry.key === module) ?? dashboardModules[0];
@@ -89,12 +105,12 @@ export function GMDashboardView({ onBack }) {
       </section>
       {pending.length > 0 && <section className="grid gap-3 border border-[#a8752a]/45 bg-black/25 p-4"><div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Offene Shop-Anfragen</div>{pending.map((request) => <RequestRow key={request.id} request={request} data={data} onConfirm={() => confirmRequest(request.id)} onDecline={() => declineRequest(request.id)} />)}</section>}
       <div>
-        {module === "players" && <PlayerModule data={data} onGive={giveItem} onMessage={sendMessage} history={historyEvents} />}
-        {module === "campaigns" && <CampaignModule data={data} gmSession={gmSession} onSaveCampaign={upsertCampaign} onDeleteCampaign={deleteCampaign} onSaveSession={upsertCampaignSession} onDeleteSession={deleteCampaignSession} />}
-        {module === "shops" && <ShopModule data={data} gmSession={gmSession} saveSession={saveSession} />}
-        {module === "messages" && <MessageModule data={data} onMessage={sendMessage} />}
-        {module === "customModules" && <CustomModulesModule data={data} onSave={upsertCustomGmModule} onDelete={deleteCustomGmModule} />}
-        {module === "history" && <HistoryModule data={data} history={historyEvents} />}
+        {module === "players" && <PlayerModule data={workspaceData} onGive={giveItem} onMessage={sendMessage} history={historyEvents} />}
+        {module === "campaigns" && <CampaignModule data={workspaceData} gmSession={gmSession} onSaveCampaign={upsertCampaign} onDeleteCampaign={deleteCampaign} onSaveSession={upsertCampaignSession} onDeleteSession={deleteCampaignSession} />}
+        {module === "shops" && <ShopModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} />}
+        {module === "messages" && <MessageModule data={workspaceData} onMessage={sendMessage} />}
+        {module === "customModules" && <CustomModulesModule data={workspaceData} onSave={upsertCustomGmModule} onDelete={deleteCustomGmModule} />}
+        {module === "history" && <HistoryModule data={workspaceData} history={historyEvents} />}
       </div>
     </div>
   );
@@ -113,6 +129,22 @@ function ModuleButton({ module, active, onClick }) {
       <span className="text-xs normal-case leading-snug text-[#8c8170]">{module.description}</span>
     </button>
   );
+}
+
+function selectWorkspaceData(data, workspaceId) {
+  if (!workspaceId) return data;
+  const inWorkspace = (entry) => !entry.workspaceId || entry.workspaceId === workspaceId;
+  return {
+    ...data,
+    characters: (data.characters ?? []).filter(inWorkspace),
+    catalog: (data.catalog ?? []).filter(inWorkspace),
+    historyEvents: (data.historyEvents ?? []).filter(inWorkspace),
+    messages: (data.messages ?? []).filter(inWorkspace),
+    campaigns: (data.campaigns ?? []).filter(inWorkspace),
+    campaignSessions: (data.campaignSessions ?? []).filter(inWorkspace),
+    customGmModules: (data.customGmModules ?? []).filter(inWorkspace),
+    infoHints: (data.infoHints ?? []).filter(inWorkspace)
+  };
 }
 
 function PlayerModule({ data, onGive, onMessage, history }) {
@@ -431,8 +463,12 @@ function CampaignSessionCard({ session, characters, shops, campaign, onPatch, on
 function CustomModulesModule({ data, onSave, onDelete }) {
   const modules = data.customGmModules ?? [];
   const [name, setName] = useState("");
+  const [itemType, setItemType] = useState("npc");
   const [scope, setScope] = useState("global");
   const [targetId, setTargetId] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [activeId, setActiveId] = useState(modules[0]?.id ?? "");
   const targetOptions = scope === "campaign"
     ? (data.campaigns ?? []).map((campaign) => [campaign.id, campaign.name])
     : scope === "session"
@@ -440,16 +476,53 @@ function CustomModulesModule({ data, onSave, onDelete }) {
       : scope === "character"
         ? data.characters.map((character) => [character.id, character.name])
         : [];
+  const filteredModules = modules
+    .filter((module) => typeFilter === "all" || (module.itemType ?? "note") === typeFilter)
+    .filter((module) => statusFilter === "all" || (module.status ?? "draft") === statusFilter)
+    .sort((left, right) => Date.parse(right.updatedAt ?? "") - Date.parse(left.updatedAt ?? ""));
+  const activeModule = modules.find((module) => module.id === activeId) ?? filteredModules[0];
 
   function createModule() {
     if (!name.trim()) return;
     const now = new Date().toISOString();
-    onSave({ id: crypto.randomUUID(), name: name.trim(), scope, campaignId: scope === "campaign" ? targetId : undefined, sessionId: scope === "session" ? targetId : undefined, characterId: scope === "character" ? targetId : undefined, fields: [], createdAt: now, updatedAt: now });
+    const module = { id: crypto.randomUUID(), name: name.trim(), itemType, status: "draft", visibility: "gm", scope, campaignId: scope === "campaign" ? targetId : undefined, sessionId: scope === "session" ? targetId : undefined, characterId: scope === "character" ? targetId : undefined, tags: [], summary: "", gmNotes: "", playerText: "", fields: [], createdAt: now, updatedAt: now };
+    onSave(module);
+    setActiveId(module.id);
     setName("");
     setTargetId("");
   }
 
-  return <section className="grid gap-4 xl:grid-cols-[340px_1fr]"><div className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4"><div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Eigenes Modul</div><input value={name} onChange={(event) => setName(event.target.value)} placeholder="Modulname" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><Select value={scope} onChange={(value) => { setScope(value); setTargetId(""); }} options={[["global", "Global"], ["campaign", "Kampagne"], ["session", "Session"], ["character", "Charakter"]]} />{scope !== "global" && <Select value={targetId} onChange={setTargetId} options={[["", "Zuordnung waehlen"], ...targetOptions]} />}<button onClick={createModule} disabled={!name.trim() || (scope !== "global" && !targetId)} className="min-h-10 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Modul erstellen</button></div><div className="grid content-start gap-3">{modules.map((module) => <CustomModuleCard key={module.id} module={module} data={data} onSave={onSave} onDelete={() => onDelete(module.id)} />)}{!modules.length && <div className="border border-[#a8752a]/25 bg-black/20 p-4 text-[#8c8170]">Noch keine eigenen Module.</div>}</div></section>;
+  return (
+    <section className="grid gap-4 xl:grid-cols-[340px_minmax(360px,0.9fr)_1.1fr]">
+      <div className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
+        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">GM-Baukasten</div>
+        <Select value={itemType} onChange={setItemType} options={BUILDER_TYPES} />
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name des Bausteins" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+        <Select value={scope} onChange={(value) => { setScope(value); setTargetId(""); }} options={[["global", "Global"], ["campaign", "Kampagne"], ["session", "Session"], ["character", "Charakter"]]} />
+        {scope !== "global" && <Select value={targetId} onChange={setTargetId} options={[["", "Zuordnung waehlen"], ...targetOptions]} />}
+        <button onClick={createModule} disabled={!name.trim() || (scope !== "global" && !targetId)} className="min-h-10 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Baustein erstellen</button>
+        <div className="mt-3 grid gap-2 border-t border-[#a8752a]/25 pt-3">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Filter</div>
+          <Select value={typeFilter} onChange={setTypeFilter} options={[["all", "Alle Typen"], ...BUILDER_TYPES]} />
+          <Select value={statusFilter} onChange={setStatusFilter} options={[["all", "Alle Status"], ...BUILDER_STATUS]} />
+        </div>
+      </div>
+      <div className="grid content-start gap-3">
+        {filteredModules.map((module) => <BuilderItemCard key={module.id} module={module} data={data} active={activeModule?.id === module.id} onOpen={() => setActiveId(module.id)} />)}
+        {!filteredModules.length && <div className="border border-[#a8752a]/25 bg-black/20 p-4 text-[#8c8170]">Keine Bausteine fuer diesen Filter.</div>}
+      </div>
+      <div className="min-w-0">
+        {activeModule ? <CustomModuleCard module={activeModule} data={data} onSave={onSave} onDelete={() => { onDelete(activeModule.id); setActiveId(""); }} /> : <div className="border border-[#a8752a]/25 bg-black/20 p-4 text-[#8c8170]">Waehle einen Baustein aus.</div>}
+      </div>
+    </section>
+  );
+}
+
+function BuilderItemCard({ module, data, active, onOpen }) {
+  const typeLabel = optionLabel(BUILDER_TYPES, module.itemType ?? "note");
+  const statusLabel = optionLabel(BUILDER_STATUS, module.status ?? "draft");
+  const target = moduleTargetLabel(module, data);
+  return <button onClick={onOpen} className={`grid gap-2 border p-3 text-left ${active ? "border-[#ffd88c] bg-[#d6a14d]/12" : "border-[#a8752a]/30 bg-black/25 hover:border-[#d6a14d]/55"}`}><div className="flex flex-wrap items-center gap-2"><span className="border border-[#a8752a]/35 px-2 py-1 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#f2ca75]">{typeLabel}</span><span className="text-xs text-[#8c8170]">{statusLabel}</span><span className="ml-auto text-xs text-[#8c8170]">{target}</span></div><div className="text-lg text-white">{module.name}</div>{module.summary && <p className="line-clamp-2 text-sm text-[#cfc2aa]">{module.summary}</p>}<div className="flex flex-wrap gap-1">{(module.tags ?? []).slice(0, 4).map((tag) => <span key={tag} className="border border-[#a8752a]/25 px-2 py-0.5 text-xs text-[#8c8170]">{tag}</span>)}</div></button>;
 }
 
 function CustomModuleCard({ module, data, onSave, onDelete }) {
@@ -465,14 +538,18 @@ function CustomModuleCard({ module, data, onSave, onDelete }) {
   function deleteField(fieldId) {
     patch({ fields: module.fields.filter((field) => field.id !== fieldId) });
   }
-  const target = module.scope === "campaign"
-    ? data.campaigns?.find((entry) => entry.id === module.campaignId)?.name
-    : module.scope === "session"
-      ? data.campaignSessions?.find((entry) => entry.id === module.sessionId)?.name
-      : module.scope === "character"
-        ? data.characters.find((entry) => entry.id === module.characterId)?.name
-        : "Global";
-  return <div className="grid gap-3 border border-[#a8752a]/30 bg-black/25 p-3"><div className="flex flex-wrap gap-3"><input value={module.name} onChange={(event) => patch({ name: event.target.value })} className="min-w-0 flex-1 bg-transparent text-xl text-white outline-none" /><span className="border border-[#a8752a]/35 px-2 py-1 text-xs text-[#8c8170]">{target}</span><button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200"><Trash2 className="h-4 w-4" /></button></div><div className="flex flex-wrap gap-2">{["text", "textarea", "number", "checkbox"].map((type) => <button key={type} onClick={() => addField(type)} className="border border-[#a8752a]/35 px-2 py-1 text-xs text-[#cfc2aa]">{type}</button>)}</div><div className="grid gap-2">{module.fields.map((field) => <div key={field.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-2 md:grid-cols-[180px_1fr_auto]"><input value={field.label} onChange={(event) => patchField(field.id, { label: event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />{field.type === "textarea" ? <textarea value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: event.target.value })} className="min-h-20 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" /> : field.type === "checkbox" ? <label className="flex items-center gap-2 text-sm text-[#cfc2aa]"><input type="checkbox" checked={Boolean(field.value)} onChange={(event) => patchField(field.id, { value: event.target.checked })} /> Aktiv</label> : <input type={field.type === "number" ? "number" : "text"} value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: field.type === "number" ? Number(event.target.value) : event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#cfc2aa] outline-none" />}<button onClick={() => deleteField(field.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button></div>)}</div></div>;
+  return <div className="grid gap-4 border border-[#a8752a]/30 bg-black/25 p-4"><div className="flex flex-wrap gap-3"><input value={module.name} onChange={(event) => patch({ name: event.target.value })} className="min-w-0 flex-1 bg-transparent text-2xl font-light text-white outline-none" /><button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200"><Trash2 className="h-4 w-4" /></button></div><div className="grid gap-2 md:grid-cols-3"><Select value={module.itemType ?? "note"} onChange={(itemType) => patch({ itemType })} options={BUILDER_TYPES} /><Select value={module.status ?? "draft"} onChange={(status) => patch({ status })} options={BUILDER_STATUS} /><Select value={module.visibility ?? "gm"} onChange={(visibility) => patch({ visibility })} options={BUILDER_VISIBILITY} /></div><input value={(module.tags ?? []).join(", ")} onChange={(event) => patch({ tags: event.target.value.split(",").map((entry) => entry.trim()).filter(Boolean) })} placeholder="Tags, durch Komma getrennt" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><TextArea label="Kurzbeschreibung" value={module.summary ?? ""} onChange={(summary) => patch({ summary })} /><TextArea label="GM-Notizen" value={module.gmNotes ?? ""} onChange={(gmNotes) => patch({ gmNotes })} /><TextArea label="Spielertext / Handout" value={module.playerText ?? ""} onChange={(playerText) => patch({ playerText })} /><div className="grid gap-2 border-t border-[#a8752a]/25 pt-3"><div className="flex flex-wrap items-center gap-2"><div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Eigene Felder</div>{["text", "textarea", "number", "checkbox"].map((type) => <button key={type} onClick={() => addField(type)} className="border border-[#a8752a]/35 px-2 py-1 text-xs text-[#cfc2aa]">{type}</button>)}</div>{module.fields.map((field) => <div key={field.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-2 md:grid-cols-[180px_1fr_auto]"><input value={field.label} onChange={(event) => patchField(field.id, { label: event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />{field.type === "textarea" ? <textarea value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: event.target.value })} className="min-h-20 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" /> : field.type === "checkbox" ? <label className="flex items-center gap-2 text-sm text-[#cfc2aa]"><input type="checkbox" checked={Boolean(field.value)} onChange={(event) => patchField(field.id, { value: event.target.checked })} /> Aktiv</label> : <input type={field.type === "number" ? "number" : "text"} value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: field.type === "number" ? Number(event.target.value) : event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#cfc2aa] outline-none" />}<button onClick={() => deleteField(field.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button></div>)}</div></div>;
+}
+
+function optionLabel(options, value) {
+  return options.find(([optionValue]) => optionValue === value)?.[1] ?? value;
+}
+
+function moduleTargetLabel(module, data) {
+  if (module.scope === "campaign") return data.campaigns?.find((entry) => entry.id === module.campaignId)?.name ?? "Kampagne";
+  if (module.scope === "session") return data.campaignSessions?.find((entry) => entry.id === module.sessionId)?.name ?? "Session";
+  if (module.scope === "character") return data.characters.find((entry) => entry.id === module.characterId)?.name ?? "Charakter";
+  return "Global";
 }
 
 function TimelineList({ title, entries, compact = false }) {

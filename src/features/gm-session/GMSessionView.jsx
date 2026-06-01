@@ -1,26 +1,13 @@
 import { useState } from "react";
-import { AlertTriangle, ArrowLeft, CalendarDays, Check, Circle, Gift, LayoutGrid, MessageSquare, MoreHorizontal, PackagePlus, Plus, Search, Send, Store, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarDays, Check, Circle, Gift, LayoutGrid, MessageSquare, MoreHorizontal, PackagePlus, Plus, Send, Store, Trash2, Upload, X } from "lucide-react";
+import { Select } from "../../components/SelectControl";
 import { fileToPersistentImageUrl } from "../../lib/images/persistentImage";
 import { useGameStore } from "../../lib/store/GameStore";
 import { ATTRIBUTES } from "../layout-entwurf/layoutConstants";
 import { buildSheetModel } from "../layout-entwurf/sheetModel";
-
-const GIVE_TYPES = [["magicItem", "Magische Gegenstaende"], ["equipment", "Ausruestung"], ["weapon", "Waffen"], ["armor", "Ruestung"], ["potion", "Traenke"]];
-const DEFAULT_SESSION = { shops: [], shopGroups: [], shopRequests: [], inventoryHistory: [] };
-const BUILDER_TYPES = [
-  ["npc", "NSC"],
-  ["location", "Ort"],
-  ["faction", "Fraktion"],
-  ["quest", "Quest"],
-  ["note", "Notiz"],
-  ["handout", "Handout"],
-  ["encounter", "Begegnung"],
-  ["threat", "Bedrohung"],
-  ["riddle", "Raetsel"],
-  ["rule", "Regel/Hausregel"]
-];
-const BUILDER_STATUS = [["draft", "Entwurf"], ["active", "Aktiv"], ["done", "Erledigt"], ["archived", "Archiviert"]];
-const BUILDER_VISIBILITY = [["gm", "Nur GM"], ["players", "Fuer Spieler freigegeben"]];
+import { BUILDER_STATUS, BUILDER_TYPES, BUILDER_VISIBILITY, DEFAULT_SESSION, GIVE_TYPES, buildTimelineEvents, selectWorkspaceData } from "./dashboardModel";
+import { TimelineList } from "./HistoryTimeline";
+import { ModuleButton } from "./ModuleButton";
 
 export function GMDashboardView({ onBack }) {
   const { data, activeWorkspace, upsertCharacter, updateGmSession, sendMessage, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule } = useGameStore();
@@ -117,35 +104,6 @@ export function GMDashboardView({ onBack }) {
 }
 
 export const GMSessionView = GMDashboardView;
-
-function ModuleButton({ module, active, onClick }) {
-  return (
-    <button onClick={onClick} className={`grid min-h-24 gap-2 border p-3 text-left ${active ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/35 bg-black/25 text-[#cfc2aa] hover:border-[#d6a14d]/60"}`}>
-      <span className="flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center border border-[#a8752a]/35 bg-black/30">{module.icon}</span>
-        <span className="font-bold uppercase">{module.label}</span>
-        <span className="ml-auto text-xs text-[#8c8170]">{module.count}</span>
-      </span>
-      <span className="text-xs normal-case leading-snug text-[#8c8170]">{module.description}</span>
-    </button>
-  );
-}
-
-function selectWorkspaceData(data, workspaceId) {
-  if (!workspaceId) return data;
-  const inWorkspace = (entry) => !entry.workspaceId || entry.workspaceId === workspaceId;
-  return {
-    ...data,
-    characters: (data.characters ?? []).filter(inWorkspace),
-    catalog: (data.catalog ?? []).filter(inWorkspace),
-    historyEvents: (data.historyEvents ?? []).filter(inWorkspace),
-    messages: (data.messages ?? []).filter(inWorkspace),
-    campaigns: (data.campaigns ?? []).filter(inWorkspace),
-    campaignSessions: (data.campaignSessions ?? []).filter(inWorkspace),
-    customGmModules: (data.customGmModules ?? []).filter(inWorkspace),
-    infoHints: (data.infoHints ?? []).filter(inWorkspace)
-  };
-}
 
 function PlayerModule({ data, onGive, onMessage, history }) {
   const [selectedCharacter, setSelectedCharacter] = useState(data.characters[0]?.id ?? "");
@@ -552,27 +510,6 @@ function moduleTargetLabel(module, data) {
   return "Global";
 }
 
-function TimelineList({ title, entries, compact = false }) {
-  return <div className="grid gap-2">{title && <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">{title}</div>}{entries.length ? entries.map((entry) => <TimelineEntry key={entry.id} entry={entry} compact={compact} />) : <div className="text-sm text-[#8c8170]">Keine History.</div>}</div>;
-}
-
-function TimelineEntry({ entry, compact }) {
-  const [open, setOpen] = useState(false);
-  const details = entry.details ?? [];
-  return <div className="border border-[#a8752a]/25 bg-black/25 p-3 text-sm text-[#cfc2aa]"><button onClick={() => setOpen(!open)} className="flex w-full items-start gap-3 text-left"><span className="mt-0.5 shrink-0 border border-[#a8752a]/35 px-2 py-1 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#f2ca75]">{historyTypeLabel(entry.type)}</span><span className="min-w-0 flex-1"><span className="block text-white">{entry.title}</span><span className="mt-1 block text-[#cfc2aa]">{entry.summary}</span><span className="mt-1 block text-xs text-[#8c8170]">{formatDateTime(entry.createdAt)} · {actorLabel(entry.actorRole)}</span></span>{details.length > 0 && <span className="text-xs text-[#8c8170]">{open ? "Weniger" : "Details"}</span>}</button>{!compact && open && details.length > 0 && <div className="mt-3 grid gap-1 border-t border-[#a8752a]/20 pt-3">{details.map((detail, index) => <div key={index} className="grid gap-1 md:grid-cols-[160px_1fr]"><span className="font-bold text-[#f2ca75]">{detail.label}</span><span>{detail.value ?? `${detail.before ?? "-"} -> ${detail.after ?? "-"}`}</span></div>)}</div>}</div>;
-}
-
-function Select({ value, onChange, options }) {
-  if (options.length > 10) return <SearchableSelect value={value} onChange={onChange} options={options} />;
-  return <select value={value} onChange={(event) => onChange(event.target.value)} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none">{options.map(([optionValue, label]) => <option key={optionValue} value={optionValue}>{label}</option>)}</select>;
-}
-function SearchableSelect({ value, onChange, options }) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const filtered = options.filter(([, label]) => label.toLowerCase().includes(query.toLowerCase())).slice(0, 80);
-  const selectedLabel = options.find(([optionValue]) => optionValue === value)?.[1] ?? "Auswaehlen";
-  return <div className="relative"><button onClick={() => setOpen(!open)} className="min-h-10 w-full border border-[#a8752a]/35 bg-black/30 px-3 text-left text-[#f4ead7]">{selectedLabel}</button>{open && <div className="absolute z-50 mt-1 grid max-h-80 w-full gap-2 overflow-auto border border-[#a8752a]/45 bg-[#070b12] p-2 shadow-xl shadow-black/60"><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8c8170]" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suchen..." className="min-h-10 w-full border border-[#a8752a]/35 bg-black/30 pl-9 pr-3 text-[#f4ead7] outline-none" /></div>{filtered.map(([optionValue, label]) => <button key={optionValue} onClick={() => { onChange(optionValue); setOpen(false); setQuery(""); }} className={`border px-3 py-2 text-left text-sm ${optionValue === value ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/25 text-[#cfc2aa]"}`}>{label}</button>)}</div>}</div>;
-}
 function Field({ label, value, onChange }) {
   return <label className="grid gap-1 text-sm text-[#cfc2aa]"><span className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">{label}</span><input value={value} onChange={(event) => onChange(event.target.value)} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /></label>;
 }
@@ -621,55 +558,6 @@ function formatHistory(entry) {
   const date = new Date(entry.createdAt).toLocaleString("de-DE");
   const action = entry.action === "given" ? "ausgegeben vom GM" : entry.action === "shopConfirmed" ? `gekauft${entry.shopName ? ` in ${entry.shopName}` : ""}` : entry.action === "returned" ? `zurueckgegeben${entry.note ? `: ${entry.note}` : ""}` : entry.action;
   return `${date} · ${entry.itemName} · ${action}`;
-}
-function buildTimelineEvents(data, inventoryHistory) {
-  const events = [
-    ...(data.historyEvents ?? []),
-    ...inventoryHistory.map(inventoryHistoryToEvent)
-  ];
-  return events.sort((left, right) => Date.parse(right.createdAt ?? "") - Date.parse(left.createdAt ?? ""));
-}
-function inventoryHistoryToEvent(entry) {
-  const title = entry.action === "given" ? "Gegenstand ausgegeben" : entry.action === "shopConfirmed" ? "Shop-Kauf bestätigt" : entry.action === "returned" ? "Gegenstand zurückgegeben" : "Inventar geändert";
-  const summary = entry.action === "shopConfirmed"
-    ? `${entry.itemName}${entry.shopName ? ` wurde in ${entry.shopName} gekauft.` : " wurde gekauft."}`
-    : entry.action === "given"
-      ? `${entry.itemName} wurde vom GM ins Inventar gelegt.`
-      : entry.action === "returned"
-        ? `${entry.itemName} wurde zurückgegeben.`
-        : `${entry.itemName} wurde geändert.`;
-  return {
-    id: `inventory:${entry.id}`,
-    type: entry.action === "shopConfirmed" ? "shop.purchase" : entry.action === "given" ? "item.given" : entry.action === "returned" ? "item.returned" : "inventory.changed",
-    characterId: entry.characterId,
-    actorRole: entry.action === "shopConfirmed" ? "system" : "gm",
-    title,
-    summary,
-    details: [
-      { label: "Gegenstand", value: entry.itemName },
-      entry.shopName ? { label: "Shop", value: entry.shopName } : undefined,
-      entry.note ? { label: "Notiz", value: entry.note } : undefined
-    ].filter(Boolean),
-    createdAt: entry.createdAt
-  };
-}
-function historyTypeLabel(type) {
-  if (type?.startsWith("character.")) return "Charakter";
-  if (type?.startsWith("item.") || type === "inventory.changed") return "Inventar";
-  if (type?.startsWith("shop.")) return "Shop";
-  if (type?.startsWith("message.")) return "Nachricht";
-  if (type?.startsWith("session.")) return "Session";
-  return "Event";
-}
-function actorLabel(role) {
-  if (role === "gm") return "GM";
-  if (role === "player") return "Spieler";
-  return "System";
-}
-function formatDateTime(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "unbekannt";
-  return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(date);
 }
 function selectedByIds(catalog, ids) {
   return ids.map((id) => catalog.find((item) => item.id === id)).filter(Boolean);

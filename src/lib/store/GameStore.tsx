@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import type { AppData, AppMessage, Campaign, CampaignSession, CatalogItem, Character, CustomGmModule, GmSessionData, HistoryEvent, InfoHint, NewMessageInput, SessionState, UserProfile, Workspace, WorkspaceInvite, WorkspaceMemberRole } from "../../types/domain";
+import type { AppData, AppMessage, Campaign, CampaignSession, CatalogItem, Character, CustomGmModule, GmSessionData, GmShop, HistoryEvent, InfoHint, NewMessageInput, SessionState, UserProfile, Workspace, WorkspaceInvite, WorkspaceMemberRole } from "../../types/domain";
 import { loadCachedData, saveCachedData } from "../cache/indexedDb";
 import { createSeedData } from "../../data/seeds";
 import { acceptRemoteWorkspaceInvite, getSessionUser, loadUserProfile, loadVisibleRemoteData, onAuthChanged, saveRemoteData, type AcceptedWorkspaceInvite } from "../supabase/client";
@@ -350,8 +350,10 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
       upsertCatalogItem: (item) =>
         setData((current) => {
           const exists = current.catalog.some((entry) => entry.id === item.id);
+          const existing = current.catalog.find((entry) => entry.id === item.id);
+          const now = new Date().toISOString();
           const workspaceId = currentWorkspaceId(current, currentUserId);
-          const nextItem = { ...item, workspaceId: item.workspaceId ?? workspaceId };
+          const nextItem = { ...item, workspaceId: item.workspaceId ?? workspaceId, createdAt: item.createdAt ?? existing?.createdAt ?? now, updatedAt: now };
           return {
             ...current,
             deletedCatalogItemIds: (current.deletedCatalogItemIds ?? []).filter((id) => id !== item.id),
@@ -387,11 +389,14 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
       upsertHint: (hint) =>
         setData((current) => {
           const exists = current.infoHints.some((entry) => entry.id === hint.id);
+          const existing = current.infoHints.find((entry) => entry.id === hint.id);
+          const now = new Date().toISOString();
+          const nextHint = { ...hint, createdAt: hint.createdAt ?? existing?.createdAt ?? now, updatedAt: now };
           return {
             ...current,
             infoHints: exists
-              ? current.infoHints.map((entry) => (entry.id === hint.id ? hint : entry))
-              : [...current.infoHints, hint]
+              ? current.infoHints.map((entry) => (entry.id === hint.id ? nextHint : entry))
+              : [...current.infoHints, nextHint]
           };
         }),
       updateSession: (state) =>
@@ -404,7 +409,7 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
       updateGmSession: (gmSession) =>
         setData((current) => ({
           ...current,
-          gmSession
+          gmSession: stampGmSession(current.gmSession, gmSession)
         })),
       upsertCampaign: (campaign) =>
         setData((current) => upsertCampaignInData(current, { ...campaign, workspaceId: campaign.workspaceId ?? currentWorkspaceId(current, currentUserId) }, currentUserId)),
@@ -451,7 +456,7 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
     : workspaces[0]?.id;
   const deletedCatalogItemIds = unique([...(data.deletedCatalogItemIds ?? []), ...DEPRECATED_SEED_CATALOG_IDS]);
   const deletedCatalogItemSet = new Set(deletedCatalogItemIds);
-  const catalog = dedupeById(data.catalog ?? []).filter((item) => !deletedCatalogItemSet.has(item.id));
+  const catalog = normalizeCatalogItems(dedupeById(data.catalog ?? []).filter((item) => !deletedCatalogItemSet.has(item.id)));
   const deletedCharacterIds = unique(data.deletedCharacterIds ?? []);
   const deletedCharacterSet = new Set(deletedCharacterIds);
   const catalogIds = new Set(catalog.map((item) => item.id));
@@ -531,7 +536,7 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
     campaigns: cleanCampaigns(data.campaigns, deletedCharacterSet).map((campaign) => ({ ...campaign, workspaceId: campaign.workspaceId ?? activeWorkspaceId })),
     campaignSessions: cleanCampaignSessions(data.campaignSessions, data.campaigns).map((session) => ({ ...session, workspaceId: session.workspaceId ?? activeWorkspaceId })),
     customGmModules: cleanCustomGmModules(data.customGmModules, deletedCharacterSet).map((module) => ({ ...module, workspaceId: module.workspaceId ?? activeWorkspaceId })),
-    infoHints: (data.infoHints ?? []).filter((hint) => !deletedCatalogItemSet.has(hint.target)).map((hint) => ({ ...hint, workspaceId: hint.workspaceId ?? activeWorkspaceId })),
+    infoHints: normalizeInfoHints((data.infoHints ?? []).filter((hint) => !deletedCatalogItemSet.has(hint.target)).map((hint) => ({ ...hint, workspaceId: hint.workspaceId ?? activeWorkspaceId }))),
     activeCharacterId,
     characters,
     session: characters.reduce((session, character) => ensureSession(session, character.id), data.session ?? []),
@@ -544,12 +549,71 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
 }
 
 function normalizeGmSession(session?: GmSessionData): GmSessionData {
-  return {
+  return stampGmSession(undefined, {
     shops: session?.shops ?? [],
     shopGroups: session?.shopGroups ?? [],
     shopRequests: session?.shopRequests ?? [],
     inventoryHistory: session?.inventoryHistory ?? []
+  });
+}
+
+function normalizeCatalogItems(items: CatalogItem[]) {
+  return items.map((item) => {
+    const timestamp = item.updatedAt ?? item.createdAt ?? new Date().toISOString();
+    return { ...item, createdAt: item.createdAt ?? timestamp, updatedAt: item.updatedAt ?? timestamp };
+  });
+}
+
+function normalizeInfoHints(items: InfoHint[]) {
+  return items.map((item) => {
+    const timestamp = item.updatedAt ?? item.createdAt ?? new Date().toISOString();
+    return { ...item, createdAt: item.createdAt ?? timestamp, updatedAt: item.updatedAt ?? timestamp };
+  });
+}
+
+function stampGmSession(previous: GmSessionData | undefined, next: GmSessionData): GmSessionData {
+  const now = new Date().toISOString();
+  return {
+    shops: stampArray(previous?.shops ?? [], next.shops ?? [], now, stampShop),
+    shopGroups: stampArray(previous?.shopGroups ?? [], next.shopGroups ?? [], now, stampTimestampedRecord),
+    shopRequests: stampArray(previous?.shopRequests ?? [], next.shopRequests ?? [], now, stampTimestampedRecord),
+    inventoryHistory: stampArray(previous?.inventoryHistory ?? [], next.inventoryHistory ?? [], now, stampTimestampedRecord)
   };
+}
+
+function stampShop(previous: GmShop | undefined, next: GmShop, now: string): GmShop {
+  const stamped = stampTimestampedRecord(previous, next, now);
+  return {
+    ...stamped,
+    listings: stampArray(previous?.listings ?? [], next.listings ?? [], now, stampTimestampedRecord)
+  };
+}
+
+function stampArray<T extends { id: string; createdAt?: string; updatedAt?: string }>(
+  previous: T[],
+  next: T[],
+  now: string,
+  stamp: (previous: T | undefined, next: T, now: string) => T
+) {
+  const previousById = new Map(previous.map((entry) => [entry.id, entry]));
+  return next.map((entry) => stamp(previousById.get(entry.id), entry, now));
+}
+
+function stampTimestampedRecord<T extends { createdAt?: string; updatedAt?: string }>(previous: T | undefined, next: T, now: string): T {
+  const createdAt = next.createdAt ?? previous?.createdAt ?? now;
+  const previousComparable = previous ? withoutTimestamps(previous) : undefined;
+  const nextComparable = withoutTimestamps(next);
+  const changed = !previous || JSON.stringify(previousComparable) !== JSON.stringify(nextComparable);
+  return {
+    ...next,
+    createdAt,
+    updatedAt: changed ? now : next.updatedAt ?? previous?.updatedAt ?? createdAt
+  };
+}
+
+function withoutTimestamps<T>(entry: T): Omit<T, "createdAt" | "updatedAt"> {
+  const { createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = entry as T & { createdAt?: string; updatedAt?: string };
+  return rest;
 }
 
 function normalizeWorkspaces(workspaces: Workspace[] | undefined, activeWorkspaceId?: string, userId?: string) {

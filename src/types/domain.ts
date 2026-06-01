@@ -206,6 +206,8 @@ export interface CatalogItem {
   sheetTab?: SheetTabData;
   rest?: RestData;
   backgroundQuestion?: BackgroundQuestionData;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CharacterAppearance {
@@ -257,6 +259,7 @@ export interface InventoryHistoryEntry {
   shopName?: string;
   action: "given" | "returned" | "shopConfirmed" | "shopDeclined" | "shopWithdrawn";
   createdAt: string;
+  updatedAt?: string;
 }
 
 export type HistoryEventType =
@@ -336,6 +339,8 @@ export interface ShopListing {
   quantity: number;
   sold?: boolean;
   reservedBy?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ShopVisitRequest {
@@ -362,6 +367,8 @@ export interface GmShop {
   releasedTo?: string[];
   active: boolean;
   listings: ShopListing[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface GmShopGroup {
@@ -369,6 +376,8 @@ export interface GmShopGroup {
   name: string;
   shopIds: string[];
   releasedTo?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface GmSessionData {
@@ -473,6 +482,8 @@ export interface InfoHint {
   target: string;
   title: string;
   body: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type WorkspaceMemberRole = "owner" | "gm" | "player" | "assistant_gm";

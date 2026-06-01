@@ -311,8 +311,8 @@ export async function saveRemoteData(data: AppData, userId?: string) {
   await upsertRemoteMessages(remoteData.messages ?? [], userId).catch(() => undefined);
   await upsertRemoteWorkspaceData(remoteData, userId).catch(() => undefined);
   await upsertRemoteCampaignData(remoteData).catch(() => undefined);
-  await upsertRemoteCharacters(remoteData.characters ?? [], userId).catch(() => undefined);
-  await deleteRemoteCharacters(remoteData.deletedCharacterIds ?? []).catch(() => undefined);
+  await upsertRemoteCharacters(remoteData.characters ?? [], userId);
+  await deleteRemoteCharacters(remoteData.deletedCharacterIds ?? []);
   lastRemotePayloadByUser.set(userId, remoteJson);
 }
 

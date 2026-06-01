@@ -280,7 +280,7 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
           const existing = current.characters.find((entry) => entry.id === character.id);
           const exists = Boolean(existing);
           const workspaceId = currentWorkspaceId(current, currentUserId);
-          const nextCharacter = { ...character, ownerId: character.ownerId ?? currentUserId, workspaceId: character.workspaceId ?? workspaceId };
+          const nextCharacter = { ...character, ownerId: character.ownerId ?? currentUserId, workspaceId: character.workspaceId ?? workspaceId, updatedAt: new Date().toISOString() };
           const historyEvents = appendCharacterHistory(current.historyEvents ?? [], existing, nextCharacter, currentUserId, profile?.isGm ? "gm" : "player");
           return {
             ...current,

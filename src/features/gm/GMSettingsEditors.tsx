@@ -378,7 +378,6 @@ function FateFields({ item, catalog, gameOptions, savePatch }: SpecificEditorPro
     <div className="grid gap-3 md:grid-cols-2">
       <Select label="Fatesymbol" value={fate.symbolItemId ?? ""} onChange={selectSymbol} options={[["", "Kein Symbol"], ...symbols.map(optionPair)]} />
       <ImageInput label="Fatesymbol direkt" value={fate.symbolUrl ?? ""} onChange={(symbolUrl) => savePatch({ fate: { ...fate, symbolUrl } })} />
-      <ImageInput label="Zauberbaukasten Template" value={fate.spellTemplateImageUrl ?? ""} onChange={(spellTemplateImageUrl) => savePatch({ fate: { ...fate, spellTemplateImageUrl } })} />
       <Select label="Zauberattribut" value={fate.spellAttribute ?? ""} onChange={(spellAttribute) => savePatch({ fate: { ...fate, spellAttribute: spellAttribute as AttributeKey | "" } })} options={[["", "Kein Zauberattribut"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
       <Field label="Level-1 Fatekarten IDs" value={fate.levelOneCards.join(", ")} onChange={(value) => savePatch({ fate: { ...fate, levelOneCards: splitList(value) } })} />
       <FateCategoryEditor item={item} catalog={catalog} savePatch={savePatch} />
@@ -640,6 +639,13 @@ export function HintDialog({ target, hint, item, itemName, onSave, onPatchItem, 
                 onChange={(spellAttribute) => onPatchItem({ ...item, fate: { ...(item.fate ?? { levelOneCards: [] }), spellAttribute: spellAttribute as AttributeKey | "" } })}
                 options={[["", "Kein Zauberattribut"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]}
               />
+              <div className="md:col-span-2">
+                <ImageInput
+                  label="Zauberbaukasten Template"
+                  value={item.fate?.spellTemplateImageUrl ?? ""}
+                  onChange={(spellTemplateImageUrl) => onPatchItem({ ...item, fate: { ...(item.fate ?? { levelOneCards: [] }), spellTemplateImageUrl } })}
+                />
+              </div>
             </div>
           )}
           <button onClick={() => onSave(target, title, body)} className="inline-flex h-11 items-center justify-center gap-2 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 text-sm font-bold uppercase tracking-wide text-[#ffd88c]">

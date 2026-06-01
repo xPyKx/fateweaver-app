@@ -472,6 +472,7 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
         selectedEquipmentCounts,
         selectedMaterialCounts,
         selectedFateCardIds,
+        attunedItemIds: cleanIds(character.choices?.attunedItemIds),
         dismissedShopIds: unique(character.choices?.dismissedShopIds ?? []),
         levelUps: character.choices?.levelUps ?? {},
         folkId: catalogHas(character.choices?.folkId, "folk") ? character.choices.folkId : undefined,
@@ -514,7 +515,8 @@ function normalizeGmSession(session?: GmSessionData): GmSessionData {
     shops: session?.shops ?? [],
     shopGroups: session?.shopGroups ?? [],
     shopRequests: session?.shopRequests ?? [],
-    inventoryHistory: session?.inventoryHistory ?? []
+    inventoryHistory: session?.inventoryHistory ?? [],
+    attunementLimit: session?.attunementLimit ?? 3
   });
 }
 

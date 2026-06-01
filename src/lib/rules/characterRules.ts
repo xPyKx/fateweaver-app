@@ -29,9 +29,9 @@ export const attributeVariants = [
 ];
 
 export function tierForLevel(level: number) {
-  if (level >= 16) return 4;
-  if (level >= 11) return 3;
-  if (level >= 6) return 2;
+  if (level >= 15) return 4;
+  if (level >= 9) return 3;
+  if (level >= 2) return 2;
   return 1;
 }
 

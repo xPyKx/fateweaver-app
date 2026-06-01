@@ -15,6 +15,7 @@ import {
   Feather,
   X,
   ChevronsUp,
+  ChevronDown,
   CircleDot,
   Grid2X2,
   List,
@@ -264,8 +265,7 @@ function ExperiencesPanel({ entries }) {
   );
 }
 
-function ItemRow({ item, onClick, attunementIconUrl }) {
-  const [attuned, setAttuned] = useState(false);
+function ItemRow({ item, onClick, attunementIconUrl, attuned, onToggleAttunement }) {
   const propertyLabel = [
     ...(item.properties ?? []).map((property) => property.name),
     item.propertyText
@@ -295,7 +295,7 @@ function ItemRow({ item, onClick, attunementIconUrl }) {
                   <span
                     onClick={(event) => {
                       event.stopPropagation();
-                      setAttuned(!attuned);
+                      onToggleAttunement?.();
                     }}
                     className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border ${attuned ? "border-[#ffd88c] bg-[#d79a39] text-black" : "border-[#a8752a]/55 bg-black/35 text-[#f2ca75]"}`}
                     title="Einstimmung markieren"
@@ -481,6 +481,7 @@ function BottomPanel() {
   const inventoryCollapsed = Boolean(activeCharacter?.choices?.inventoryCollapsed);
   const customTabs = data.catalog
     .filter((item) => item.type === "sheetTab")
+    .filter((item) => tabReleasedToCharacter(item, activeCharacter?.id))
     .sort((a, b) => a.name.localeCompare(b.name, "de", { sensitivity: "base" }))
     .map((item) => ({ name: item.name, icon: BookOpen, catalogItem: item }));
   const allTabs = uniqueTabs([...BOTTOM_TABS, ...customTabs]);
@@ -576,7 +577,7 @@ function BottomPanel() {
         className="flex w-full items-center justify-between border-b border-[#a8752a]/35 px-4 py-3 text-left"
       >
         <span className="text-sm font-black uppercase tracking-[0.24em] text-[#f2ca75]">Inventar</span>
-        <span className="text-xs font-bold uppercase tracking-[0.16em] text-[#8c8170]">{inventoryCollapsed ? "Eingeklappt" : "Ausgeklappt"}</span>
+        {inventoryCollapsed ? <ChevronRight className="h-5 w-5 text-[#8c8170]" /> : <ChevronDown className="h-5 w-5 text-[#8c8170]" />}
       </button>
       {!inventoryCollapsed && <div className="relative z-[70] flex flex-wrap items-center gap-2 overflow-visible border-b border-[#a8752a]/35 px-4 pt-3">
         {tabs.map(({ name, icon: Icon }) => (
@@ -1238,11 +1239,15 @@ function CustomTabPanel({ tab, mode, catalog }) {
   if (item.sheetTab?.contentType === "catalogList" && item.sheetTab.catalogType) {
     const entries = catalog
       .filter((entry) => entry.type === item.sheetTab.catalogType)
-      .sort((a, b) => a.name.localeCompare(b.name, "de", { sensitivity: "base" }))
-      .map((entry) => entry.name);
-    return <SortablePanel mode={mode} items={entries.length ? entries : [`Keine Einträge für ${item.name}.`]} />;
+      .sort((a, b) => a.name.localeCompare(b.name, "de", { sensitivity: "base" }));
+    return entries.length ? <CatalogCardPanel mode={mode} items={entries} /> : <SortablePanel mode={mode} items={[`Keine Einträge für ${item.name}.`]} />;
   }
   return <SortablePanel mode={mode} items={[item.description || `${item.name} ist leer.`]} />;
+}
+
+function tabReleasedToCharacter(item, characterId) {
+  const released = item.sheetTab?.releasedToCharacterIds ?? [];
+  return !released.length || Boolean(characterId && released.includes(characterId));
 }
 
 function PlayerShopModal({ character, catalog, characters, gmSession, updateGmSession, onClose }) {
@@ -1416,6 +1421,9 @@ function SortablePanel({ items, mode = "grid" }) {
 
 function PlayerMessagePopup({ message, character, onReply, onRead, onClose }) {
   const [reply, setReply] = useState("");
+  useEffect(() => {
+    onRead();
+  }, [message.id]);
   return (
     <div className="fixed inset-0 z-[280] grid place-items-center bg-black/80 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div className="grid w-full max-w-xl gap-3 border border-[#a8752a]/60 bg-[#070b12] p-4 shadow-xl shadow-black/60">
@@ -1432,7 +1440,7 @@ function PlayerMessagePopup({ message, character, onReply, onRead, onClose }) {
         </div>
         <textarea value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Antwort schreiben" className="min-h-28 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none" />
         <div className="flex flex-wrap justify-end gap-2">
-          <button onClick={onRead} className="border border-[#a8752a]/45 px-4 py-2 text-sm text-[#cfc2aa]">Gelesen</button>
+          <button onClick={onClose} className="border border-[#a8752a]/45 px-4 py-2 text-sm text-[#cfc2aa]">Schliessen</button>
           <button onClick={() => reply.trim() && onReply(reply)} disabled={!reply.trim()} className="flex items-center gap-2 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 text-sm font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]"><Send className="h-4 w-4" /> Antworten</button>
         </div>
       </div>
@@ -1482,6 +1490,15 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
   const [shopOpen, setShopOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
   const [dismissedMessageId, setDismissedMessageId] = useState(null);
+  const [activeGmMessage, setActiveGmMessage] = useState(null);
+  useEffect(() => {
+    if (!character) return;
+    const nextUnread = (data.messages ?? [])
+      .filter((message) => message.characterId === character.id || message.toCharacterId === character.id)
+      .sort((left, right) => Date.parse(right.createdAt ?? "") - Date.parse(left.createdAt ?? ""))
+      .find((message) => message.fromRole === "gm" && message.status === "unread" && message.id !== dismissedMessageId);
+    if (nextUnread) setActiveGmMessage(nextUnread);
+  }, [character?.id, data.messages, dismissedMessageId]);
   if (!character) {
     return (
       <Shell>
@@ -1504,6 +1521,20 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
     .filter((message) => message.characterId === character.id || message.toCharacterId === character.id)
     .sort((left, right) => Date.parse(right.createdAt ?? "") - Date.parse(left.createdAt ?? ""));
   const unreadGmMessage = characterMessages.find((message) => message.fromRole === "gm" && message.status === "unread" && message.id !== dismissedMessageId);
+  function toggleAttunement(itemId) {
+    if (!itemId) return;
+    const attunedItemIds = character.choices.attunedItemIds ?? [];
+    upsertCharacter({
+      ...character,
+      choices: {
+        ...character.choices,
+        attunedItemIds: attunedItemIds.includes(itemId)
+          ? attunedItemIds.filter((id) => id !== itemId)
+          : [...attunedItemIds, itemId]
+      },
+      updatedAt: new Date().toISOString()
+    });
+  }
 
   function openShop() {
     upsertCharacter({
@@ -1590,8 +1621,8 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
                 <CircleTrack current={sheet.training} max={6} />
               </div>
               <div className="grid flex-1 content-start gap-3">
-                <ItemRow item={weapon1} attunementIconUrl={sheet.attunementIconUrl} onClick={() => setDetailItem(weapon1)} />
-                <ItemRow item={weapon2} attunementIconUrl={sheet.attunementIconUrl} onClick={() => setDetailItem(weapon2)} />
+                <ItemRow item={weapon1} attunementIconUrl={sheet.attunementIconUrl} attuned={(character.choices.attunedItemIds ?? []).includes(weapon1.id)} onToggleAttunement={() => toggleAttunement(weapon1.id)} onClick={() => setDetailItem(weapon1)} />
+                <ItemRow item={weapon2} attunementIconUrl={sheet.attunementIconUrl} attuned={(character.choices.attunedItemIds ?? []).includes(weapon2.id)} onToggleAttunement={() => toggleAttunement(weapon2.id)} onClick={() => setDetailItem(weapon2)} />
               </div>
             </GoldPanel>
 
@@ -1601,7 +1632,7 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
                 <DefenseCluster evasion={sheet.dodge} armor={sheet.armorValue} armorSlotsMax={sheet.armorSlots} />
               </div>
               <div className="min-h-0 flex-1">
-                <ItemRow item={armor} attunementIconUrl={sheet.attunementIconUrl} onClick={() => setDetailItem(armor)} />
+                <ItemRow item={armor} attunementIconUrl={sheet.attunementIconUrl} attuned={(character.choices.attunedItemIds ?? []).includes(armor.id)} onToggleAttunement={() => toggleAttunement(armor.id)} onClick={() => setDetailItem(armor)} />
               </div>
             </GoldPanel>
         </div>
@@ -1613,19 +1644,22 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
           </button>
         )}
         {shopOpen && <PlayerShopModal character={character} characters={data.characters} catalog={data.catalog} gmSession={data.gmSession} updateGmSession={updateGmSession} onClose={() => setShopOpen(false)} />}
-        {unreadGmMessage && (
+        {activeGmMessage && (
           <PlayerMessagePopup
-            message={unreadGmMessage}
+            message={activeGmMessage}
             character={character}
-            onClose={() => setDismissedMessageId(unreadGmMessage.id)}
+            onClose={() => {
+              setDismissedMessageId(activeGmMessage.id);
+              setActiveGmMessage(null);
+            }}
             onRead={() => {
-              markMessageRead(unreadGmMessage.id);
-              setDismissedMessageId(unreadGmMessage.id);
+              markMessageRead(activeGmMessage.id);
             }}
             onReply={(body) => {
-              sendMessage({ body, parentId: unreadGmMessage.id, threadId: unreadGmMessage.threadId, characterId: character.id, toRole: "gm" });
-              markMessageRead(unreadGmMessage.id);
-              setDismissedMessageId(unreadGmMessage.id);
+              sendMessage({ body, parentId: activeGmMessage.id, threadId: activeGmMessage.threadId, characterId: character.id, toRole: "gm" });
+              markMessageRead(activeGmMessage.id);
+              setDismissedMessageId(activeGmMessage.id);
+              setActiveGmMessage(null);
             }}
           />
         )}

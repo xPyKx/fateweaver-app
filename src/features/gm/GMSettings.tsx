@@ -17,6 +17,8 @@ import {
   optionKind
 } from "./gmCatalogMeta";
 
+const HIDDEN_GAME_OPTION_KINDS = new Set(["fateSymbol"]);
+
 export function GMSettings() {
   const { data, upsertCatalogItem, importCatalogItems, deleteCatalogItem, upsertHint } = useGameStore();
   const [type, setType] = useState<CatalogType>("weapon");
@@ -40,6 +42,7 @@ export function GMSettings() {
   const properties = data.catalog.filter((item) => item.type === "property").sort(compareByName);
   const gameOptions = data.catalog
     .filter((item) => item.type === "gameOption" || item.type === "range")
+    .filter((item) => !HIDDEN_GAME_OPTION_KINDS.has(optionKind(item)))
     .sort(compareByName);
   const gameOptionKindsForList = Array.from(new Set([...gameOptionKinds.map((entry) => entry.key), ...gameOptions.map(optionKind)])).filter(Boolean);
   const fateAbilities = data.catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.fateId === activeFateId).sort(compareFateAbilities);
@@ -87,6 +90,16 @@ export function GMSettings() {
     if (!kind) return;
     setGameOptionKindFilter(kind);
     showNotice(`Unterkategorie "${kind}" angelegt. Erstelle jetzt Eintraege darin.`);
+  }
+
+  function confirmDelete(item: CatalogItem) {
+    const confirmation = window.prompt(`"${item.name}" wirklich loeschen? Tippe loeschen zur Bestaetigung.`);
+    if (confirmation?.trim().toLowerCase() !== "loeschen" && confirmation?.trim().toLowerCase() !== "löschen") return false;
+    deleteCatalogItem(item.id);
+    if (selectedId === item.id) setSelectedId(undefined);
+    if (activeFateId === item.id) setActiveFateId(undefined);
+    showNotice(`"${item.name}" geloescht.`);
+    return true;
   }
 
   function savePatch(patch: Partial<CatalogItem>) {
@@ -234,12 +247,7 @@ export function GMSettings() {
                   if (item.type === "fate") setActiveFateId(item.id);
                 }}
                 onInfo={() => setHintTarget(item.id)}
-                onDelete={() => {
-                  deleteCatalogItem(item.id);
-                  if (selectedId === item.id) setSelectedId(undefined);
-                  if (activeFateId === item.id) setActiveFateId(undefined);
-                  showNotice(`"${item.name}" geloescht.`);
-                }}
+                onDelete={() => confirmDelete(item)}
               />
             ))}
             {!items.length && <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Noch keine Eintraege in dieser Kategorie.</div>}
@@ -263,14 +271,17 @@ export function GMSettings() {
             kind={activeFateAbilityKind}
             abilities={filteredFateAbilities}
             activeId={selectedId}
-            deleteCatalogItem={deleteCatalogItem}
+            deleteCatalogItem={(id) => {
+              const item = data.catalog.find((entry) => entry.id === id);
+              if (item) confirmDelete(item);
+            }}
             selectAbility={setSelectedId}
           />
         )}
 
         <section className="border border-[#a8752a]/35 bg-black/24 p-4">
           {selected ? (
-            <Editor item={selected} catalog={data.catalog} properties={properties} gameOptions={gameOptions} savePatch={savePatch} onSaved={() => showNotice(`"${selected.name}" gespeichert.`)} />
+            <Editor item={selected} catalog={data.catalog} characters={data.characters} properties={properties} gameOptions={gameOptions} savePatch={savePatch} onSaved={() => showNotice(`"${selected.name}" gespeichert.`)} />
           ) : (
             <p className="text-[#cfc2aa]">Waehle einen Eintrag oder erstelle einen neuen.</p>
           )}

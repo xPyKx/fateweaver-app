@@ -146,6 +146,7 @@ export interface GameOptionData {
 export interface SheetTabData {
   contentType: "freeText" | "catalogList";
   catalogType?: CatalogType;
+  releasedToCharacterIds?: string[];
 }
 
 export interface BackgroundQuestionData {
@@ -234,6 +235,7 @@ export interface CharacterChoices {
   selectedEquipmentCounts?: Record<string, number>;
   selectedMaterialCounts?: Record<string, number>;
   selectedFateCardIds: string[];
+  attunedItemIds?: string[];
   inventoryCollapsed?: boolean;
   dismissedShopIds?: string[];
   levelUps?: Record<string, LevelUpChoice>;
@@ -385,6 +387,7 @@ export interface GmSessionData {
   shopGroups?: GmShopGroup[];
   shopRequests: ShopVisitRequest[];
   inventoryHistory: InventoryHistoryEntry[];
+  attunementLimit?: number;
 }
 
 export interface Campaign {

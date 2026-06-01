@@ -1,7 +1,7 @@
 import { CircleDot, Info, Save, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Field } from "../../components/Field";
-import type { AttributeKey, BackgroundQuestionKind, CatalogItem, CatalogType, FateAbilityKind, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget } from "../../types/domain";
+import type { AttributeKey, BackgroundQuestionKind, CatalogItem, CatalogType, Character, FateAbilityKind, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget } from "../../types/domain";
 import { ImageInput, MagicItemKindField, RarityField, Select, SignedNumberField } from "./GMControls";
 import {
   attributes,
@@ -41,7 +41,7 @@ export function EntryRow({ item, active, hint, onSelect, onInfo, onDelete }: { i
   );
 }
 
-export function Editor({ item, catalog, properties, gameOptions, savePatch, onSaved }: { item: CatalogItem; catalog: CatalogItem[]; properties: CatalogItem[]; gameOptions: CatalogItem[]; savePatch: (patch: Partial<CatalogItem>) => void; onSaved: () => void }) {
+export function Editor({ item, catalog, characters, properties, gameOptions, savePatch, onSaved }: { item: CatalogItem; catalog: CatalogItem[]; characters: Character[]; properties: CatalogItem[]; gameOptions: CatalogItem[]; savePatch: (patch: Partial<CatalogItem>) => void; onSaved: () => void }) {
   return (
     <div className="grid gap-4">
       <div className="border-b border-[#a8752a]/30 pb-3">
@@ -50,7 +50,7 @@ export function Editor({ item, catalog, properties, gameOptions, savePatch, onSa
       </div>
       <Field label="Name" value={item.name} onChange={(name) => savePatch({ name })} />
       <TextArea label="Beschreibung" value={item.description} onChange={(description) => savePatch({ description })} />
-      <ImageInput label="Bild" value={item.imageUrl ?? ""} onChange={(imageUrl) => savePatch({ imageUrl })} />
+      {item.type !== "gameOption" && item.type !== "range" && <ImageInput label="Bild" value={item.imageUrl ?? ""} onChange={(imageUrl) => savePatch({ imageUrl })} />}
       {supportsRarity(item.type) && <RarityField value={item.rarity ?? "common"} onChange={(rarity) => savePatch({ rarity })} />}
       {item.type === "magicItem" && <MagicItemKindField value={item.magicItemKind ?? "item"} onChange={(magicItemKind) => savePatch({ magicItemKind, ...defaultsForMagicKind(magicItemKind) })} />}
 
@@ -59,7 +59,7 @@ export function Editor({ item, catalog, properties, gameOptions, savePatch, onSa
       {item.type === "range" && <RangeFields item={item} savePatch={savePatch} />}
       {item.type === "gameOption" && <GameOptionFields item={item} savePatch={savePatch} />}
       {item.type === "property" && <PropertyEffectEditor item={item} savePatch={savePatch} />}
-      {item.type === "sheetTab" && <SheetTabFields item={item} savePatch={savePatch} />}
+      {item.type === "sheetTab" && <SheetTabFields item={item} characters={characters} savePatch={savePatch} />}
       {item.type === "fate" && <FateFields item={item} gameOptions={gameOptions} savePatch={savePatch} />}
       {item.type === "fateAbility" && <FateAbilityFields item={item} catalog={catalog} savePatch={savePatch} />}
       {item.type === "fateCard" && <TagFields item={item} savePatch={savePatch} />}
@@ -247,13 +247,12 @@ function WeaponFields({ item, gameOptions, properties, savePatch }: SpecificEdit
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <Select label="Hand" value={weapon.hand} onChange={(hand) => savePatch({ weapon: { ...weapon, hand: hand as "oneHand" | "twoHand" } })} options={[["oneHand", "Einhaendig"], ["twoHand", "Zweihaendig"]]} />
+      <Select label="Waffenhand" value={weapon.handId ?? ""} onChange={selectHand} options={[["", "Hand waehlen"], ...hands.map(optionPair)]} />
       <Select label="Slot" value={weapon.slot} onChange={(slot) => savePatch({ weapon: { ...weapon, slot: slot as "primary" | "secondary" } })} options={[["primary", "Primaerwaffe"], ["secondary", "Sekundaerwaffe"]]} />
       <Select label="Reichweite" value={weapon.rangeId ?? ""} onChange={selectRange} options={[["", "Reichweite waehlen"], ...ranges.map((range) => [range.id, range.name] as [string, string])]} />
       <Select label="Weitere Reichweite" value={weapon.secondaryRangeId ?? ""} onChange={selectSecondaryRange} options={[["", "Keine zweite Reichweite"], ...ranges.map((range) => [range.id, range.name] as [string, string])]} />
       <Field label="Angriffsbonus optional" type="number" value={weapon.attackBonus ?? 0} onChange={(value) => savePatch({ weapon: { ...weapon, attackBonus: Number(value) } })} />
       <Field label="Schadenswuerfel" value={weapon.damageDie ?? weapon.damage ?? ""} onChange={(damageDie) => savePatch({ weapon: { ...weapon, damageDie } })} />
-      <Select label="Waffenhand Icon" value={weapon.handId ?? ""} onChange={selectHand} options={[["", "Hand waehlen"], ...hands.map(optionPair)]} />
       <Select label="Schadenswuerfel Icon" value={weapon.damageDieId ?? ""} onChange={selectDamageDie} options={[["", "Wuerfel waehlen"], ...damageDice.map(optionPair)]} />
       <Select label="Schadensart" value={weapon.damageTypeId ?? ""} onChange={selectDamageType} options={[["", "Schadensart waehlen"], ...damageTypes.map(optionPair)]} />
       <AttributeMultiSelect selected={weapon.damageBonusAttributes ?? []} onChange={(damageBonusAttributes) => savePatch({ weapon: { ...weapon, damageBonusAttributes } })} />
@@ -299,8 +298,8 @@ function RangeFields({ item, savePatch }: SpecificEditorProps) {
   const range = item.range ?? { text: item.description };
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <Field label="Reichweiten-Text" value={range.text ?? ""} onChange={(text) => savePatch({ range: { ...range, text } })} />
-      <ImageInput label="Reichweiten-Icon" value={range.iconUrl ?? ""} onChange={(iconUrl) => savePatch({ range: { ...range, iconUrl } })} />
+      <Field label="Text" value={range.text ?? ""} onChange={(text) => savePatch({ range: { ...range, text } })} />
+      <ImageInput label="Icon" value={range.iconUrl ?? item.imageUrl ?? ""} onChange={(iconUrl) => savePatch({ imageUrl: iconUrl, range: { ...range, iconUrl } })} />
     </div>
   );
 }
@@ -311,13 +310,20 @@ function GameOptionFields({ item, savePatch }: SpecificEditorProps) {
     <div className="grid gap-3 md:grid-cols-2">
       <Select label="Unterkategorie" value={option.kind} onChange={(kind) => savePatch({ gameOption: { ...option, kind: kind as GameOptionKind } })} options={Array.from(new Set([...gameOptionKinds.map((entry) => entry.key), option.kind])).map((kind) => [kind, labelForGameOptionKind(kind)])} />
       <Field label="Text" value={option.text ?? ""} onChange={(text) => savePatch({ gameOption: { ...option, text } })} />
-      <ImageInput label="Icon" value={option.iconUrl ?? ""} onChange={(iconUrl) => savePatch({ gameOption: { ...option, iconUrl } })} />
+      <ImageInput label="Icon" value={option.iconUrl ?? item.imageUrl ?? ""} onChange={(iconUrl) => savePatch({ imageUrl: iconUrl, gameOption: { ...option, iconUrl } })} />
     </div>
   );
 }
 
-function SheetTabFields({ item, savePatch }: SpecificEditorProps) {
+function SheetTabFields({ item, characters, savePatch }: SpecificEditorProps & { characters: Character[] }) {
   const sheetTab = item.sheetTab ?? { contentType: "freeText" as const };
+  const releasedToCharacterIds = sheetTab.releasedToCharacterIds ?? [];
+  function toggleCharacter(characterId: string) {
+    const next = releasedToCharacterIds.includes(characterId)
+      ? releasedToCharacterIds.filter((id) => id !== characterId)
+      : [...releasedToCharacterIds, characterId];
+    savePatch({ sheetTab: { ...sheetTab, releasedToCharacterIds: next } });
+  }
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <Select
@@ -334,6 +340,18 @@ function SheetTabFields({ item, savePatch }: SpecificEditorProps) {
           options={catalogTypes.filter((entry) => !["sheetTab", "range"].includes(entry)).map((entry) => [entry, labelForType(entry)] as [string, string])}
         />
       )}
+      <div className="grid gap-2 md:col-span-2">
+        <div className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#f2ca75]">Freigabe</div>
+        <div className="text-xs text-[#8c8170]">{releasedToCharacterIds.length ? "Nur ausgewaehlte Charaktere sehen diesen Reiter." : "Ohne Auswahl ist der Reiter fuer alle Charaktere sichtbar."}</div>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {characters.map((character) => (
+            <label key={character.id} className="flex items-center gap-2 border border-[#a8752a]/30 bg-black/25 p-2 text-sm text-[#cfc2aa]">
+              <input type="checkbox" checked={releasedToCharacterIds.includes(character.id)} onChange={() => toggleCharacter(character.id)} />
+              <span>{character.name}</span>
+            </label>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

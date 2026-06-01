@@ -92,7 +92,7 @@ export function GMDashboardView({ onBack }) {
       </section>
       {pending.length > 0 && <section className="grid gap-3 border border-[#a8752a]/45 bg-black/25 p-4"><div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Offene Shop-Anfragen</div>{pending.map((request) => <RequestRow key={request.id} request={request} data={data} onConfirm={() => confirmRequest(request.id)} onDecline={() => declineRequest(request.id)} />)}</section>}
       <div>
-        {module === "players" && <PlayerModule data={workspaceData} onGive={giveItem} onMessage={sendMessage} history={historyEvents} />}
+        {module === "players" && <PlayerModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} onGive={giveItem} onMessage={sendMessage} history={historyEvents} />}
         {module === "campaigns" && <CampaignModule data={workspaceData} gmSession={gmSession} onSaveCampaign={upsertCampaign} onDeleteCampaign={deleteCampaign} onSaveSession={upsertCampaignSession} onDeleteSession={deleteCampaignSession} />}
         {module === "shops" && <ShopModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} />}
         {module === "messages" && <MessageModule data={workspaceData} onMessage={sendMessage} />}
@@ -105,7 +105,7 @@ export function GMDashboardView({ onBack }) {
 
 export const GMSessionView = GMDashboardView;
 
-function PlayerModule({ data, onGive, onMessage, history }) {
+function PlayerModule({ data, gmSession, saveSession, onGive, onMessage, history }) {
   const [selectedCharacter, setSelectedCharacter] = useState(data.characters[0]?.id ?? "");
   const [selectedType, setSelectedType] = useState("magicItem");
   const [selectedItem, setSelectedItem] = useState("");
@@ -115,6 +115,7 @@ function PlayerModule({ data, onGive, onMessage, history }) {
   const [dismissedWarnings, setDismissedWarnings] = useState({});
   const [messageTarget, setMessageTarget] = useState(null);
   const items = data.catalog.filter((item) => selectedType === "magicItem" ? item.type === "magicItem" : item.type === selectedType).sort(byName);
+  const attunementLimit = gmSession.attunementLimit ?? 3;
 
   function toggleStat(characterId, key) {
     setHiddenStats((current) => ({ ...current, [characterId]: { ...(current[characterId] ?? {}), [key]: (current[characterId]?.[key] ?? true) === false ? true : false } }));
@@ -128,6 +129,10 @@ function PlayerModule({ data, onGive, onMessage, history }) {
         <Select value={selectedType} onChange={setSelectedType} options={GIVE_TYPES} />
         <Select value={selectedItem} onChange={setSelectedItem} options={[["", "Gegenstand waehlen"], ...items.map((item) => [item.id, item.name])]} />
         <button onClick={() => onGive(selectedCharacter, selectedItem)} disabled={!selectedCharacter || !selectedItem} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-3 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Ins Inventar legen</button>
+        <label className="grid gap-1 text-sm text-[#cfc2aa]">
+          <span className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Einstimmungen pro Charakter</span>
+          <input type="number" min="0" value={attunementLimit} onChange={(event) => saveSession({ attunementLimit: Math.max(0, Number(event.target.value) || 0) })} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+        </label>
       </div>
       <div className="grid gap-3">
         {data.characters.map((character) => {
@@ -137,6 +142,8 @@ function PlayerModule({ data, onGive, onMessage, history }) {
           const visible = hiddenStats[character.id] ?? {};
           const weapons = selectedByIds(data.catalog, [...(character.choices.selectedWeapons ?? []), ...(character.choices.storedWeaponIds ?? [])]);
           const showWeaponWarning = weapons.length > 5 && !dismissedWarnings[character.id];
+          const attunedCount = (character.choices.attunedItemIds ?? []).length;
+          const showAttunementWarning = attunementLimit > 0 && attunedCount > attunementLimit;
           return (
             <div key={character.id} className="border border-[#a8752a]/35 bg-black/25 p-4">
               <div className="flex items-start gap-3">
@@ -149,6 +156,7 @@ function PlayerModule({ data, onGive, onMessage, history }) {
                 <div className="relative"><button onClick={() => setMetricMenu(metricMenu === character.id ? null : character.id)} className="grid h-9 w-9 place-items-center border border-[#a8752a]/35 bg-black/25 text-[#cfc2aa]" title="Anzeige einstellen"><MoreHorizontal className="h-4 w-4" /></button>{metricMenu === character.id && <CharacterQuickStats sheet={sheet} visible={visible} onToggle={(key) => toggleStat(character.id, key)} />}</div>
               </div>
               <div className="mt-3 text-xs text-[#8c8170]">{characterHistory.length} History-Eintraege</div>
+              {showAttunementWarning && <div className="mt-3 flex items-center gap-3 border border-red-300/45 bg-red-950/25 p-3 text-sm text-red-100"><AlertTriangle className="h-4 w-4" /><span>{character.name} hat {attunedCount}/{attunementLimit} Einstimmungen.</span></div>}
               {showWeaponWarning && <div className="mt-3 flex items-center gap-3 border border-red-300/45 bg-red-950/25 p-3 text-sm text-red-100"><AlertTriangle className="h-4 w-4" /><span className="mr-auto">{character.name} hat mehr als 5 Waffen.</span><button onClick={() => setDismissedWarnings((current) => ({ ...current, [character.id]: true }))} className="border border-red-200/45 px-2 py-1">Bestaetigen</button></div>}
               {expanded && <CharacterDetails character={character} data={data} sheet={sheet} history={characterHistory} visible={visible} />}
             </div>

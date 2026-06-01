@@ -1,6 +1,6 @@
 export const GIVE_TYPES = [["magicItem", "Magische Gegenstaende"], ["equipment", "Ausruestung"], ["weapon", "Waffen"], ["armor", "Ruestung"], ["potion", "Traenke"]];
 
-export const DEFAULT_SESSION = { shops: [], shopGroups: [], shopRequests: [], inventoryHistory: [] };
+export const DEFAULT_SESSION = { shops: [], shopGroups: [], shopRequests: [], inventoryHistory: [], attunementLimit: 3 };
 
 export const BUILDER_TYPES = [
   ["npc", "NSC"],

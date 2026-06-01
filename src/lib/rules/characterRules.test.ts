@@ -24,9 +24,11 @@ const attributes = {
 describe("character rules", () => {
   it("derives tier and dice from level", () => {
     expect(tierForLevel(1)).toBe(1);
-    expect(tierForLevel(6)).toBe(2);
-    expect(tierForLevel(11)).toBe(3);
-    expect(tierForLevel(16)).toBe(4);
+    expect(tierForLevel(2)).toBe(2);
+    expect(tierForLevel(8)).toBe(2);
+    expect(tierForLevel(9)).toBe(3);
+    expect(tierForLevel(14)).toBe(3);
+    expect(tierForLevel(15)).toBe(4);
     expect(dieForLevel(1)).toBe("W6");
     expect(dieForLevel(2)).toBe("W8");
     expect(dieForLevel(9)).toBe("W10");

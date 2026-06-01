@@ -62,7 +62,6 @@ export const gameOptionKinds: { key: GameOptionKind; label: string }[] = [
   { key: "damageDie", label: "Schadenswuerfel" },
   { key: "damageType", label: "Schadensart" },
   { key: "weaponHand", label: "Waffenhand" },
-  { key: "fateSymbol", label: "Fatesymbol" },
   { key: "attunementIcon", label: "Einstimmungssymbol" }
 ];
 
@@ -133,7 +132,7 @@ export function splitList(value: string) {
 export function labelForType(type: CatalogType) {
   if (type === "range") return "Reichweite";
   if (type === "gameOption") return "Spielwerte";
-  if (type === "sheetTab") return "Charakterbogen-Reiter";
+  if (type === "sheetTab") return "Charakter Inventar";
   if (type === "backgroundQuestion") return "Charakterhintergrund";
   const labels: Partial<Record<CatalogType, string>> = {
     weapon: "Waffen",

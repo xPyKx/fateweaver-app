@@ -404,15 +404,83 @@ function LevelFateCardChoice({ level, character, catalog, choice, patchLevel, up
   );
 }
 
+type SpellComponentKey = "casting" | "targets" | "range" | "resource" | "type" | "power";
+type SpellBuildSelection = Record<SpellComponentKey, string>;
+type SpellComponentOption = { id: string; label: string; cost: number; text?: string; damageText?: string; healingText?: string };
+
+const spellBuilderOptions: Record<SpellComponentKey, SpellComponentOption[]> = {
+  casting: [
+    { id: "longRest", label: "Einmal pro lange Rast", cost: 1, text: "Einmal pro lange Rast" },
+    { id: "shortRest", label: "Einmal pro kurze Rast", cost: 2, text: "Einmal pro kurze Rast" },
+    { id: "targetDc", label: "Gegen SG des Ziels", cost: 4, text: "Lege einen Zauberwurf gegen die SG des Ziels ab" },
+    { id: "fixedRoll", label: "Fester Zauberwurf", cost: 6, text: "Lege einen festen Zauberwurf ab" }
+  ],
+  targets: [
+    { id: "self", label: "Selbst", cost: 1, text: "dich selbst" },
+    { id: "one", label: "1 Ziel", cost: 2, text: "1 Ziel" },
+    { id: "perResource", label: "Ziele pro ausgegebene Ressource", cost: 3, text: "Ziele pro ausgegebene Ressource" },
+    { id: "spellAttribute", label: "Ziele in Hoehe Zauberattribut", cost: 4, text: "Ziele in Hoehe deines Zauberattributs" },
+    { id: "all", label: "Alle Ziele", cost: 6, text: "alle Ziele" }
+  ],
+  range: [
+    { id: "near", label: "Nah", cost: 1, text: "Nahkampfreichweite" },
+    { id: "3m", label: "3 m", cost: 2, text: "3 m" },
+    { id: "6m", label: "6 m", cost: 3, text: "6 m" },
+    { id: "9m", label: "9 m", cost: 4, text: "9 m" },
+    { id: "12m", label: "12 m", cost: 5, text: "12 m" },
+    { id: "18m", label: "18 m", cost: 6, text: "18 m" },
+    { id: "24m", label: "24 m", cost: 7, text: "24 m" }
+  ],
+  resource: [
+    { id: "inspiration", label: "Inspiration", cost: 2, text: "gib 1 Inspiration aus" },
+    { id: "stress", label: "Stress", cost: 1, text: "markiere 1 Stress" }
+  ],
+  type: [
+    { id: "support", label: "Unterstuetzung", cost: 2, text: "unterstuetzt das Ziel" },
+    { id: "damage", label: "Schaden", cost: 4, text: "erleidet das Ziel" },
+    { id: "healing", label: "Heilung", cost: 6, text: "heilt das Ziel" }
+  ],
+  power: [
+    { id: "oneDie", label: "1 Stufenwuerfel / 1 HP", cost: 2, damageText: "1 Stufenwuerfel magischen Schaden", healingText: "1 HP" },
+    { id: "twoDice", label: "2 Stufenwuerfel / 2 HP", cost: 4, damageText: "2 Stufenwuerfel magischen Schaden", healingText: "2 HP" },
+    { id: "proficiency", label: "In Hoehe Uebungsbonus", cost: 6, damageText: "Stufenwuerfel in Hoehe deines Uebungsbonus magischen Schaden", healingText: "HP in Hoehe deines Uebungsbonus" },
+    { id: "spellAttribute", label: "In Hoehe Zauberattribut", cost: 6, damageText: "Stufenwuerfel in Hoehe deines Zauberattributs magischen Schaden", healingText: "HP in Hoehe deines Zauberattributs" }
+  ]
+};
+
+const spellBuilderSteps: Array<{ key: SpellComponentKey; label: string }> = [
+  { key: "casting", label: "Zauberwurf" },
+  { key: "targets", label: "Ziele" },
+  { key: "range", label: "Reichweite" },
+  { key: "resource", label: "Ressource" },
+  { key: "type", label: "Zauberart" },
+  { key: "power", label: "Schaden / Heilung" }
+];
+
 function SpellBuilderPanel({ level, character, fates, upsertCatalogItem, patchLevel }: { level: number; character: Character; fates: CatalogItem[]; upsertCatalogItem: (item: CatalogItem) => void; patchLevel: (patch: Partial<LevelUpChoice>) => void }) {
   const [fateId, setFateId] = useState(fates[0]?.id ?? "");
   const [name, setName] = useState("");
-  const [stress, setStress] = useState(1);
-  const [text, setText] = useState("");
+  const [extraText, setExtraText] = useState("");
+  const [selection, setSelection] = useState<SpellBuildSelection>({
+    casting: "longRest",
+    targets: "one",
+    range: "near",
+    resource: "stress",
+    type: "damage",
+    power: "oneDie"
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const fate = fates.find((entry) => entry.id === fateId);
-  const canGenerate = Boolean(fate?.fate?.spellTemplateImageUrl && name.trim() && text.trim());
+  const spellAttribute = fate?.fate?.spellAttribute ? attributeLabels[fate.fate.spellAttribute] : "Zauberattribut";
+  const spellText = buildSpellText(selection, extraText, spellAttribute);
+  const totalCost = spellBuildCost(selection);
+  const stressCost = selection.resource === "stress" ? 1 : 0;
+  const canGenerate = Boolean(fate?.fate?.spellTemplateImageUrl && name.trim() && totalCost <= 20);
+
+  function selectComponent(key: SpellComponentKey, value: string) {
+    setSelection((current) => ({ ...current, [key]: value }));
+  }
 
   async function generate() {
     if (!fate?.fate?.spellTemplateImageUrl || !canGenerate) return;
@@ -420,13 +488,13 @@ function SpellBuilderPanel({ level, character, fates, upsertCatalogItem, patchLe
     setError("");
     try {
       const trimmedName = name.trim();
-      const trimmedText = text.trim();
+      const trimmedText = spellText.trim();
       const cardImageUrl = await renderSpellCard({
         templateImageUrl: fate.fate.spellTemplateImageUrl,
         name: trimmedName,
         text: trimmedText,
         level,
-        stress
+        stress: stressCost
       });
       const now = new Date().toISOString();
       const item: CatalogItem = {
@@ -439,13 +507,15 @@ function SpellBuilderPanel({ level, character, fates, upsertCatalogItem, patchLe
           fateId: fate.id,
           kind: "fateCard",
           level,
-          stressCost: stress,
+          stressCost,
           cardImageUrl,
           showTitleOnSheet: false,
           spellBuilder: {
             templateFateId: fate.id,
             level,
-            stress,
+            stress: stressCost,
+            points: totalCost,
+            components: selection,
             text: trimmedText,
             generatedAt: now,
             createdByCharacterId: character.id
@@ -469,27 +539,37 @@ function SpellBuilderPanel({ level, character, fates, upsertCatalogItem, patchLe
 
   return (
     <PickerShell title="Zauber bauen" current={canGenerate ? 1 : 0} total={1}>
-      <div className="grid gap-3">
-        <label className="grid gap-1 text-sm font-bold uppercase text-[#6b7280]">
-          Fate
-          <select value={fateId} onChange={(event) => setFateId(event.target.value)} className="min-h-11 border border-[#d6a14d]/45 bg-white px-3 text-[#111827] outline-none">
-            {fates.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
-          </select>
-        </label>
-        <div className="grid gap-3 md:grid-cols-[1fr_120px]">
+      <div className="grid gap-4">
+        <div className="grid gap-3 md:grid-cols-[1fr_180px]">
           <label className="grid gap-1 text-sm font-bold uppercase text-[#6b7280]">
-            Zaubername
-            <input value={name} onChange={(event) => setName(event.target.value)} className="min-h-11 border border-[#d6a14d]/45 bg-white px-3 text-[#111827] outline-none" />
+            Fate Template
+            <select value={fateId} onChange={(event) => setFateId(event.target.value)} className="min-h-11 border border-[#d6a14d]/45 bg-white px-3 text-[#111827] outline-none">
+              {fates.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+            </select>
           </label>
           <label className="grid gap-1 text-sm font-bold uppercase text-[#6b7280]">
-            Stress
-            <input type="number" min="0" value={stress} onChange={(event) => setStress(Math.max(0, Number(event.target.value) || 0))} className="min-h-11 border border-[#d6a14d]/45 bg-white px-3 text-[#111827] outline-none" />
+            Gesamt
+            <div className={`grid min-h-11 place-items-center border px-3 font-black ${totalCost > 20 ? "border-red-300 bg-red-50 text-red-700" : "border-[#d6a14d]/45 bg-white text-[#111827]"}`}>{totalCost} / 20</div>
           </label>
         </div>
         <label className="grid gap-1 text-sm font-bold uppercase text-[#6b7280]">
-          Zaubertext
-          <textarea value={text} onChange={(event) => setText(event.target.value)} className="min-h-52 border border-[#d6a14d]/45 bg-white p-3 text-[#111827] outline-none" />
+          Zaubername
+          <input value={name} onChange={(event) => setName(event.target.value)} className="min-h-11 border border-[#d6a14d]/45 bg-white px-3 text-[#111827] outline-none" />
         </label>
+        <div className="grid gap-3">
+          {spellBuilderSteps.map((step) => (
+            <SpellComponentPicker key={step.key} step={step} selection={selection} onSelect={selectComponent} />
+          ))}
+        </div>
+        <label className="grid gap-1 text-sm font-bold uppercase text-[#6b7280]">
+          Zusatztext optional
+          <textarea value={extraText} onChange={(event) => setExtraText(event.target.value)} className="min-h-24 border border-[#d6a14d]/45 bg-white p-3 text-[#111827] outline-none" placeholder="Besondere Bedingung, Nachteil, Dauer oder Beschreibung." />
+        </label>
+        <div className="grid gap-2 border border-[#d6a14d]/45 bg-white/75 p-3">
+          <div className="text-xs font-black uppercase text-[#6b7280]">Kartentext Vorschau</div>
+          <p className="whitespace-pre-line text-sm leading-relaxed text-[#111827]">{spellText}</p>
+        </div>
+        {totalCost > 20 && <div className="border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-700">Du kannst maximal 20 Punkte ausgeben.</div>}
         {error && <div className="border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div>}
         <button onClick={generate} disabled={!canGenerate || busy} className="inline-flex min-h-11 w-fit items-center gap-2 border border-[#d6a14d] bg-[#45208a] px-4 py-2 text-sm font-black uppercase text-white disabled:cursor-not-allowed disabled:bg-gray-500">
           <Wand2 className="h-4 w-4" /> {busy ? "Karte wird erzeugt..." : "Zauberkarte erzeugen"}
@@ -497,6 +577,76 @@ function SpellBuilderPanel({ level, character, fates, upsertCatalogItem, patchLe
       </div>
     </PickerShell>
   );
+}
+
+function SpellComponentPicker({ step, selection, onSelect }: { step: { key: SpellComponentKey; label: string }; selection: SpellBuildSelection; onSelect: (key: SpellComponentKey, value: string) => void }) {
+  const options = spellBuilderOptions[step.key];
+  const isHealing = selection.type === "healing";
+  return (
+    <div className="grid gap-2 border border-[#d6a14d]/35 bg-white/65 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-black uppercase text-[#111827]">{step.label}</div>
+        {step.key === "targets" && isHealing && <div className="text-xs font-bold text-[#6b7280]">Heilung: Zielkosten +1</div>}
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {options.map((option) => {
+          const active = selection[step.key] === option.id;
+          const cost = option.cost + (step.key === "targets" && isHealing ? 1 : 0);
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => onSelect(step.key, option.id)}
+              className={`flex min-h-12 items-center justify-between gap-3 border px-3 py-2 text-left text-sm ${active ? "border-[#45208a] bg-[#45208a] text-white" : "border-[#d6a14d]/45 bg-white text-[#111827]"}`}
+            >
+              <span>{option.label}</span>
+              <span className={`shrink-0 font-black ${active ? "text-[#ffd88c]" : "text-[#6b7280]"}`}>{cost}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function spellBuildCost(selection: SpellBuildSelection) {
+  return (Object.entries(selection) as Array<[SpellComponentKey, string]>).reduce((sum, [key, value]) => {
+    const option = spellBuilderOptions[key].find((entry) => entry.id === value);
+    const healingTargetSurcharge = key === "targets" && selection.type === "healing" ? 1 : 0;
+    return sum + (option?.cost ?? 0) + healingTargetSurcharge;
+  }, 0);
+}
+
+function buildSpellText(selection: SpellBuildSelection, extraText: string, spellAttribute: string) {
+  const casting = optionFor("casting", selection.casting);
+  const targets = optionFor("targets", selection.targets);
+  const range = optionFor("range", selection.range);
+  const resource = optionFor("resource", selection.resource);
+  const type = optionFor("type", selection.type);
+  const power = optionFor("power", selection.power);
+  const targetText = replaceSpellAttribute(targets.text ?? targets.label, spellAttribute);
+  const rangeText = range.text ?? range.label;
+  const resourceText = resource.text ?? resource.label;
+  const castingText = casting.text ?? casting.label;
+  const suffix = extraText.trim() ? `\n\n${extraText.trim()}` : "";
+
+  if (selection.type === "support") {
+    return `${castingText}, waehle ${targetText} in ${rangeText}. Bei einem Erfolg, ${resourceText} und ${type.text}.${suffix}`;
+  }
+
+  const effect = selection.type === "healing"
+    ? replaceSpellAttribute(power.healingText ?? power.label, spellAttribute)
+    : replaceSpellAttribute(power.damageText ?? power.label, spellAttribute);
+  const verb = selection.type === "healing" ? "heilt" : "erleidet";
+  return `${castingText}, waehle ${targetText} in ${rangeText}. Bei einem Erfolg, ${resourceText}; das Ziel ${verb} ${effect}.${suffix}`;
+}
+
+function optionFor(key: SpellComponentKey, value: string) {
+  return spellBuilderOptions[key].find((entry) => entry.id === value) ?? spellBuilderOptions[key][0];
+}
+
+function replaceSpellAttribute(text: string, spellAttribute: string) {
+  return text.replace(/Zauberattributs?/g, spellAttribute);
 }
 
 function AdditionalFateCardOption({ level, character, catalog, choice, patchLevel }: { level: number; character: Character; catalog: CatalogItem[]; choice: LevelUpChoice; patchLevel: (patch: Partial<LevelUpChoice>) => void }) {

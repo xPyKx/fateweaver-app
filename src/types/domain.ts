@@ -148,6 +148,8 @@ export interface SpellBuilderResultData {
   templateFateId: string;
   level: number;
   stress: number;
+  points?: number;
+  components?: Record<string, string>;
   text: string;
   generatedAt: string;
   createdByCharacterId?: string;

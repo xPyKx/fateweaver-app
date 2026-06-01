@@ -529,7 +529,8 @@ function normalizeCatalogItems(items: CatalogItem[]) {
         fate: {
           levelOneCards: item.fate?.levelOneCards ?? [],
           ...item.fate,
-          abilityCategories: item.fate?.abilityCategories ?? []
+          abilityCategories: item.fate?.abilityCategories ?? [],
+          spellTemplateImageUrl: item.fate?.spellTemplateImageUrl ?? ""
         },
         createdAt: item.createdAt ?? timestamp,
         updatedAt: item.updatedAt ?? timestamp

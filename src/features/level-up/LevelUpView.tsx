@@ -2,6 +2,7 @@ import { ArrowLeft, Check, ChevronDown, ChevronRight, Minus, Plus, RotateCcw, Wa
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { CounterBadge } from "../../components/CounterBadge";
+import { renderSpellCard } from "../../lib/cards/spellCardRenderer";
 import {
   attributeLabels,
   dieForLevel,
@@ -49,7 +50,7 @@ const fixedRewards: Record<number, string[]> = {
 const experienceRewardLevels = new Set([2, 6, 9, 12, 15, 18]);
 
 export function LevelUpView({ onBack }: { onBack: () => void }) {
-  const { activeCharacter, data, upsertCharacter } = useGameStore();
+  const { activeCharacter, data, upsertCharacter, upsertCatalogItem } = useGameStore();
   const [openLevel, setOpenLevel] = useState(2);
   const [detail, setDetail] = useState<DetailKey>("overview");
   if (!activeCharacter) return null;
@@ -243,6 +244,7 @@ export function LevelUpView({ onBack }: { onBack: () => void }) {
             choice={currentChoice}
             patchLevel={(patch) => patchLevel(openLevel, patch)}
             updateCharacter={updateCharacter}
+            upsertCatalogItem={upsertCatalogItem}
           />
         )}
       </section>
@@ -293,9 +295,9 @@ function OptionOverview({ character, openLevel, choices, selectOption, proficien
   );
 }
 
-function OptionDetail({ option, level, character, catalog, choice, patchLevel, updateCharacter }: { option: Exclude<DetailKey, "overview">; level: number; character: Character; catalog: CatalogItem[]; choice: LevelUpChoice; patchLevel: (patch: Partial<LevelUpChoice>) => void; updateCharacter: (character: Character) => void }) {
+function OptionDetail({ option, level, character, catalog, choice, patchLevel, updateCharacter, upsertCatalogItem }: { option: Exclude<DetailKey, "overview">; level: number; character: Character; catalog: CatalogItem[]; choice: LevelUpChoice; patchLevel: (patch: Partial<LevelUpChoice>) => void; updateCharacter: (character: Character) => void; upsertCatalogItem: (item: CatalogItem) => void }) {
   if (option === "newExperience") return <NewExperienceEditor level={level} character={character} updateCharacter={updateCharacter} />;
-  if (option === "levelFateCard") return <LevelFateCardChoice level={level} character={character} catalog={catalog} choice={choice} patchLevel={patchLevel} />;
+  if (option === "levelFateCard") return <LevelFateCardChoice level={level} character={character} catalog={catalog} choice={choice} patchLevel={patchLevel} upsertCatalogItem={upsertCatalogItem} />;
   if (option === "attributes") return <AttributePicker choice={choice} patchLevel={patchLevel} />;
   if (option === "experiences") return <ExperiencePicker character={character} choice={choice} patchLevel={patchLevel} />;
   if (option === "fateCard") return <AdditionalFateCardOption level={level} character={character} catalog={catalog} choice={choice} patchLevel={patchLevel} />;
@@ -375,8 +377,11 @@ function NewExperienceEditor({ level, character, updateCharacter }: { level: num
   );
 }
 
-function LevelFateCardChoice({ level, character, catalog, choice, patchLevel }: { level: number; character: Character; catalog: CatalogItem[]; choice: LevelUpChoice; patchLevel: (patch: Partial<LevelUpChoice>) => void }) {
+function LevelFateCardChoice({ level, character, catalog, choice, patchLevel, upsertCatalogItem }: { level: number; character: Character; catalog: CatalogItem[]; choice: LevelUpChoice; patchLevel: (patch: Partial<LevelUpChoice>) => void; upsertCatalogItem: (item: CatalogItem) => void }) {
   const [cardsOpen, setCardsOpen] = useState(!choice.levelSpellBuilder);
+  const spellFates = [character.choices.mainFateId, character.choices.sideFateId]
+    .map((id) => catalog.find((item) => item.id === id && item.type === "fate"))
+    .filter((item): item is CatalogItem => Boolean(item?.fate?.spellTemplateImageUrl));
   return (
     <div className="grid gap-5">
       <PickerShell title="Level-Fatekarte" current={choice.levelFateCardId || choice.levelSpellBuilder ? 1 : 0} total={1}>
@@ -393,8 +398,104 @@ function LevelFateCardChoice({ level, character, catalog, choice, patchLevel }: 
           )}
         </div>
       </PickerShell>
+      {choice.levelSpellBuilder && <SpellBuilderPanel level={level} character={character} fates={spellFates} upsertCatalogItem={upsertCatalogItem} patchLevel={patchLevel} />}
       {!choice.levelSpellBuilder && <CollapsibleFateCardPicker title="Karte aus Haupt- oder Nebenfate" open={cardsOpen} setOpen={setCardsOpen} level={level} character={character} catalog={catalog} selectedId={choice.levelFateCardId} onSelect={(levelFateCardId) => patchLevel({ levelFateCardId, levelSpellBuilder: false })} includeSelectedId={choice.levelFateCardId} />}
     </div>
+  );
+}
+
+function SpellBuilderPanel({ level, character, fates, upsertCatalogItem, patchLevel }: { level: number; character: Character; fates: CatalogItem[]; upsertCatalogItem: (item: CatalogItem) => void; patchLevel: (patch: Partial<LevelUpChoice>) => void }) {
+  const [fateId, setFateId] = useState(fates[0]?.id ?? "");
+  const [name, setName] = useState("");
+  const [stress, setStress] = useState(1);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const fate = fates.find((entry) => entry.id === fateId);
+  const canGenerate = Boolean(fate?.fate?.spellTemplateImageUrl && name.trim() && text.trim());
+
+  async function generate() {
+    if (!fate?.fate?.spellTemplateImageUrl || !canGenerate) return;
+    setBusy(true);
+    setError("");
+    try {
+      const trimmedName = name.trim();
+      const trimmedText = text.trim();
+      const cardImageUrl = await renderSpellCard({
+        templateImageUrl: fate.fate.spellTemplateImageUrl,
+        name: trimmedName,
+        text: trimmedText,
+        level,
+        stress
+      });
+      const now = new Date().toISOString();
+      const item: CatalogItem = {
+        id: `fateAbility-${crypto.randomUUID()}`,
+        type: "fateAbility",
+        name: trimmedName,
+        description: trimmedText,
+        imageUrl: cardImageUrl,
+        fateAbility: {
+          fateId: fate.id,
+          kind: "fateCard",
+          level,
+          stressCost: stress,
+          cardImageUrl,
+          showTitleOnSheet: false,
+          spellBuilder: {
+            templateFateId: fate.id,
+            level,
+            stress,
+            text: trimmedText,
+            generatedAt: now,
+            createdByCharacterId: character.id
+          }
+        },
+        createdAt: now,
+        updatedAt: now
+      };
+      upsertCatalogItem(item);
+      patchLevel({ levelSpellBuilder: true, levelFateCardId: item.id });
+    } catch {
+      setError("Zauberkarte konnte nicht generiert werden. Pruefe das Template-Bild.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!fates.length) {
+    return <div className="border border-dashed border-[#d6a14d]/45 bg-white/70 p-4 text-[#6b7280]">Fuer die gewaehlten Fates ist noch kein Zauberbaukasten-Template in der GM-Verwaltung hinterlegt.</div>;
+  }
+
+  return (
+    <PickerShell title="Zauber bauen" current={canGenerate ? 1 : 0} total={1}>
+      <div className="grid gap-3">
+        <label className="grid gap-1 text-sm font-bold uppercase text-[#6b7280]">
+          Fate
+          <select value={fateId} onChange={(event) => setFateId(event.target.value)} className="min-h-11 border border-[#d6a14d]/45 bg-white px-3 text-[#111827] outline-none">
+            {fates.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+          </select>
+        </label>
+        <div className="grid gap-3 md:grid-cols-[1fr_120px]">
+          <label className="grid gap-1 text-sm font-bold uppercase text-[#6b7280]">
+            Zaubername
+            <input value={name} onChange={(event) => setName(event.target.value)} className="min-h-11 border border-[#d6a14d]/45 bg-white px-3 text-[#111827] outline-none" />
+          </label>
+          <label className="grid gap-1 text-sm font-bold uppercase text-[#6b7280]">
+            Stress
+            <input type="number" min="0" value={stress} onChange={(event) => setStress(Math.max(0, Number(event.target.value) || 0))} className="min-h-11 border border-[#d6a14d]/45 bg-white px-3 text-[#111827] outline-none" />
+          </label>
+        </div>
+        <label className="grid gap-1 text-sm font-bold uppercase text-[#6b7280]">
+          Zaubertext
+          <textarea value={text} onChange={(event) => setText(event.target.value)} className="min-h-52 border border-[#d6a14d]/45 bg-white p-3 text-[#111827] outline-none" />
+        </label>
+        {error && <div className="border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div>}
+        <button onClick={generate} disabled={!canGenerate || busy} className="inline-flex min-h-11 w-fit items-center gap-2 border border-[#d6a14d] bg-[#45208a] px-4 py-2 text-sm font-black uppercase text-white disabled:cursor-not-allowed disabled:bg-gray-500">
+          <Wand2 className="h-4 w-4" /> {busy ? "Karte wird erzeugt..." : "Zauberkarte erzeugen"}
+        </button>
+      </div>
+    </PickerShell>
   );
 }
 

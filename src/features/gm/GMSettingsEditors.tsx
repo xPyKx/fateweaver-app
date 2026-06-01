@@ -378,6 +378,7 @@ function FateFields({ item, catalog, gameOptions, savePatch }: SpecificEditorPro
     <div className="grid gap-3 md:grid-cols-2">
       <Select label="Fatesymbol" value={fate.symbolItemId ?? ""} onChange={selectSymbol} options={[["", "Kein Symbol"], ...symbols.map(optionPair)]} />
       <ImageInput label="Fatesymbol direkt" value={fate.symbolUrl ?? ""} onChange={(symbolUrl) => savePatch({ fate: { ...fate, symbolUrl } })} />
+      <ImageInput label="Zauberbaukasten Template" value={fate.spellTemplateImageUrl ?? ""} onChange={(spellTemplateImageUrl) => savePatch({ fate: { ...fate, spellTemplateImageUrl } })} />
       <Select label="Zauberattribut" value={fate.spellAttribute ?? ""} onChange={(spellAttribute) => savePatch({ fate: { ...fate, spellAttribute: spellAttribute as AttributeKey | "" } })} options={[["", "Kein Zauberattribut"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
       <Field label="Level-1 Fatekarten IDs" value={fate.levelOneCards.join(", ")} onChange={(value) => savePatch({ fate: { ...fate, levelOneCards: splitList(value) } })} />
       <FateCategoryEditor item={item} catalog={catalog} savePatch={savePatch} />

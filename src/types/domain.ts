@@ -98,6 +98,7 @@ export interface FateData {
   symbolItemId?: string;
   spellAttribute?: AttributeKey | "";
   abilityCategories?: FateAbilityCategoryData[];
+  spellTemplateImageUrl?: string;
 }
 
 export type FateAbilityKind =
@@ -140,6 +141,16 @@ export interface FateAbilityData {
   attributeOptions?: AttributeKey[];
   markerMax?: number;
   stressCost?: number;
+  spellBuilder?: SpellBuilderResultData;
+}
+
+export interface SpellBuilderResultData {
+  templateFateId: string;
+  level: number;
+  stress: number;
+  text: string;
+  generatedAt: string;
+  createdByCharacterId?: string;
 }
 
 export interface RestData {

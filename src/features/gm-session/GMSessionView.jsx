@@ -13,7 +13,7 @@ export function GMDashboardView({ onBack }) {
   const { data, activeWorkspace, upsertCharacter, updateGmSession, sendMessage, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule } = useGameStore();
   const workspaceId = activeWorkspace?.id ?? data.activeWorkspaceId;
   const workspaceData = selectWorkspaceData(data, workspaceId);
-  const gmSession = { ...DEFAULT_SESSION, ...(data.gmSession ?? {}) };
+  const gmSession = normalizeDashboardSession(data.gmSession);
   const historyEvents = buildTimelineEvents(workspaceData, gmSession.inventoryHistory);
   const [module, setModule] = useState("players");
 
@@ -136,13 +136,14 @@ function PlayerModule({ data, gmSession, saveSession, onGive, onMessage, history
       </div>
       <div className="grid gap-3">
         {data.characters.map((character) => {
+          const choices = character.choices ?? {};
           const sheet = buildSheetModel(character, data.catalog, ATTRIBUTES);
           const characterHistory = history.filter((entry) => entry.characterId === character.id);
           const expanded = openCharacter === character.id;
           const visible = hiddenStats[character.id] ?? {};
-          const weapons = selectedByIds(data.catalog, [...(character.choices.selectedWeapons ?? []), ...(character.choices.storedWeaponIds ?? [])]);
+          const weapons = selectedByIds(data.catalog, [...(choices.selectedWeapons ?? []), ...(choices.storedWeaponIds ?? [])]);
           const showWeaponWarning = weapons.length > 5 && !dismissedWarnings[character.id];
-          const attunedCount = (character.choices.attunedItemIds ?? []).length;
+          const attunedCount = (choices.attunedItemIds ?? []).length;
           const showAttunementWarning = attunementLimit > 0 && attunedCount > attunementLimit;
           return (
             <div key={character.id} className="border border-[#a8752a]/35 bg-black/25 p-4">
@@ -174,11 +175,12 @@ function CharacterQuickStats({ sheet, visible, onToggle }) {
 }
 
 function CharacterDetails({ character, data, sheet, history, visible }) {
-  const magicItems = selectedByIds(data.catalog, character.choices.selectedMagicItemIds ?? []);
-  const weapons = selectedByIds(data.catalog, [...(character.choices.selectedWeapons ?? []), ...(character.choices.storedWeaponIds ?? [])]);
-  const equipment = selectedByIds(data.catalog, character.choices.selectedEquipmentIds ?? []);
-  const potion = selectedByIds(data.catalog, character.choices.selectedPotionId ? [character.choices.selectedPotionId] : []);
-  const freeEquipment = (character.choices.selectedEquipmentText ?? []).map((text, index) => ({ id: `text-${index}`, name: text }));
+  const choices = character.choices ?? {};
+  const magicItems = selectedByIds(data.catalog, choices.selectedMagicItemIds ?? []);
+  const weapons = selectedByIds(data.catalog, [...(choices.selectedWeapons ?? []), ...(choices.storedWeaponIds ?? [])]);
+  const equipment = selectedByIds(data.catalog, choices.selectedEquipmentIds ?? []);
+  const potion = selectedByIds(data.catalog, choices.selectedPotionId ? [choices.selectedPotionId] : []);
+  const freeEquipment = (choices.selectedEquipmentText ?? []).map((text, index) => ({ id: `text-${index}`, name: text }));
   return <div className="mt-4 grid gap-4 border-t border-[#a8752a]/25 pt-4"><div className="grid gap-2 md:grid-cols-3">{(visible.light !== false || visible.heavy !== false) && <Metric label="Schadensgrenzwerte" value={`${sheet.lightThreshold}/${sheet.heavyThreshold}`} />}<Metric label="Ruestung" value={sheet.armorValue} />{visible.armorSlots !== false && <Metric label="Ruestungsplaetze" value={`0/${sheet.armorSlots}`} />}</div><div className="grid gap-3 md:grid-cols-2">{visible.hp !== false && <MiniSegments label="HP" current={0} max={sheet.hpMax} tone="hp" />}{visible.stress !== false && <MiniSegments label="Stress" current={0} max={sheet.stressMax} tone="stress" />}</div><InventorySummary title="Magische Gegenstaende" items={magicItems} /><InventorySummary title="Waffen" items={weapons} /><InventorySummary title="Ausruestung" items={[...equipment, ...freeEquipment]} /><InventorySummary title="Traenke" items={potion} /><TimelineList title="History" entries={history} compact /></div>;
 }
 
@@ -505,12 +507,24 @@ function CustomModuleCard({ module, data, onSave, onDelete }) {
     patch({ fields: [...(module.fields ?? []), { id: crypto.randomUUID(), label: "Neues Feld", type, value: type === "checkbox" ? false : "" }] });
   }
   function patchField(fieldId, patchData) {
-    patch({ fields: module.fields.map((field) => field.id === fieldId ? { ...field, ...patchData } : field) });
+    patch({ fields: (module.fields ?? []).map((field) => field.id === fieldId ? { ...field, ...patchData } : field) });
   }
   function deleteField(fieldId) {
-    patch({ fields: module.fields.filter((field) => field.id !== fieldId) });
+    patch({ fields: (module.fields ?? []).filter((field) => field.id !== fieldId) });
   }
-  return <div className="grid gap-4 border border-[#a8752a]/30 bg-black/25 p-4"><div className="flex flex-wrap gap-3"><input value={module.name} onChange={(event) => patch({ name: event.target.value })} className="min-w-0 flex-1 bg-transparent text-2xl font-light text-white outline-none" /><button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200"><Trash2 className="h-4 w-4" /></button></div><div className="grid gap-2 md:grid-cols-3"><Select value={module.itemType ?? "note"} onChange={(itemType) => patch({ itemType })} options={BUILDER_TYPES} /><Select value={module.status ?? "draft"} onChange={(status) => patch({ status })} options={BUILDER_STATUS} /><Select value={module.visibility ?? "gm"} onChange={(visibility) => patch({ visibility })} options={BUILDER_VISIBILITY} /></div><input value={(module.tags ?? []).join(", ")} onChange={(event) => patch({ tags: event.target.value.split(",").map((entry) => entry.trim()).filter(Boolean) })} placeholder="Tags, durch Komma getrennt" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><TextArea label="Kurzbeschreibung" value={module.summary ?? ""} onChange={(summary) => patch({ summary })} /><TextArea label="GM-Notizen" value={module.gmNotes ?? ""} onChange={(gmNotes) => patch({ gmNotes })} /><TextArea label="Spielertext / Handout" value={module.playerText ?? ""} onChange={(playerText) => patch({ playerText })} /><div className="grid gap-2 border-t border-[#a8752a]/25 pt-3"><div className="flex flex-wrap items-center gap-2"><div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Eigene Felder</div>{["text", "textarea", "number", "checkbox"].map((type) => <button key={type} onClick={() => addField(type)} className="border border-[#a8752a]/35 px-2 py-1 text-xs text-[#cfc2aa]">{type}</button>)}</div>{module.fields.map((field) => <div key={field.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-2 md:grid-cols-[180px_1fr_auto]"><input value={field.label} onChange={(event) => patchField(field.id, { label: event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />{field.type === "textarea" ? <textarea value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: event.target.value })} className="min-h-20 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" /> : field.type === "checkbox" ? <label className="flex items-center gap-2 text-sm text-[#cfc2aa]"><input type="checkbox" checked={Boolean(field.value)} onChange={(event) => patchField(field.id, { value: event.target.checked })} /> Aktiv</label> : <input type={field.type === "number" ? "number" : "text"} value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: field.type === "number" ? Number(event.target.value) : event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#cfc2aa] outline-none" />}<button onClick={() => deleteField(field.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button></div>)}</div></div>;
+  return <div className="grid gap-4 border border-[#a8752a]/30 bg-black/25 p-4"><div className="flex flex-wrap gap-3"><input value={module.name} onChange={(event) => patch({ name: event.target.value })} className="min-w-0 flex-1 bg-transparent text-2xl font-light text-white outline-none" /><button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200"><Trash2 className="h-4 w-4" /></button></div><div className="grid gap-2 md:grid-cols-3"><Select value={module.itemType ?? "note"} onChange={(itemType) => patch({ itemType })} options={BUILDER_TYPES} /><Select value={module.status ?? "draft"} onChange={(status) => patch({ status })} options={BUILDER_STATUS} /><Select value={module.visibility ?? "gm"} onChange={(visibility) => patch({ visibility })} options={BUILDER_VISIBILITY} /></div><input value={(module.tags ?? []).join(", ")} onChange={(event) => patch({ tags: event.target.value.split(",").map((entry) => entry.trim()).filter(Boolean) })} placeholder="Tags, durch Komma getrennt" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><TextArea label="Kurzbeschreibung" value={module.summary ?? ""} onChange={(summary) => patch({ summary })} /><TextArea label="GM-Notizen" value={module.gmNotes ?? ""} onChange={(gmNotes) => patch({ gmNotes })} /><TextArea label="Spielertext / Handout" value={module.playerText ?? ""} onChange={(playerText) => patch({ playerText })} /><div className="grid gap-2 border-t border-[#a8752a]/25 pt-3"><div className="flex flex-wrap items-center gap-2"><div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Eigene Felder</div>{["text", "textarea", "number", "checkbox"].map((type) => <button key={type} onClick={() => addField(type)} className="border border-[#a8752a]/35 px-2 py-1 text-xs text-[#cfc2aa]">{type}</button>)}</div>{(module.fields ?? []).map((field) => <div key={field.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-2 md:grid-cols-[180px_1fr_auto]"><input value={field.label} onChange={(event) => patchField(field.id, { label: event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />{field.type === "textarea" ? <textarea value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: event.target.value })} className="min-h-20 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" /> : field.type === "checkbox" ? <label className="flex items-center gap-2 text-sm text-[#cfc2aa]"><input type="checkbox" checked={Boolean(field.value)} onChange={(event) => patchField(field.id, { value: event.target.checked })} /> Aktiv</label> : <input type={field.type === "number" ? "number" : "text"} value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: field.type === "number" ? Number(event.target.value) : event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#cfc2aa] outline-none" />}<button onClick={() => deleteField(field.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button></div>)}</div></div>;
+}
+
+function normalizeDashboardSession(session) {
+  return {
+    ...DEFAULT_SESSION,
+    ...(session ?? {}),
+    shops: session?.shops ?? [],
+    shopGroups: session?.shopGroups ?? [],
+    shopRequests: session?.shopRequests ?? [],
+    inventoryHistory: session?.inventoryHistory ?? [],
+    attunementLimit: session?.attunementLimit ?? DEFAULT_SESSION.attunementLimit
+  };
 }
 
 function optionLabel(options, value) {
@@ -563,7 +577,8 @@ function addItemToCharacter(character, item) {
   return { ...character, choices: { ...choices, selectedEquipmentIds: unique([...(choices.selectedEquipmentIds ?? []), item.id]), selectedEquipmentCounts: counts }, updatedAt: now };
 }
 function addWeapon(character, id) {
-  return { ...character, choices: { ...character.choices, storedWeaponIds: unique([...(character.choices.storedWeaponIds ?? []), id]) }, updatedAt: new Date().toISOString() };
+  const choices = character.choices ?? {};
+  return { ...character, choices: { ...choices, storedWeaponIds: unique([...(choices.storedWeaponIds ?? []), id]) }, updatedAt: new Date().toISOString() };
 }
 function historyEntry(characterId, item, action, shopName) {
   return { id: crypto.randomUUID(), characterId, itemId: item.id, itemName: item.name, itemType: item.type === "magicItem" ? "magicItem" : item.type, action, shopName, createdAt: new Date().toISOString() };

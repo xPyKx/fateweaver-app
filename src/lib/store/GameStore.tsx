@@ -540,7 +540,8 @@ function stampGmSession(previous: GmSessionData | undefined, next: GmSessionData
     shops: stampArray(previous?.shops ?? [], next.shops ?? [], now, stampShop),
     shopGroups: stampArray(previous?.shopGroups ?? [], next.shopGroups ?? [], now, stampTimestampedRecord),
     shopRequests: stampArray(previous?.shopRequests ?? [], next.shopRequests ?? [], now, stampTimestampedRecord),
-    inventoryHistory: stampArray(previous?.inventoryHistory ?? [], next.inventoryHistory ?? [], now, stampTimestampedRecord)
+    inventoryHistory: stampArray(previous?.inventoryHistory ?? [], next.inventoryHistory ?? [], now, stampTimestampedRecord),
+    attunementLimit: next.attunementLimit ?? previous?.attunementLimit ?? 3
   };
 }
 

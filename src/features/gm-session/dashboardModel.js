@@ -37,7 +37,7 @@ export function selectWorkspaceData(data, workspaceId) {
 export function buildTimelineEvents(data, inventoryHistory) {
   const events = [
     ...(data.historyEvents ?? []),
-    ...inventoryHistory.map(inventoryHistoryToEvent)
+    ...(inventoryHistory ?? []).map(inventoryHistoryToEvent)
   ];
   return events.sort((left, right) => Date.parse(right.createdAt ?? "") - Date.parse(left.createdAt ?? ""));
 }

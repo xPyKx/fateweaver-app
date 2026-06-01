@@ -41,7 +41,7 @@ export function EntryRow({ item, active, hint, onSelect, onInfo, onDelete }: { i
   );
 }
 
-export function Editor({ item, catalog, characters, properties, gameOptions, savePatch, onSaved }: { item: CatalogItem; catalog: CatalogItem[]; characters: Character[]; properties: CatalogItem[]; gameOptions: CatalogItem[]; savePatch: (patch: Partial<CatalogItem>) => void; onSaved: () => void }) {
+export function Editor({ item, catalog, characters = [], properties, gameOptions, savePatch, onSaved }: { item: CatalogItem; catalog: CatalogItem[]; characters?: Character[]; properties: CatalogItem[]; gameOptions: CatalogItem[]; savePatch: (patch: Partial<CatalogItem>) => void; onSaved: () => void }) {
   return (
     <div className="grid gap-4">
       <div className="border-b border-[#a8752a]/30 pb-3">
@@ -315,7 +315,7 @@ function GameOptionFields({ item, savePatch }: SpecificEditorProps) {
   );
 }
 
-function SheetTabFields({ item, characters, savePatch }: SpecificEditorProps & { characters: Character[] }) {
+function SheetTabFields({ item, characters = [], savePatch }: SpecificEditorProps & { characters?: Character[] }) {
   const sheetTab = item.sheetTab ?? { contentType: "freeText" as const };
   const releasedToCharacterIds = sheetTab.releasedToCharacterIds ?? [];
   function toggleCharacter(characterId: string) {

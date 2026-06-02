@@ -44,6 +44,9 @@ export interface BonusSource {
 
 export type PropertyEffectTarget =
   | AttributeKey
+  | "hpBonus"
+  | "stressBonus"
+  | "experienceBonus"
   | "dodge"
   | "armorValue"
   | "lightThreshold"
@@ -60,6 +63,25 @@ export interface PropertyEffect {
   value: number;
   condition?: string;
   attributeOptions?: AttributeKey[];
+}
+
+export type OriginRestActionMode = "included" | "additional";
+
+export interface OriginAbilityData {
+  id: string;
+  name: string;
+  description?: string;
+  propertyEffects?: PropertyEffect[];
+  extraLevelOneFateCards?: number;
+  restAction?: {
+    enabled?: boolean;
+    restKind: "short" | "long" | "both";
+    mode: OriginRestActionMode;
+    name: string;
+    effect: string;
+  };
+  restExtraActions?: number;
+  restRerolls?: number;
 }
 
 export interface WeaponData {
@@ -134,6 +156,7 @@ export interface FateAbilityUsageData {
   refreshTrigger?: FateRefreshTrigger;
   counterName?: string;
   counterMax?: number;
+  counterAttribute?: AttributeKey | "";
   rollName?: string;
   rollDice?: string;
   rollCount?: number;
@@ -258,6 +281,7 @@ export interface CatalogItem {
   sheetTab?: SheetTabData;
   rest?: RestData;
   backgroundQuestion?: BackgroundQuestionData;
+  originAbilities?: OriginAbilityData[];
   createdAt?: string;
   updatedAt?: string;
 }

@@ -16,11 +16,14 @@ export function RestView({ onBack }: { onBack?: () => void }) {
   const hint = data.infoHints.find((entry) => entry.target === "rest");
   const shortOptions = data.catalog.filter((item) => item.type === "restOption" && item.rest?.restKind === "short");
   const longOptions = data.catalog.filter((item) => item.type === "restOption" && item.rest?.restKind === "long");
-  const options = kind === "short" ? shortOptions : longOptions;
+  const originRest = originRestRules(character, data.catalog, kind);
+  const options = [...(kind === "short" ? shortOptions : longOptions), ...originRest.includedActions];
+  const additionalOptions = originRest.additionalActions;
+  const requiredActions = 2 + originRest.extraActions;
   const selectedSummary = useMemo(() => selectedActions.map((id) => options.find((option) => option.id === id)?.name).filter((name): name is string => Boolean(name)), [selectedActions, options]);
   const shortAvailable = !session.longRestUsed && shortRestCount < 3;
   const longAvailable = true;
-  const canConfirm = selectedActions.length === 2 && (kind === "short" ? shortAvailable : longAvailable);
+  const canConfirm = selectedActions.length === requiredActions && (kind === "short" ? shortAvailable : longAvailable);
 
   function selectKind(nextKind: "short" | "long") {
     setKind(nextKind);
@@ -28,7 +31,7 @@ export function RestView({ onBack }: { onBack?: () => void }) {
   }
 
   function addAction(id: string) {
-    setSelectedActions((current) => current.length >= 2 ? current : [...current, id]);
+    setSelectedActions((current) => current.length >= requiredActions ? current : [...current, id]);
   }
 
   function removeAction(index: number) {
@@ -98,18 +101,23 @@ export function RestView({ onBack }: { onBack?: () => void }) {
                 <ChoiceCard title={option.name} description={option.description} meta={option.rest?.effect} />
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm text-[#cfc2aa]">{count}x gewaehlt</span>
-                  <button type="button" onClick={() => addAction(option.id)} disabled={selectedActions.length >= 2} className="inline-flex h-9 items-center gap-2 border border-[#d6a14d]/55 bg-[#d6a14d]/10 px-3 text-sm font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">
+                  <button type="button" onClick={() => addAction(option.id)} disabled={selectedActions.length >= requiredActions} className="inline-flex h-9 items-center gap-2 border border-[#d6a14d]/55 bg-[#d6a14d]/10 px-3 text-sm font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">
                     <Plus className="h-4 w-4" /> Aktion
                   </button>
                 </div>
               </div>
             );
           })}
+          {additionalOptions.map((option) => (
+            <div key={option.id} className="grid gap-3 border border-[#d6a14d]/45 bg-[#d6a14d]/10 p-3">
+              <ChoiceCard title={option.name} description={option.description} meta={`${option.rest?.effect ?? ""} - zusaetzlich`} />
+            </div>
+          ))}
         </div>
 
         <aside className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
           <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Auswahl</div>
-          {[0, 1].map((index) => (
+          {Array.from({ length: requiredActions }, (_, index) => (
             <div key={index} className="flex min-h-11 items-center justify-between gap-3 border border-[#a8752a]/30 bg-black/25 px-3 text-sm text-[#cfc2aa]">
               <span>{selectedSummary[index] ?? `Aktion ${index + 1} offen`}</span>
               {selectedSummary[index] && <button type="button" onClick={() => removeAction(index)} className="grid h-8 w-8 place-items-center border border-[#a8752a]/35 text-[#ffd88c]"><Minus className="h-4 w-4" /></button>}
@@ -120,11 +128,33 @@ export function RestView({ onBack }: { onBack?: () => void }) {
           </button>
           <div className="text-xs leading-relaxed text-[#8c8170]">
             Beim Bestaetigen werden passende Fate-Inhalte refreshed, passende aktive Effekte beendet und eine GM-Meldung zu Unheil erzeugt.
+            {originRest.rerolls > 0 && <span className="block pt-2 text-[#ffd88c]">Rast-Wiederholungen verfuegbar: {originRest.rerolls}</span>}
           </div>
         </aside>
       </section>
     </div>
   );
+}
+
+function originRestRules(character: Character, catalog: CatalogItem[], kind: "short" | "long") {
+  const originItems = [character.choices.folkId, character.choices.societyId]
+    .map((id) => catalog.find((item) => item.id === id))
+    .filter(Boolean) as CatalogItem[];
+  const abilities = originItems.flatMap((item) => item.originAbilities ?? []);
+  const restAbilities = abilities.filter((ability) => ability.restAction?.enabled && (ability.restAction.restKind === kind || ability.restAction.restKind === "both"));
+  const toOption = (ability: typeof abilities[number]): CatalogItem => ({
+    id: `origin-rest-${ability.id}`,
+    type: "restOption",
+    name: ability.restAction?.name || ability.name,
+    description: ability.description || ability.name,
+    rest: { restKind: kind, effect: ability.restAction?.effect ?? "" }
+  });
+  return {
+    includedActions: restAbilities.filter((ability) => ability.restAction?.mode !== "additional").map(toOption),
+    additionalActions: restAbilities.filter((ability) => ability.restAction?.mode === "additional").map(toOption),
+    extraActions: abilities.reduce((sum, ability) => sum + Math.max(0, ability.restExtraActions ?? 0), 0),
+    rerolls: abilities.reduce((sum, ability) => sum + Math.max(0, ability.restRerolls ?? 0), 0)
+  };
 }
 
 function createSession(characterId: string): SessionState {

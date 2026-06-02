@@ -63,6 +63,7 @@ export function Editor({ item, catalog, characters = [], properties, gameOptions
       {item.type === "sheetTab" && <SheetTabFields item={item} characters={characters} savePatch={savePatch} />}
       {item.type === "fate" && <FateFields item={item} catalog={catalog} gameOptions={gameOptions} savePatch={savePatch} />}
       {item.type === "fateAbility" && <FateAbilityFields item={item} catalog={catalog} savePatch={savePatch} />}
+      {(item.type === "folk" || item.type === "society") && <OriginAbilityFields item={item} savePatch={savePatch} />}
       {item.type === "fateCard" && <TagFields item={item} savePatch={savePatch} />}
       {item.type === "restOption" && <RestFields item={item} savePatch={savePatch} />}
       {item.type === "backgroundQuestion" && <BackgroundQuestionFields item={item} savePatch={savePatch} />}
@@ -533,6 +534,7 @@ function FateUsageFields({ ability, save }: { ability: NonNullable<CatalogItem["
             <Select label="Nutzungen refreshen" value={usage.refreshTrigger ?? "none"} onChange={(refreshTrigger) => patch({ refreshTrigger: refreshTrigger as NonNullable<typeof usage>["refreshTrigger"] })} options={refreshOptions} />
             <Field label="Counter Name" value={usage.counterName ?? ""} onChange={(counterName) => patch({ counterName })} />
             <Field label="Counter Maximum" type="number" value={usage.counterMax ?? 0} onChange={(counterMax) => patch({ counterMax: Math.max(0, Number(counterMax) || 0) })} />
+            <Select label="Counter Attribut" value={usage.counterAttribute ?? ""} onChange={(counterAttribute) => patch({ counterAttribute: counterAttribute as NonNullable<typeof usage>["counterAttribute"] })} options={[["", "Festes Maximum"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
             <Field label="Wuerfelvorrat Name" value={usage.rollName ?? ""} onChange={(rollName) => patch({ rollName })} />
             <Field label="Wuerfel Formel" value={usage.rollDice ?? ""} onChange={(rollDice) => patch({ rollDice })} />
             <Field label="Wuerfel Anzahl" type="number" value={usage.rollCount ?? 0} onChange={(rollCount) => patch({ rollCount: Math.max(0, Number(rollCount) || 0) })} />
@@ -560,6 +562,72 @@ function FateUsageFields({ ability, save }: { ability: NonNullable<CatalogItem["
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function OriginAbilityFields({ item, savePatch }: SpecificEditorProps) {
+  const abilities = item.originAbilities ?? [];
+  function patchAbility(id: string, patch: Partial<NonNullable<CatalogItem["originAbilities"]>[number]>) {
+    savePatch({ originAbilities: abilities.map((ability) => ability.id === id ? { ...ability, ...patch } : ability) });
+  }
+  function addAbility() {
+    savePatch({ originAbilities: [...abilities, { id: crypto.randomUUID(), name: "Neue Faehigkeit", description: "", propertyEffects: [] }] });
+  }
+  return (
+    <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-black uppercase tracking-[0.16em] text-[#f2ca75]">Faehigkeiten</div>
+          <div className="text-xs text-[#8c8170]">Werte, Fatekarten-Bonus und Rastaktionen fuer diesen Eintrag.</div>
+        </div>
+        <button type="button" onClick={addAbility} className="shrink-0 border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Faehigkeit +</button>
+      </div>
+      {abilities.map((ability) => {
+        const effects = ability.propertyEffects ?? [];
+        const rest = ability.restAction ?? { enabled: false, restKind: "short" as const, mode: "included" as const, name: "", effect: "" };
+        return (
+          <div key={ability.id} className="grid gap-3 border border-[#a8752a]/25 bg-black/20 p-3">
+            <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+              <Field label="Name" value={ability.name} onChange={(name) => patchAbility(ability.id, { name })} />
+              <button type="button" onClick={() => savePatch({ originAbilities: abilities.filter((entry) => entry.id !== ability.id) })} className="self-end border border-red-400/45 px-3 py-3 text-red-200"><Trash2 className="h-4 w-4" /></button>
+            </div>
+            <TextArea label="Beschreibung" value={ability.description ?? ""} onChange={(description) => patchAbility(ability.id, { description })} />
+            <div className="grid gap-2 lg:grid-cols-3">
+              <Field label="Extra Level-1 Fatekarten" type="number" value={ability.extraLevelOneFateCards ?? 0} onChange={(extraLevelOneFateCards) => patchAbility(ability.id, { extraLevelOneFateCards: Math.max(0, Number(extraLevelOneFateCards) || 0) })} />
+              <Field label="Zusaetzliche Rastaktionen" type="number" value={ability.restExtraActions ?? 0} onChange={(restExtraActions) => patchAbility(ability.id, { restExtraActions: Math.max(0, Number(restExtraActions) || 0) })} />
+              <Field label="Rast-Wiederholungen" type="number" value={ability.restRerolls ?? 0} onChange={(restRerolls) => patchAbility(ability.id, { restRerolls: Math.max(0, Number(restRerolls) || 0) })} />
+            </div>
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Werteffekte</div>
+                <button type="button" onClick={() => patchAbility(ability.id, { propertyEffects: [...effects, { id: crypto.randomUUID(), target: "hpBonus", value: 1 }] })} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Effekt +</button>
+              </div>
+              {effects.map((effect) => (
+                <div key={effect.id} className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)_auto]">
+                  <Select label="Ziel" value={effect.target} onChange={(target) => patchAbility(ability.id, { propertyEffects: effects.map((entry) => entry.id === effect.id ? { ...entry, target: target as PropertyEffectTarget } : entry) })} options={effectTargets.map((target) => [target.key, target.label])} />
+                  <SignedNumberField label="Wert" value={effect.value} onChange={(value) => patchAbility(ability.id, { propertyEffects: effects.map((entry) => entry.id === effect.id ? { ...entry, value } : entry) })} />
+                  <Field label="Notiz" value={effect.condition ?? ""} onChange={(condition) => patchAbility(ability.id, { propertyEffects: effects.map((entry) => entry.id === effect.id ? { ...entry, condition } : entry) })} />
+                  <button type="button" onClick={() => patchAbility(ability.id, { propertyEffects: effects.filter((entry) => entry.id !== effect.id) })} className="self-end border border-red-400/45 px-3 py-3 text-red-200"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              ))}
+            </div>
+            <label className="flex min-h-11 items-center gap-2 border border-[#a8752a]/30 bg-black/25 px-3 text-sm text-[#cfc2aa]">
+              <input type="checkbox" checked={Boolean(rest.enabled)} onChange={(event) => patchAbility(ability.id, { restAction: { ...rest, enabled: event.target.checked } })} />
+              Rastaktion freischalten
+            </label>
+            {rest.enabled && (
+              <div className="grid gap-2 lg:grid-cols-2">
+                <Field label="Rastaktion Name" value={rest.name} onChange={(name) => patchAbility(ability.id, { restAction: { ...rest, name } })} />
+                <Field label="Rastaktion Effekt" value={rest.effect} onChange={(effect) => patchAbility(ability.id, { restAction: { ...rest, effect } })} />
+                <Select label="Rastart" value={rest.restKind} onChange={(restKind) => patchAbility(ability.id, { restAction: { ...rest, restKind: restKind as "short" | "long" | "both" } })} options={[["short", "Kurze Rast"], ["long", "Lange Rast"], ["both", "Kurz und lang"]]} />
+                <Select label="Zaehlt als" value={rest.mode} onChange={(mode) => patchAbility(ability.id, { restAction: { ...rest, mode: mode as "included" | "additional" } })} options={[["included", "Teil der 2 Rastaktionen"], ["additional", "Zusaetzlich immer machbar"]]} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {!abilities.length && <div className="text-sm text-[#8c8170]">Noch keine Faehigkeiten hinterlegt.</div>}
     </div>
   );
 }

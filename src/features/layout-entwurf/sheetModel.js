@@ -47,13 +47,13 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
   const weapons = (choices.selectedWeapons ?? [])
     .map((id) => findWeaponItem(catalog, id))
     .filter(Boolean);
-  const activeItems = [...weapons, armorItem].filter(Boolean);
-  const activeEffects = [...collectPropertyEffects(activeItems, catalog), ...collectActiveFateEffects(character, catalog)];
-  const attributes = applyAttributeEffects(baseAttributes, activeEffects);
   const mainFate = findItem(catalog, choices.mainFateId, "fate");
   const sideFate = findItem(catalog, choices.sideFateId, "fate");
   const folk = findItem(catalog, choices.folkId, "folk");
   const society = findItem(catalog, choices.societyId, "society");
+  const activeItems = [...weapons, armorItem].filter(Boolean);
+  const activeEffects = [...collectPropertyEffects(activeItems, catalog), ...collectOriginEffects([folk, society]), ...collectActiveFateEffects(character, catalog)];
+  const attributes = applyAttributeEffects(baseAttributes, activeEffects);
   const level = character.level ?? 1;
   const training = effectiveTrainingBonus(character);
 
@@ -66,8 +66,8 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
     dodge: dodge(attributes, character.dodgeBonuses ?? [], armorData) + sumEffects(activeEffects, "dodge") + levelUpEvasionBonus(character),
     armorValue: (armorData?.armorValue ?? 0) + sumEffects(activeEffects, "armorValue"),
     armorSlots: Math.max(0, Math.min(12, (armorData?.armorValue ?? 0) + sumEffects(activeEffects, "armorValue"))),
-    hpMax: Math.max(1, hitPoints(attributes, (character.hpBonus ?? 0) + levelUpHpBonus(character))),
-    stressMax: Math.max(1, stress(attributes, (character.stressBonus ?? 0) + levelUpStressBonus(character))),
+    hpMax: Math.max(1, hitPoints(attributes, (character.hpBonus ?? 0) + levelUpHpBonus(character) + sumEffects(activeEffects, "hpBonus"))),
+    stressMax: Math.max(1, stress(attributes, (character.stressBonus ?? 0) + levelUpStressBonus(character) + sumEffects(activeEffects, "stressBonus"))),
     lightThreshold: lightDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "lightThreshold"),
     heavyThreshold: heavyDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "heavyThreshold"),
     attributes: attributeTemplates.map((item) => {
@@ -251,6 +251,13 @@ function normalizeLegacyDamageDie(damage) {
 
 function collectPropertyEffects(items, catalog) {
   return items.flatMap((item) => resolveEffects(item, catalog));
+}
+
+function collectOriginEffects(items) {
+  return items.filter(Boolean).flatMap((item) => [
+    ...(item.propertyEffects ?? []),
+    ...(item.originAbilities ?? []).flatMap((ability) => ability.propertyEffects ?? [])
+  ]);
 }
 
 function collectActiveFateEffects(character, catalog) {

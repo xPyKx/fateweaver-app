@@ -32,6 +32,9 @@ export const attributes: { key: AttributeKey; label: string }[] = [
 
 export const effectTargets: { key: PropertyEffectTarget; label: string }[] = [
   ...attributes,
+  { key: "hpBonus", label: "HP" },
+  { key: "stressBonus", label: "Stress" },
+  { key: "experienceBonus", label: "Erfahrung Bonus" },
   { key: "dodge", label: "Ausweichen" },
   { key: "armorValue", label: "Ruestungswert" },
   { key: "lightThreshold", label: "Grenzwert leicht" },
@@ -86,7 +89,7 @@ export function defaultsForMagicKind(kind: MagicItemKind) {
 }
 
 export function supportsProperties(type: CatalogType) {
-  return type === "weapon" || type === "armor" || type === "equipment" || type === "material" || type === "magicItem";
+  return type === "weapon" || type === "armor" || type === "equipment" || type === "material" || type === "magicItem" || type === "folk" || type === "society";
 }
 
 export function supportsRarity(type: CatalogType) {

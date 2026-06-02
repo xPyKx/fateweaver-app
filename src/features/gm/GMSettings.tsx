@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { missingSeedCatalogItems } from "../../data/seeds";
 import { useGameStore } from "../../lib/store/GameStore";
@@ -51,10 +51,10 @@ export function GMSettings() {
   const filteredFateAbilities = fateAbilities.filter((item) => item.fateAbility?.kind === activeFateAbilityKind || item.fateAbility?.categoryId === activeFateAbilityKind);
   const hasSubcategoryColumn = type === "magicItem" || type === "gameOption" || type === "backgroundQuestion";
   const gridColumns = type === "fate" && activeFate
-    ? "xl:grid-cols-[minmax(170px,0.75fr)_minmax(220px,0.95fr)_minmax(190px,0.85fr)_minmax(230px,1fr)_minmax(320px,1.45fr)]"
+    ? "xl:grid-cols-[minmax(170px,0.75fr)_minmax(220px,0.95fr)_minmax(190px,0.85fr)_minmax(230px,1fr)]"
     : hasSubcategoryColumn
-      ? "xl:grid-cols-[minmax(170px,0.8fr)_minmax(200px,0.85fr)_minmax(250px,1fr)_minmax(320px,1.5fr)]"
-      : "xl:grid-cols-[minmax(180px,0.85fr)_minmax(260px,1fr)_minmax(320px,1.6fr)]";
+      ? "xl:grid-cols-[minmax(170px,0.8fr)_minmax(200px,0.85fr)_minmax(250px,1fr)]"
+      : "xl:grid-cols-[minmax(180px,0.85fr)_minmax(260px,1fr)]";
 
   function createItem() {
     if (type === "fate" && activeFate) {
@@ -309,14 +309,22 @@ export function GMSettings() {
           />
         )}
 
-        <section className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
-          {selected ? (
-            <Editor item={selected} catalog={data.catalog} characters={data.characters} properties={properties} gameOptions={gameOptions} savePatch={savePatch} onSaved={() => showNotice(`"${selected.name}" gespeichert.`)} />
-          ) : (
-            <p className="text-[#cfc2aa]">Waehle einen Eintrag oder erstelle einen neuen.</p>
-          )}
-        </section>
       </section>
+
+      {selected && (
+        <div className="fixed inset-0 z-[220] grid place-items-center bg-black/80 p-3" onMouseDown={(event) => event.target === event.currentTarget && setSelectedId(undefined)}>
+          <section className="grid max-h-[92vh] w-full max-w-5xl overflow-auto border border-[#a8752a]/60 bg-[#070b12] p-4 shadow-2xl shadow-black/70">
+            <div className="mb-4 flex items-center justify-between gap-3 border-b border-[#a8752a]/30 pb-3">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Eintrag bearbeiten</div>
+                <div className="text-xl font-light text-white">{selected.name}</div>
+              </div>
+              <button onClick={() => setSelectedId(undefined)} className="grid h-10 w-10 place-items-center border border-[#a8752a]/45 text-[#cfc2aa]"><X className="h-4 w-4" /></button>
+            </div>
+            <Editor item={selected} catalog={data.catalog} characters={data.characters} properties={properties} gameOptions={gameOptions} savePatch={savePatch} onSaved={() => showNotice(`"${selected.name}" gespeichert.`)} />
+          </section>
+        </div>
+      )}
 
       {hintTarget && (
         <HintDialog

@@ -738,6 +738,7 @@ function FateCardUsageControls({ item, character, upsertCharacter }) {
   const activationMax = Number(usage.activationMax ?? 0);
   const rolls = state.rolls ?? [];
   const counter = Number(state.counter ?? 0);
+  const counterMax = usage.counterAttribute ? Number(character.attributes?.[usage.counterAttribute] ?? 0) : Number(usage.counterMax ?? 0);
 
   function patchState(patch) {
     upsertCharacter({
@@ -771,10 +772,10 @@ function FateCardUsageControls({ item, character, upsertCharacter }) {
           <button type="button" onClick={() => patchState({ used: Math.max(0, used - 1) })} className="border border-[#a8752a]/30 px-2 py-1"><Minus className="h-3.5 w-3.5" /></button>
         </div>
       )}
-      {Number(usage.counterMax ?? 0) > 0 && (
+      {counterMax > 0 && (
         <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
-          <span>{usage.counterName || "Counter"}: {counter}/{usage.counterMax}</span>
-          <button type="button" onClick={() => patchState({ counter: Math.min(Number(usage.counterMax), counter + 1) })} className="border border-[#a8752a]/30 px-2 py-1"><Plus className="h-3.5 w-3.5" /></button>
+          <span>{usage.counterName || "Counter"}: {counter}/{counterMax}</span>
+          <button type="button" onClick={() => patchState({ counter: Math.min(counterMax, counter + 1) })} className="border border-[#a8752a]/30 px-2 py-1"><Plus className="h-3.5 w-3.5" /></button>
           <button type="button" onClick={() => patchState({ counter: Math.max(0, counter - 1) })} className="border border-[#a8752a]/30 px-2 py-1"><Minus className="h-3.5 w-3.5" /></button>
         </div>
       )}
@@ -1207,6 +1208,18 @@ function EquipmentPanel({ character, catalog, upsertCharacter, mode, onReturn })
 
 function selectedByIds(catalog, ids) {
   return ids.map((id) => catalog.find((item) => item.id === id)).filter(Boolean);
+}
+
+function originAdjustedExperiences(character, catalog) {
+  const bonus = [character.choices?.folkId, character.choices?.societyId]
+    .map((id) => catalog.find((item) => item.id === id))
+    .filter(Boolean)
+    .flatMap((item) => [...(item.propertyEffects ?? []), ...(item.originAbilities ?? []).flatMap((ability) => ability.propertyEffects ?? [])])
+    .filter((effect) => effect.target === "experienceBonus")
+    .reduce((sum, effect) => sum + (effect.value ?? 0), 0);
+  const entries = effectiveExperiences(character);
+  if (!bonus || !entries.length) return entries;
+  return entries.map((entry, index) => index === 0 ? { ...entry, bonus: entry.bonus + bonus } : entry);
 }
 
 function shopReleasedToCharacter(shop, groups, characterId) {
@@ -1770,7 +1783,7 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
               <SegmentBar label="Stress" marked={0} max={sheet.stressMax} tone="stress" />
             </div>
           </GoldPanel>
-          <ExperiencesPanel entries={effectiveExperiences(character)} />
+          <ExperiencesPanel entries={originAdjustedExperiences(character, data.catalog)} />
         </div>
 
         <div className="grid h-full gap-4 lg:grid-cols-[1fr_0.78fr]">

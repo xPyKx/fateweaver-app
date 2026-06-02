@@ -239,7 +239,12 @@ function FateSelection({ draft, catalog, patchChoices, selectedFateDetail, setSe
     const isMain = target === "main";
     if (!isMain && id === draft.choices.mainFateId) return;
     if (isMain && id === draft.choices.sideFateId) return;
-    patchChoices(isMain ? { mainFateId: id } : { sideFateId: id });
+    patchChoices({
+      ...(isMain ? { mainFateId: id } : { sideFateId: id }),
+      selectedFateCardIds: [],
+      selectedFateCategoryEntryIds: {},
+      fateCardStates: {}
+    });
     setSelectedFateDetail(id);
     setTarget(isMain ? "side" : "main");
   }
@@ -273,7 +278,7 @@ function BuildDetail({ category, draft, catalog, patchCharacter, patchChoices }:
   if (category === "equipment") return <EquipmentDetail draft={draft} catalog={catalog} patchChoices={patchChoices} />;
   return (
     <div className="grid gap-6">
-      <CardSelection title="Fatekarten" items={fateCardsForCharacter(draft, catalog)} selected={draft.choices.selectedFateCardIds} limit={2} onChange={(selectedFateCardIds) => patchChoices({ selectedFateCardIds })} />
+      <CardSelection title="Fatekarten" items={fateCardsForCharacter(draft, catalog)} selected={draft.choices.selectedFateCardIds} limit={fateCardLimit(draft, catalog)} onChange={(selectedFateCardIds) => patchChoices({ selectedFateCardIds })} />
       <FateCategoryChoicePools character={draft} catalog={catalog} onChange={(selectedFateCategoryEntryIds) => patchChoices({ selectedFateCategoryEntryIds })} />
     </div>
   );
@@ -543,6 +548,14 @@ function fateCardsForCharacter(character: Character, catalog: CatalogItem[]) {
   const abilities = catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.kind === "fateCard" && item.fateAbility.level === 1 && fateIds.includes(item.fateAbility.fateId));
   const legacy = catalog.filter((item) => item.type === "fateCard" && item.tags?.some((tag) => fateIds.includes(tag)) && item.tags?.includes("level-1"));
   return [...abilities, ...legacy];
+}
+
+function fateCardLimit(character: Character, catalog: CatalogItem[]) {
+  const originItems = [character.choices.folkId, character.choices.societyId]
+    .map((id) => catalog.find((item) => item.id === id))
+    .filter(Boolean) as CatalogItem[];
+  const extra = originItems.flatMap((item) => item.originAbilities ?? []).reduce((sum, ability) => sum + Math.max(0, ability.extraLevelOneFateCards ?? 0), 0);
+  return 2 + extra;
 }
 
 function availableFateCategoryPools(character: Character, catalog: CatalogItem[], level: number, options: { includeSpecialization: boolean }) {

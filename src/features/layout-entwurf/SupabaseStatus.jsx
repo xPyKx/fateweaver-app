@@ -13,9 +13,10 @@ import {
 } from "../../lib/supabase/client";
 import { useGameStore } from "../../lib/store/GameStore";
 import { BackupMenuItems } from "./BackupPanel";
+import { WorkspaceManager } from "./WorkspaceManager";
 
 export function SupabaseStatus() {
-  const { syncStatus, syncState, lastRemoteSyncAt, syncNow, authLoading, currentUserId, profile } = useGameStore();
+  const { data, syncStatus, syncState, lastRemoteSyncAt, syncNow, authLoading, currentUserId, profile } = useGameStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -23,6 +24,7 @@ export function SupabaseStatus() {
   const [mode, setMode] = useState("login");
   const [message, setMessage] = useState("");
   const [usersOpen, setUsersOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const [expandedUserId, setExpandedUserId] = useState("");
@@ -30,6 +32,7 @@ export function SupabaseStatus() {
   const [busyAction, setBusyAction] = useState("");
   const menuRef = useRef(null);
   const canManageUsers = Boolean(profile?.isAdmin);
+  const canManageWorkspaces = Boolean(profile?.isGm || profile?.isAdmin);
 
   useEffect(() => {
     if (currentUserId && message === "Ausgeloggt.") setMessage("");
@@ -66,6 +69,7 @@ export function SupabaseStatus() {
       await signOut();
       setMenuOpen(false);
       setUsersOpen(false);
+      setWorkspaceOpen(false);
       setMessage("Ausgeloggt.");
     } finally {
       setBusyAction("");
@@ -187,6 +191,11 @@ export function SupabaseStatus() {
                 <button disabled={Boolean(busyAction)} onClick={changeOwnPassword} className="flex h-10 items-center gap-2 border border-[#a8752a]/45 bg-black/35 px-3 font-bold uppercase tracking-wide text-[#f2ca75] disabled:cursor-not-allowed disabled:opacity-55">
                   <KeyRound className="h-4 w-4" /> {busyAction === "password" ? "Speichert" : "Passwort setzen"}
                 </button>
+                {canManageWorkspaces && (
+                  <button onClick={() => { setWorkspaceOpen(true); setMenuOpen(false); }} className="flex h-10 items-center gap-2 border border-[#a8752a]/45 bg-black/35 px-3 font-bold uppercase tracking-wide text-[#f2ca75]">
+                    <Users className="h-4 w-4" /> Spielrunde
+                  </button>
+                )}
                 {canManageUsers && (
                   <button onClick={() => { setUsersOpen(!usersOpen); setMenuOpen(false); }} className="flex h-10 items-center gap-2 border border-[#a8752a]/45 bg-black/35 px-3 font-bold uppercase tracking-wide text-[#f2ca75]">
                     <Users className="h-4 w-4" /> Nutzer verwalten
@@ -205,6 +214,14 @@ export function SupabaseStatus() {
         )}
       </div>
 
+      {workspaceOpen && canManageWorkspaces && (
+        <div className="fixed inset-0 z-[255] grid place-items-center bg-black/82 p-4" onMouseDown={(event) => event.target === event.currentTarget && setWorkspaceOpen(false)}>
+          <div className="grid max-h-[88vh] w-full max-w-6xl overflow-auto border border-[#a8752a]/60 bg-[#070b12] p-4 shadow-xl shadow-black/70">
+            <WorkspaceManager onClose={() => setWorkspaceOpen(false)} />
+          </div>
+        </div>
+      )}
+
       {usersOpen && canManageUsers && (
         <div className="fixed inset-0 z-[260] grid place-items-center bg-black/82 p-4" onMouseDown={(event) => event.target === event.currentTarget && setUsersOpen(false)}>
           <div className="grid max-h-[88vh] w-full max-w-5xl gap-3 overflow-auto border border-[#a8752a]/60 bg-[#070b12] p-4 shadow-xl shadow-black/70">
@@ -214,18 +231,30 @@ export function SupabaseStatus() {
             {busyAction === "profiles" && <div className="border border-[#a8752a]/30 bg-black/25 p-2 text-[#cfc2aa]">Nutzer werden geladen...</div>}
             {profiles.map((entry) => {
               const expanded = expandedUserId === entry.userId;
+              const userCharacters = charactersForProfile(data.characters ?? [], entry, currentUserId);
               return (
                 <div key={entry.userId} className="grid gap-2 border border-[#a8752a]/30 bg-black/25 p-3">
-                  <button onClick={() => setExpandedUserId(expanded ? "" : entry.userId)} className="grid gap-2 text-left lg:grid-cols-[minmax(180px,1fr)_auto] lg:items-center">
+                  <button onClick={() => setExpandedUserId(expanded ? "" : entry.userId)} className="grid gap-2 text-left lg:grid-cols-[minmax(180px,1fr)_auto_auto] lg:items-center">
                     <span className="truncate text-[#f4ead7]">{entry.email || entry.userId}</span>
+                    <span className="text-xs text-[#8c8170]">{roleLabel(entry)} - {userCharacters.length} Charakter{userCharacters.length === 1 ? "" : "e"}</span>
                     <span className="text-xs text-[#8c8170]">{expanded ? "Einklappen" : "Aufklappen"}</span>
                   </button>
-                  <div className="flex flex-wrap gap-3">
-                    <RoleCheck label="GM" checked={entry.isGm} onChange={(checked) => patchProfile({ ...entry, isGm: checked })} />
-                    <RoleCheck label="Spieler" checked={entry.isPlayer} onChange={(checked) => patchProfile({ ...entry, isPlayer: checked })} />
-                  </div>
                   {expanded && (
                     <div className="grid gap-2 border-t border-[#a8752a]/25 pt-3">
+                      <div className="flex flex-wrap gap-3">
+                        <RoleCheck label="GM" checked={entry.isGm} onChange={(checked) => patchProfile({ ...entry, isGm: checked })} />
+                        <RoleCheck label="Spieler" checked={entry.isPlayer} onChange={(checked) => patchProfile({ ...entry, isPlayer: checked })} />
+                      </div>
+                      <div className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-3">
+                        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Charaktere</div>
+                        {userCharacters.map((character) => (
+                          <div key={character.id} className="grid gap-1 border border-[#a8752a]/20 bg-black/20 px-3 py-2 sm:grid-cols-[1fr_auto] sm:items-center">
+                            <span className="truncate text-[#f4ead7]">{character.name || "Unbenannter Charakter"}</span>
+                            <span className="text-xs text-[#8c8170]">Level {character.level ?? 1} - {character.updatedAt ? formatDateTime(character.updatedAt) : "nie bearbeitet"}</span>
+                          </div>
+                        ))}
+                        {!userCharacters.length && <div className="text-sm text-[#8c8170]">Keine Charaktere angelegt.</div>}
+                      </div>
                       <button onClick={() => setProfilePasswords((current) => ({ ...current, [entry.userId]: current[entry.userId] ?? "" }))} className="flex h-10 w-fit items-center gap-2 border border-[#a8752a]/45 bg-black/35 px-3 font-bold uppercase tracking-wide text-[#f2ca75]">
                         <KeyRound className="h-4 w-4" /> Passwort setzen
                       </button>
@@ -233,7 +262,7 @@ export function SupabaseStatus() {
                         <div className="grid gap-2 sm:grid-cols-[minmax(180px,320px)_auto_auto]">
                           <input className="h-10 min-w-0 border border-[#a8752a]/35 bg-black/35 px-3 text-[#f4ead7] outline-none" placeholder="Neues Passwort" type="password" value={profilePasswords[entry.userId] ?? ""} onChange={(event) => setProfilePasswords((current) => ({ ...current, [entry.userId]: event.target.value }))} />
                           <button disabled={Boolean(busyAction)} onClick={() => setPasswordFor(entry)} className="h-10 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 font-bold uppercase text-[#ffd88c] disabled:cursor-not-allowed disabled:opacity-55">Speichern</button>
-                          <button onClick={() => resetPasswordFor(entry.email)} className="flex h-10 items-center justify-center gap-2 border border-[#a8752a]/35 bg-black/25 px-3 text-xs font-bold uppercase text-[#f2ca75]">
+                          <button disabled={!entry.email} onClick={() => resetPasswordFor(entry.email)} className="flex h-10 items-center justify-center gap-2 border border-[#a8752a]/35 bg-black/25 px-3 text-xs font-bold uppercase text-[#f2ca75] disabled:cursor-not-allowed disabled:opacity-55">
                             <RotateCcw className="h-3.5 w-3.5" /> Reset-Mail
                           </button>
                         </div>
@@ -291,6 +320,21 @@ function profileLabel(profile) {
     profile.isPlayer ? "Spieler" : ""
   ].filter(Boolean).join(" + ");
   return `${profile.email} · ${roles || "ohne Rolle"}`;
+}
+
+function roleLabel(profile) {
+  const roles = [
+    profile?.isGm ? "GM" : "",
+    profile?.isPlayer ? "Spieler" : ""
+  ].filter(Boolean);
+  return roles.length ? roles.join(" + ") : "ohne Rolle";
+}
+
+function charactersForProfile(characters, profile, currentUserId) {
+  return characters.filter((character) => (
+    character.ownerId === profile.userId
+    || (!character.ownerId && profile.userId === currentUserId)
+  ));
 }
 
 function formatDateTime(value) {

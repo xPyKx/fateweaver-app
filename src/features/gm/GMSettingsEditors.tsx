@@ -744,6 +744,7 @@ function RestFields({ item, savePatch }: SpecificEditorProps) {
     <div className="grid gap-3 md:grid-cols-2">
       <Select label="Rastart" value={rest.restKind} onChange={(restKind) => savePatch({ rest: { ...rest, restKind: restKind as "short" | "long" } })} options={[["short", "Kurze Rast"], ["long", "Lange Rast"]]} />
       <Select label="Effekt" value={rest.effectTarget ?? ""} onChange={(effectTarget) => savePatch({ rest: { ...rest, effectTarget: effectTarget as NonNullable<typeof rest["effectTarget"]> } })} options={[["", "Nur Text"], ["stress", "Stress"], ["hp", "HP"], ["armorSlot", "Ruestungsplatz"], ["inspiration", "Inspiration"]]} />
+      <Select label="Ziel" value={rest.targetMode ?? "single"} onChange={(targetMode) => savePatch({ rest: { ...rest, targetMode: targetMode as "single" | "multiple" } })} options={[["single", "Ein Ziel"], ["multiple", "Mehrere Ziele"]]} />
       <Select label="Anzahl Art" value={rest.amountKind ?? "fixed"} onChange={(amountKind) => savePatch({ rest: { ...rest, amountKind: amountKind as "fixed" | "dice" } })} options={[["fixed", "Feste Anzahl"], ["dice", "Wuerfelwurf"]]} />
       {rest.amountKind === "dice"
         ? <Field label="Wuerfel" value={rest.dice ?? "1W4"} onChange={(dice) => savePatch({ rest: { ...rest, dice } })} />

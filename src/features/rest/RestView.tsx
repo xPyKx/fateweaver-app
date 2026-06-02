@@ -187,13 +187,15 @@ function originRestRules(character: Character, catalog: CatalogItem[], kind: "sh
 
 function RestActionInputs({ option, detail, actorId, characters, onPatch }: { option: CatalogItem; detail: { targetCharacterId?: string; result?: string; participantIds?: string[] }; actorId: string; characters: Character[]; onPatch: (patch: Partial<{ targetCharacterId: string; result: string; participantIds: string[] }>) => void }) {
   const target = option.rest?.effectTarget;
-  const needsTarget = target === "hp" || target === "stress" || target === "armorSlot";
+  const targetMode = option.rest?.targetMode ?? "single";
+  const needsSingleTarget = Boolean(target) && targetMode === "single";
+  const needsMultipleTargets = Boolean(target) && targetMode === "multiple";
   const needsRoll = option.rest?.amountKind === "dice";
   const participants = detail.participantIds ?? [actorId];
   if (!target && !needsRoll) return null;
   return (
     <div className="grid gap-2 border-t border-[#a8752a]/25 pt-2">
-      {needsTarget && (
+      {needsSingleTarget && (
         <label className="grid gap-1">
           <span className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#f2ca75]">Ziel</span>
           <select value={detail.targetCharacterId ?? actorId} onChange={(event) => onPatch({ targetCharacterId: event.target.value })} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-2 text-[#f4ead7]">
@@ -201,9 +203,9 @@ function RestActionInputs({ option, detail, actorId, characters, onPatch }: { op
           </select>
         </label>
       )}
-      {target === "inspiration" && (
+      {needsMultipleTargets && (
         <div className="grid gap-1">
-          <span className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#f2ca75]">Teilnehmer</span>
+          <span className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#f2ca75]">Ziele</span>
           <div className="grid gap-1">
             {characters.map((entry) => (
               <label key={entry.id} className="flex items-center gap-2">
@@ -230,7 +232,7 @@ function RestActionInputs({ option, detail, actorId, characters, onPatch }: { op
 
 function actionReady(option: CatalogItem, detail?: { result?: string; participantIds?: string[] }) {
   if (option.rest?.amountKind === "dice" && !(Number(detail?.result) > 0)) return false;
-  if (option.rest?.effectTarget === "inspiration" && detail?.participantIds && !detail.participantIds.length) return false;
+  if (option.rest?.targetMode === "multiple" && detail?.participantIds && !detail.participantIds.length) return false;
   return true;
 }
 
@@ -239,16 +241,17 @@ function applyRestAction(option: CatalogItem, detail: { targetCharacterId?: stri
   if (!rest?.effectTarget) return;
   const amount = rest.amountKind === "dice" ? Math.max(0, Number(detail.result) || 0) : Math.max(0, Number(rest.amount ?? 0) || 0);
   if (amount <= 0) return;
+  const targetIds = rest.targetMode === "multiple" ? (detail.participantIds?.length ? detail.participantIds : [actorId]) : [detail.targetCharacterId || actorId];
   if (rest.effectTarget === "inspiration") {
-    const participantIds = detail.participantIds?.length ? detail.participantIds : [actorId];
-    const value = amount + (participantIds.length > 1 ? Math.max(0, rest.groupBonus ?? 0) : 0);
-    participantIds.forEach((id) => patchCharacterResource(updates, id, (resources) => ({ ...resources, inspiration: Math.min(5, (resources.inspiration ?? 0) + value) })));
+    const value = amount + (targetIds.length > 1 ? Math.max(0, rest.groupBonus ?? 0) : 0);
+    targetIds.forEach((id) => patchCharacterResource(updates, id, (resources) => ({ ...resources, inspiration: Math.min(5, (resources.inspiration ?? 0) + value) })));
     return;
   }
-  const targetId = detail.targetCharacterId || actorId;
-  if (rest.effectTarget === "hp") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, hpMarked: Math.max(0, (resources.hpMarked ?? 0) - amount) }));
-  if (rest.effectTarget === "stress") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, stressMarked: Math.max(0, (resources.stressMarked ?? 0) - amount) }));
-  if (rest.effectTarget === "armorSlot") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, armorMarked: Math.max(0, (resources.armorMarked ?? 0) - amount) }));
+  targetIds.forEach((targetId) => {
+    if (rest.effectTarget === "hp") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, hpMarked: Math.max(0, (resources.hpMarked ?? 0) - amount) }));
+    if (rest.effectTarget === "stress") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, stressMarked: Math.max(0, (resources.stressMarked ?? 0) - amount) }));
+    if (rest.effectTarget === "armorSlot") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, armorMarked: Math.max(0, (resources.armorMarked ?? 0) - amount) }));
+  });
 }
 
 function patchCharacterResource(updates: Map<string, Character>, characterId: string, patch: (resources: NonNullable<Character["resources"]>) => NonNullable<Character["resources"]>) {

@@ -203,6 +203,7 @@ export interface RestData {
   restKind: "short" | "long";
   effect: string;
   effectTarget?: "stress" | "hp" | "armorSlot" | "inspiration";
+  targetMode?: "single" | "multiple";
   amountKind?: "fixed" | "dice";
   amount?: number;
   dice?: string;

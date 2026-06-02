@@ -743,7 +743,13 @@ function RestFields({ item, savePatch }: SpecificEditorProps) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <Select label="Rastart" value={rest.restKind} onChange={(restKind) => savePatch({ rest: { ...rest, restKind: restKind as "short" | "long" } })} options={[["short", "Kurze Rast"], ["long", "Lange Rast"]]} />
-      <Field label="Effekt" value={rest.effect} onChange={(effect) => savePatch({ rest: { ...rest, effect } })} />
+      <Select label="Effekt" value={rest.effectTarget ?? ""} onChange={(effectTarget) => savePatch({ rest: { ...rest, effectTarget: effectTarget as NonNullable<typeof rest["effectTarget"]> } })} options={[["", "Nur Text"], ["stress", "Stress"], ["hp", "HP"], ["armorSlot", "Ruestungsplatz"], ["inspiration", "Inspiration"]]} />
+      <Select label="Anzahl Art" value={rest.amountKind ?? "fixed"} onChange={(amountKind) => savePatch({ rest: { ...rest, amountKind: amountKind as "fixed" | "dice" } })} options={[["fixed", "Feste Anzahl"], ["dice", "Wuerfelwurf"]]} />
+      {rest.amountKind === "dice"
+        ? <Field label="Wuerfel" value={rest.dice ?? "1W4"} onChange={(dice) => savePatch({ rest: { ...rest, dice } })} />
+        : <Select label="Anzahl" value={String(rest.amount ?? 1)} onChange={(amount) => savePatch({ rest: { ...rest, amount: Number(amount) } })} options={Array.from({ length: 12 }, (_, index) => [String(index + 1), String(index + 1)])} />}
+      <Field label="Effekttext" value={rest.effect} onChange={(effect) => savePatch({ rest: { ...rest, effect } })} />
+      <Select label="Gemeinsam Bonus" value={String(rest.groupBonus ?? 0)} onChange={(groupBonus) => savePatch({ rest: { ...rest, groupBonus: Number(groupBonus) } })} options={Array.from({ length: 6 }, (_, index) => [String(index), index ? `+${index}` : "Kein Bonus"])} />
     </div>
   );
 }

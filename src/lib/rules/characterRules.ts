@@ -164,6 +164,7 @@ export function createCharacter(): Character {
     stressBonus: 0,
     dodgeBonuses: [],
     weaponBonuses: {},
+    resources: { hpMarked: 0, stressMarked: 0, armorMarked: 0, inspiration: 2 },
     choices: {
       selectedWeapons: [],
       weaponAttributeSelections: {},

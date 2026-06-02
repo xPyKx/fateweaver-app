@@ -9,6 +9,7 @@ export function RestView({ onBack }: { onBack?: () => void }) {
   const { activeCharacter, data, updateSession, upsertCharacter, sendMessage } = useGameStore();
   const [kind, setKind] = useState<"short" | "long">("short");
   const [selectedActions, setSelectedActions] = useState<string[]>([]);
+  const [actionDetails, setActionDetails] = useState<Record<number, { targetCharacterId?: string; result?: string; participantIds?: string[] }>>({});
   if (!activeCharacter) return null;
   const character = activeCharacter;
   const session = data.session.find((entry) => entry.characterId === character.id) ?? createSession(character.id);
@@ -23,11 +24,14 @@ export function RestView({ onBack }: { onBack?: () => void }) {
   const selectedSummary = useMemo(() => selectedActions.map((id) => options.find((option) => option.id === id)?.name).filter((name): name is string => Boolean(name)), [selectedActions, options]);
   const shortAvailable = !session.longRestUsed && shortRestCount < 3;
   const longAvailable = true;
-  const canConfirm = selectedActions.length === requiredActions && (kind === "short" ? shortAvailable : longAvailable);
+  const partyCharacters = data.characters.filter((entry) => !character.workspaceId || entry.workspaceId === character.workspaceId);
+  const selectedOptions = selectedActions.map((id) => options.find((option) => option.id === id)).filter(Boolean) as CatalogItem[];
+  const canConfirm = selectedActions.length === requiredActions && selectedOptions.every((option, index) => actionReady(option, actionDetails[index])) && (kind === "short" ? shortAvailable : longAvailable);
 
   function selectKind(nextKind: "short" | "long") {
     setKind(nextKind);
     setSelectedActions([]);
+    setActionDetails({});
   }
 
   function addAction(id: string) {
@@ -36,12 +40,23 @@ export function RestView({ onBack }: { onBack?: () => void }) {
 
   function removeAction(index: number) {
     setSelectedActions((current) => current.filter((_, entryIndex) => entryIndex !== index));
+    setActionDetails((current) => Object.fromEntries(Object.entries(current).filter(([key]) => Number(key) !== index).map(([key, value]) => [Number(key) > index ? String(Number(key) - 1) : key, value])));
+  }
+
+  function patchActionDetail(index: number, patch: Partial<{ targetCharacterId: string; result: string; participantIds: string[] }>) {
+    setActionDetails((current) => ({ ...current, [index]: { ...(current[index] ?? {}), ...patch } }));
   }
 
   function confirmRest() {
     if (!canConfirm) return;
     const refreshed = refreshFateCardsForRest(character, data.catalog, kind);
-    upsertCharacter(refreshed);
+    const updates = new Map(data.characters.map((entry) => [entry.id, entry]));
+    updates.set(character.id, refreshed);
+    selectedOptions.forEach((option, index) => applyRestAction(option, actionDetails[index] ?? {}, character.id, updates));
+    Array.from(updates.values()).forEach((entry) => {
+      const original = data.characters.find((characterEntry) => characterEntry.id === entry.id);
+      if (JSON.stringify(original?.resources ?? {}) !== JSON.stringify(entry.resources ?? {}) || entry.id === character.id) upsertCharacter(entry);
+    });
     updateSession({
       ...session,
       shortRestUsed: kind === "short" ? true : session.shortRestUsed,
@@ -55,6 +70,7 @@ export function RestView({ onBack }: { onBack?: () => void }) {
       body: restGmMessage(character.name, kind, selectedSummary, data.characters.filter((entry) => entry.workspaceId === character.workspaceId).length || data.characters.length || 1)
     });
     setSelectedActions([]);
+    setActionDetails({});
     if (kind === "short" && shortRestCount + 1 >= 3) setKind("long");
   }
 
@@ -62,6 +78,7 @@ export function RestView({ onBack }: { onBack?: () => void }) {
     upsertCharacter(refreshFateCardsForSession(character, data.catalog));
     updateSession({ ...session, shortRestUsed: false, shortRestCount: 0, longRestUsed: false, updatedAt: new Date().toISOString() });
     setSelectedActions([]);
+    setActionDetails({});
     setKind("short");
   }
 
@@ -118,9 +135,20 @@ export function RestView({ onBack }: { onBack?: () => void }) {
         <aside className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
           <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Auswahl</div>
           {Array.from({ length: requiredActions }, (_, index) => (
-            <div key={index} className="flex min-h-11 items-center justify-between gap-3 border border-[#a8752a]/30 bg-black/25 px-3 text-sm text-[#cfc2aa]">
-              <span>{selectedSummary[index] ?? `Aktion ${index + 1} offen`}</span>
-              {selectedSummary[index] && <button type="button" onClick={() => removeAction(index)} className="grid h-8 w-8 place-items-center border border-[#a8752a]/35 text-[#ffd88c]"><Minus className="h-4 w-4" /></button>}
+            <div key={index} className="grid gap-2 border border-[#a8752a]/30 bg-black/25 p-3 text-sm text-[#cfc2aa]">
+              <div className="flex min-h-9 items-center justify-between gap-3">
+                <span>{selectedSummary[index] ?? `Aktion ${index + 1} offen`}</span>
+                {selectedSummary[index] && <button type="button" onClick={() => removeAction(index)} className="grid h-8 w-8 place-items-center border border-[#a8752a]/35 text-[#ffd88c]"><Minus className="h-4 w-4" /></button>}
+              </div>
+              {selectedOptions[index] && (
+                <RestActionInputs
+                  option={selectedOptions[index]}
+                  detail={actionDetails[index] ?? {}}
+                  actorId={character.id}
+                  characters={partyCharacters}
+                  onPatch={(patch) => patchActionDetail(index, patch)}
+                />
+              )}
             </div>
           ))}
           <button type="button" onClick={confirmRest} disabled={!canConfirm} className="mt-2 inline-flex min-h-11 items-center justify-center gap-2 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 font-bold uppercase tracking-wide text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">
@@ -155,6 +183,78 @@ function originRestRules(character: Character, catalog: CatalogItem[], kind: "sh
     extraActions: abilities.reduce((sum, ability) => sum + Math.max(0, ability.restExtraActions ?? 0), 0),
     rerolls: abilities.reduce((sum, ability) => sum + Math.max(0, ability.restRerolls ?? 0), 0)
   };
+}
+
+function RestActionInputs({ option, detail, actorId, characters, onPatch }: { option: CatalogItem; detail: { targetCharacterId?: string; result?: string; participantIds?: string[] }; actorId: string; characters: Character[]; onPatch: (patch: Partial<{ targetCharacterId: string; result: string; participantIds: string[] }>) => void }) {
+  const target = option.rest?.effectTarget;
+  const needsTarget = target === "hp" || target === "stress" || target === "armorSlot";
+  const needsRoll = option.rest?.amountKind === "dice";
+  const participants = detail.participantIds ?? [actorId];
+  if (!target && !needsRoll) return null;
+  return (
+    <div className="grid gap-2 border-t border-[#a8752a]/25 pt-2">
+      {needsTarget && (
+        <label className="grid gap-1">
+          <span className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#f2ca75]">Ziel</span>
+          <select value={detail.targetCharacterId ?? actorId} onChange={(event) => onPatch({ targetCharacterId: event.target.value })} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-2 text-[#f4ead7]">
+            {characters.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+          </select>
+        </label>
+      )}
+      {target === "inspiration" && (
+        <div className="grid gap-1">
+          <span className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#f2ca75]">Teilnehmer</span>
+          <div className="grid gap-1">
+            {characters.map((entry) => (
+              <label key={entry.id} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={participants.includes(entry.id)}
+                  onChange={(event) => onPatch({ participantIds: event.target.checked ? Array.from(new Set([...participants, entry.id])) : participants.filter((id) => id !== entry.id) })}
+                />
+                {entry.name}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      {needsRoll && (
+        <label className="grid gap-1">
+          <span className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#f2ca75]">Wuerfelergebnis {option.rest?.dice}</span>
+          <input type="number" min="0" value={detail.result ?? ""} onChange={(event) => onPatch({ result: event.target.value })} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-2 text-[#f4ead7]" />
+        </label>
+      )}
+    </div>
+  );
+}
+
+function actionReady(option: CatalogItem, detail?: { result?: string; participantIds?: string[] }) {
+  if (option.rest?.amountKind === "dice" && !(Number(detail?.result) > 0)) return false;
+  if (option.rest?.effectTarget === "inspiration" && detail?.participantIds && !detail.participantIds.length) return false;
+  return true;
+}
+
+function applyRestAction(option: CatalogItem, detail: { targetCharacterId?: string; result?: string; participantIds?: string[] }, actorId: string, updates: Map<string, Character>) {
+  const rest = option.rest;
+  if (!rest?.effectTarget) return;
+  const amount = rest.amountKind === "dice" ? Math.max(0, Number(detail.result) || 0) : Math.max(0, Number(rest.amount ?? 0) || 0);
+  if (amount <= 0) return;
+  if (rest.effectTarget === "inspiration") {
+    const participantIds = detail.participantIds?.length ? detail.participantIds : [actorId];
+    const value = amount + (participantIds.length > 1 ? Math.max(0, rest.groupBonus ?? 0) : 0);
+    participantIds.forEach((id) => patchCharacterResource(updates, id, (resources) => ({ ...resources, inspiration: Math.min(5, (resources.inspiration ?? 0) + value) })));
+    return;
+  }
+  const targetId = detail.targetCharacterId || actorId;
+  if (rest.effectTarget === "hp") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, hpMarked: Math.max(0, (resources.hpMarked ?? 0) - amount) }));
+  if (rest.effectTarget === "stress") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, stressMarked: Math.max(0, (resources.stressMarked ?? 0) - amount) }));
+  if (rest.effectTarget === "armorSlot") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, armorMarked: Math.max(0, (resources.armorMarked ?? 0) - amount) }));
+}
+
+function patchCharacterResource(updates: Map<string, Character>, characterId: string, patch: (resources: NonNullable<Character["resources"]>) => NonNullable<Character["resources"]>) {
+  const character = updates.get(characterId);
+  if (!character) return;
+  updates.set(characterId, { ...character, resources: patch(character.resources ?? {}), updatedAt: new Date().toISOString() });
 }
 
 function createSession(characterId: string): SessionState {

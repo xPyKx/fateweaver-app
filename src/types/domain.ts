@@ -202,6 +202,11 @@ export interface SpellBuilderResultData {
 export interface RestData {
   restKind: "short" | "long";
   effect: string;
+  effectTarget?: "stress" | "hp" | "armorSlot" | "inspiration";
+  amountKind?: "fixed" | "dice";
+  amount?: number;
+  dice?: string;
+  groupBonus?: number;
 }
 
 export interface RangeData {
@@ -552,6 +557,12 @@ export interface Character {
   stressBonus: number;
   dodgeBonuses: BonusSource[];
   weaponBonuses: Record<string, BonusSource[]>;
+  resources?: {
+    hpMarked?: number;
+    stressMarked?: number;
+    armorMarked?: number;
+    inspiration?: number;
+  };
   choices: CharacterChoices;
   updatedAt: string;
 }

@@ -180,8 +180,11 @@ function CompactRuleValue({ label, value }) {
   );
 }
 
-function DefenseCluster({ evasion, armor, armorSlotsMax }) {
-  const [slots, setSlots] = useState(0);
+function DefenseCluster({ evasion, armor, armorSlotsMax, marked = 0, onMarked }) {
+  const [slots, setSlots] = useState(marked);
+  useEffect(() => {
+    setSlots(marked);
+  }, [marked]);
   const slotCount = Math.max(0, Math.min(12, armorSlotsMax));
   return (
     <div className="grid w-full gap-3">
@@ -200,7 +203,11 @@ function DefenseCluster({ evasion, armor, armorSlotsMax }) {
           {Array.from({ length: slotCount }, (_, i) => (
             <button
               key={i}
-              onClick={() => setSlots(i + 1 === slots ? i : i + 1)}
+            onClick={() => {
+              const next = i + 1 === slots ? i : i + 1;
+              setSlots(next);
+              onMarked?.(next);
+            }}
               className={`grid h-8 place-items-center transition ${i < slots ? "text-[#ffd88c] drop-shadow-[0_0_10px_rgba(255,216,140,.55)]" : "text-[#6f614d] hover:text-[#f2ca75]"}`}
             >
               <Shield className="h-6 w-6" fill={i < slots ? "currentColor" : "none"} />
@@ -212,8 +219,9 @@ function DefenseCluster({ evasion, armor, armorSlotsMax }) {
   );
 }
 
-function SegmentBar({ label, marked, max, tone }) {
+function SegmentBar({ label, marked, max, tone, onMarked }) {
   const [localMarked, setLocalMarked] = useState(marked);
+  useEffect(() => setLocalMarked(marked), [marked]);
   const color = tone === "hp" ? "bg-red-600/85 border-red-300/45" : "bg-purple-700/85 border-purple-300/35";
   const columns = max <= 6 ? "grid-cols-6" : "grid-cols-6 md:grid-cols-12";
   return (
@@ -228,7 +236,11 @@ function SegmentBar({ label, marked, max, tone }) {
         {Array.from({ length: max }, (_, i) => (
           <button
             key={i}
-            onClick={() => setLocalMarked(i + 1 === localMarked ? i : i + 1)}
+            onClick={() => {
+              const next = i + 1 === localMarked ? i : i + 1;
+              setLocalMarked(next);
+              onMarked?.(next);
+            }}
             className={`h-7 min-w-0 transition ${i < localMarked ? color : "bg-white/5 hover:bg-white/12"}`}
           />
         ))}
@@ -1656,7 +1668,7 @@ function formatMessageDate(value) {
 export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter, onLevelUp, onRest }) {
   const { data, activeCharacter, upsertCharacter, updateGmSession, sendMessage, markMessageRead } = useGameStore();
   const character = data.characters.find((entry) => entry.id === selectedCharacter) ?? activeCharacter;
-  const [inspiration, setInspiration] = useState(2);
+  const [inspiration, setInspirationState] = useState(character?.resources?.inspiration ?? 2);
   const [detailItem, setDetailItem] = useState(null);
   const [shopOpen, setShopOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
@@ -1670,6 +1682,11 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
       .find((message) => message.fromRole === "gm" && message.status === "unread" && message.id !== dismissedMessageId);
     if (nextUnread) setActiveGmMessage(nextUnread);
   }, [character?.id, data.messages, dismissedMessageId]);
+  useEffect(() => {
+    if (character) {
+      setInspirationState(character.resources?.inspiration ?? 2);
+    }
+  }, [character?.id, character?.resources?.inspiration]);
   if (!character) {
     return (
       <Shell>
@@ -1692,6 +1709,13 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
     .filter((message) => message.characterId === character.id || message.toCharacterId === character.id)
     .sort((left, right) => Date.parse(right.createdAt ?? "") - Date.parse(left.createdAt ?? ""));
   const unreadGmMessage = characterMessages.find((message) => message.fromRole === "gm" && message.status === "unread" && message.id !== dismissedMessageId);
+  function patchResources(patch) {
+    upsertCharacter({ ...character, resources: { ...(character.resources ?? {}), ...patch }, updatedAt: new Date().toISOString() });
+  }
+  function setInspiration(value) {
+    setInspirationState(value);
+    patchResources({ inspiration: value });
+  }
   function toggleAttunement(itemId) {
     if (!itemId) return;
     const attunedItemIds = character.choices.attunedItemIds ?? [];
@@ -1779,8 +1803,8 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
           <GoldPanel className="p-4">
             <div className="space-y-4">
               <DamageThresholds light={sheet.lightThreshold} heavy={sheet.heavyThreshold} />
-              <SegmentBar label="HP" marked={0} max={sheet.hpMax} tone="hp" />
-              <SegmentBar label="Stress" marked={0} max={sheet.stressMax} tone="stress" />
+              <SegmentBar label="HP" marked={character.resources?.hpMarked ?? 0} max={sheet.hpMax} tone="hp" onMarked={(hpMarked) => patchResources({ hpMarked })} />
+              <SegmentBar label="Stress" marked={character.resources?.stressMarked ?? 0} max={sheet.stressMax} tone="stress" onMarked={(stressMarked) => patchResources({ stressMarked })} />
             </div>
           </GoldPanel>
           <ExperiencesPanel entries={originAdjustedExperiences(character, data.catalog)} />
@@ -1800,7 +1824,13 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
             <GoldPanel className="flex h-full flex-col p-4">
               <div className="mb-3 text-xs font-black uppercase tracking-[0.2em] text-[#f2ca75]">Rüstung & Defensive Werte</div>
               <div className="mb-4">
-                <DefenseCluster evasion={sheet.dodge} armor={sheet.armorValue} armorSlotsMax={sheet.armorSlots} />
+                <DefenseCluster
+                  evasion={sheet.dodge}
+                  armor={sheet.armorValue}
+                  armorSlotsMax={sheet.armorSlots}
+                  marked={character.resources?.armorMarked ?? 0}
+                  onMarked={(armorMarked) => patchResources({ armorMarked })}
+                />
               </div>
               <div className="min-h-0 flex-1">
                 <ItemRow item={armor} attunementIconUrl={sheet.attunementIconUrl} attuned={(character.choices.attunedItemIds ?? []).includes(armor.id)} onToggleAttunement={() => toggleAttunement(armor.id)} onClick={() => setDetailItem(armor)} />

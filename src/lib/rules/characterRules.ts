@@ -174,6 +174,7 @@ export function createCharacter(): Character {
       selectedMaterialCounts: {},
       selectedFateCardIds: [],
       selectedFateCategoryEntryIds: {},
+      fateCardStates: {},
       inventoryCollapsed: false,
       dismissedShopIds: [],
       levelUps: {},

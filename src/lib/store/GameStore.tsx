@@ -453,6 +453,7 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
       return item?.type === "fateCard" || item?.type === "fateAbility";
     });
     const selectedFateCategoryEntryIds = normalizeFateCategorySelections(character.choices?.selectedFateCategoryEntryIds, catalog);
+    const fateCardStates = normalizeFateCardStates(character.choices?.fateCardStates, catalog);
     const weaponAttributeSelections = Object.fromEntries(
       Object.entries(character.choices?.weaponAttributeSelections ?? {}).filter(([weaponId]) => selectedWeapons.includes(weaponId))
     );
@@ -477,6 +478,7 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
         selectedMaterialCounts,
         selectedFateCardIds,
         selectedFateCategoryEntryIds,
+        fateCardStates,
         attunedItemIds: cleanIds(character.choices?.attunedItemIds),
         dismissedShopIds: unique(character.choices?.dismissedShopIds ?? []),
         levelUps: character.choices?.levelUps ?? {},
@@ -537,6 +539,21 @@ function normalizeFateCategorySelections(selections: Record<string, string[]> | 
     result[categoryId] = limit > 0 ? validIds.slice(0, limit) : validIds;
   });
   return result;
+}
+
+function normalizeFateCardStates(states: Character["choices"]["fateCardStates"] | undefined, catalog: CatalogItem[]) {
+  const validIds = new Set(catalog.filter((item) => item.type === "fateAbility" || item.type === "fateCard").map((item) => item.id));
+  return Object.fromEntries(
+    Object.entries(states ?? {})
+      .filter(([id]) => validIds.has(id))
+      .map(([id, state]) => [id, {
+        used: Math.max(0, Number(state?.used ?? 0) || 0),
+        counter: Math.max(0, Number(state?.counter ?? 0) || 0),
+        rolls: Array.isArray(state?.rolls) ? state.rolls.map((value) => Number(value)).filter((value) => Number.isFinite(value)) : [],
+        activations: Math.max(0, Number(state?.activations ?? 0) || 0),
+        active: Boolean(state?.active)
+      }])
+  );
 }
 
 function normalizeCatalogItems(items: CatalogItem[]) {

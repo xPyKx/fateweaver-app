@@ -125,6 +125,26 @@ export interface FateAbilityCategoryData {
   selectionLimit?: number;
 }
 
+export type FateRefreshTrigger = "none" | "shortRest" | "longRest" | "session";
+export type FateDurationTrigger = "none" | "rest" | "longRest" | "session" | "manual";
+
+export interface FateAbilityUsageData {
+  enabled?: boolean;
+  maxUses?: number;
+  refreshTrigger?: FateRefreshTrigger;
+  counterName?: string;
+  counterMax?: number;
+  rollName?: string;
+  rollDice?: string;
+  rollCount?: number;
+  rollRefreshTrigger?: FateRefreshTrigger;
+  activationName?: string;
+  activationMax?: number;
+  activationRefreshTrigger?: FateRefreshTrigger;
+  activationDuration?: FateDurationTrigger;
+  activationEffects?: PropertyEffect[];
+}
+
 export interface FateAbilityData {
   fateId: string;
   kind: FateAbilityKind;
@@ -142,6 +162,7 @@ export interface FateAbilityData {
   markerMax?: number;
   stressCost?: number;
   spellBuilder?: SpellBuilderResultData;
+  usage?: FateAbilityUsageData;
 }
 
 export interface SpellBuilderResultData {
@@ -266,6 +287,7 @@ export interface CharacterChoices {
   selectedMaterialCounts?: Record<string, number>;
   selectedFateCardIds: string[];
   selectedFateCategoryEntryIds?: Record<string, string[]>;
+  fateCardStates?: Record<string, CharacterFateCardState>;
   attunedItemIds?: string[];
   inventoryCollapsed?: boolean;
   dismissedShopIds?: string[];
@@ -277,6 +299,14 @@ export interface CharacterChoices {
   backgroundQuestions: Record<string, string>;
   appearance: CharacterAppearance;
   connections: string;
+}
+
+export interface CharacterFateCardState {
+  used?: number;
+  counter?: number;
+  rolls?: number[];
+  activations?: number;
+  active?: boolean;
 }
 
 export type InventoryTargetType = "magicItem" | "weapon" | "armor" | "equipment" | "potion" | "material";

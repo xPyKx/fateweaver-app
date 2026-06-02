@@ -492,6 +492,74 @@ function FateAbilityFields({ item, catalog, savePatch }: SpecificEditorProps & {
         Überschrift im Inventar anzeigen
       </label>
       <ImageInput label="Kartenbild" value={ability.cardImageUrl ?? ""} onChange={(cardImageUrl) => savePatch({ fateAbility: { ...ability, cardImageUrl } })} />
+      {(ability.kind === "fateCard" || !isDefaultFateAbilityKind(ability.kind)) && <FateUsageFields ability={ability} save={(usage) => savePatch({ fateAbility: { ...ability, usage } })} />}
+    </div>
+  );
+}
+
+function FateUsageFields({ ability, save }: { ability: NonNullable<CatalogItem["fateAbility"]>; save: (usage: NonNullable<CatalogItem["fateAbility"]>["usage"]) => void }) {
+  const usage = ability.usage ?? {};
+  const enabled = Boolean(usage.enabled);
+  const effects = usage.activationEffects ?? [];
+  const patch = (patchUsage: Partial<NonNullable<typeof usage>>) => save({ ...usage, ...patchUsage });
+  const refreshOptions: [string, string][] = [
+    ["none", "Kein Auto-Refresh"],
+    ["shortRest", "Nach kurzer oder langer Rast"],
+    ["longRest", "Nach langer Rast"],
+    ["session", "Neue Session"]
+  ];
+  const durationOptions: [string, string][] = [
+    ["none", "Keine Dauer"],
+    ["rest", "Bis zur naechsten Rast"],
+    ["longRest", "Bis zur naechsten langen Rast"],
+    ["session", "Bis Sessionende"],
+    ["manual", "Manuell beenden"]
+  ];
+
+  function updateEffect(effect: PropertyEffect) {
+    patch({ activationEffects: effects.map((entry) => entry.id === effect.id ? effect : entry) });
+  }
+
+  return (
+    <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3 md:col-span-2">
+      <label className="flex min-h-11 items-center gap-2 border border-[#a8752a]/30 bg-black/25 px-3 text-sm text-[#cfc2aa]">
+        <input type="checkbox" checked={enabled} onChange={(event) => patch({ enabled: event.target.checked })} />
+        Nutzungen, Counter oder aktive Effekte fuer diese Karte
+      </label>
+      {enabled && (
+        <>
+          <div className="grid gap-2 md:grid-cols-3">
+            <Field label="Nutzungen bis ausgegraut" type="number" value={usage.maxUses ?? 0} onChange={(maxUses) => patch({ maxUses: Math.max(0, Number(maxUses) || 0) })} />
+            <Select label="Nutzungen refreshen" value={usage.refreshTrigger ?? "none"} onChange={(refreshTrigger) => patch({ refreshTrigger: refreshTrigger as NonNullable<typeof usage>["refreshTrigger"] })} options={refreshOptions} />
+            <Field label="Counter Name" value={usage.counterName ?? ""} onChange={(counterName) => patch({ counterName })} />
+            <Field label="Counter Maximum" type="number" value={usage.counterMax ?? 0} onChange={(counterMax) => patch({ counterMax: Math.max(0, Number(counterMax) || 0) })} />
+            <Field label="Wuerfelvorrat Name" value={usage.rollName ?? ""} onChange={(rollName) => patch({ rollName })} />
+            <Field label="Wuerfel Formel" value={usage.rollDice ?? ""} onChange={(rollDice) => patch({ rollDice })} />
+            <Field label="Wuerfel Anzahl" type="number" value={usage.rollCount ?? 0} onChange={(rollCount) => patch({ rollCount: Math.max(0, Number(rollCount) || 0) })} />
+            <Select label="Wuerfel refreshen" value={usage.rollRefreshTrigger ?? "none"} onChange={(rollRefreshTrigger) => patch({ rollRefreshTrigger: rollRefreshTrigger as NonNullable<typeof usage>["rollRefreshTrigger"] })} options={refreshOptions} />
+            <Field label="Aktivierung Name" value={usage.activationName ?? ""} onChange={(activationName) => patch({ activationName })} />
+            <Field label="Aktivierungen Maximum" type="number" value={usage.activationMax ?? 0} onChange={(activationMax) => patch({ activationMax: Math.max(0, Number(activationMax) || 0) })} />
+            <Select label="Aktivierungen refreshen" value={usage.activationRefreshTrigger ?? "none"} onChange={(activationRefreshTrigger) => patch({ activationRefreshTrigger: activationRefreshTrigger as NonNullable<typeof usage>["activationRefreshTrigger"] })} options={refreshOptions} />
+            <Select label="Aktive Dauer" value={usage.activationDuration ?? "none"} onChange={(activationDuration) => patch({ activationDuration: activationDuration as NonNullable<typeof usage>["activationDuration"] })} options={durationOptions} />
+          </div>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Aktive Werteffekte</div>
+              <button type="button" onClick={() => patch({ activationEffects: [...effects, { id: crypto.randomUUID(), target: "dodge", value: 0 }] })} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Effekt +</button>
+            </div>
+            {effects.map((effect) => (
+              <div key={effect.id} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_130px_minmax(0,1fr)_auto]">
+                <Select label="Ziel" value={effect.target} onChange={(target) => updateEffect({ ...effect, target: target as PropertyEffectTarget })} options={effectTargets.map((target) => [target.key, target.label])} />
+                <SignedNumberField label="Wert" value={effect.value} onChange={(value) => updateEffect({ ...effect, value })} />
+                <Field label="Notiz optional" value={effect.condition ?? ""} onChange={(condition) => updateEffect({ ...effect, condition })} />
+                <button type="button" onClick={() => patch({ activationEffects: effects.filter((entry) => entry.id !== effect.id) })} className="self-end border border-red-400/45 px-3 py-3 text-red-200">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

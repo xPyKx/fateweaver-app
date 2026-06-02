@@ -643,9 +643,9 @@ function BottomPanel() {
         </div>
       </div>}
       {!inventoryCollapsed && <div className="p-4">
-        {tab === "Startfähigkeiten" && <CatalogCardPanel orderKey={panelOrderKey(activeCharacter, tab)} mode={activeMode} items={mainFateAbilityCards(data.catalog, activeCharacter)} />}
-        {tab === "Spezialisierung" && <CatalogCardPanel orderKey={panelOrderKey(activeCharacter, tab)} mode={activeMode} items={selectedSpecializationCards(data.catalog, activeCharacter)} />}
-        {tab === "Fatekarten" && <CatalogCardPanel orderKey={panelOrderKey(activeCharacter, tab)} mode={activeMode} items={selectedByIds(data.catalog, activeCharacter?.choices.selectedFateCardIds ?? [])} />}
+        {tab === "Startfähigkeiten" && <CatalogCardPanel orderKey={panelOrderKey(activeCharacter, tab)} mode={activeMode} items={mainFateAbilityCards(data.catalog, activeCharacter)} character={activeCharacter} upsertCharacter={upsertCharacter} />}
+        {tab === "Spezialisierung" && <CatalogCardPanel orderKey={panelOrderKey(activeCharacter, tab)} mode={activeMode} items={selectedSpecializationCards(data.catalog, activeCharacter)} character={activeCharacter} upsertCharacter={upsertCharacter} />}
+        {tab === "Fatekarten" && <CatalogCardPanel orderKey={panelOrderKey(activeCharacter, tab)} mode={activeMode} items={selectedByIds(data.catalog, activeCharacter?.choices.selectedFateCardIds ?? [])} character={activeCharacter} upsertCharacter={upsertCharacter} />}
         {tab === "Magische Gegenstände" && <MagicItemPanel character={activeCharacter} catalog={data.catalog} upsertCharacter={upsertCharacter} mode={activeMode} onReturn={returnInventoryItem} />}
         {tab === "Magische Waffen" && <WeaponInventoryPanel character={activeCharacter} catalog={data.catalog} upsertCharacter={upsertCharacter} mode={activeMode} source="magic" onReturn={returnInventoryItem} />}
         {tab === "Waffen" && <WeaponInventoryPanel character={activeCharacter} catalog={data.catalog} upsertCharacter={upsertCharacter} mode={activeMode} source="stored" onReturn={returnInventoryItem} />}
@@ -656,13 +656,13 @@ function BottomPanel() {
         {tab === "Transmutation" && <CatalogCardPanel mode={activeMode} items={selectedByIds(data.catalog, activeCharacter?.choices.transmutationId ? [activeCharacter.choices.transmutationId] : [])} />}
         {tab === "Materialien" && <MaterialPanel character={activeCharacter} catalog={data.catalog} upsertCharacter={upsertCharacter} mode={activeMode} onReturn={returnInventoryItem} />}
         {tab === "Notizen" && <textarea className="min-h-44 w-full border border-[#a8752a]/30 bg-black/25 p-4 text-[#f4ead7] outline-none" placeholder="Notizen..." />}
-        {!BOTTOM_TABS.some((entry) => entry.name === tab) && <CustomTabPanel tab={[...fateTabs, ...customTabs].find((entry) => entry.name === tab)} mode={activeMode} catalog={data.catalog} character={activeCharacter} />}
+        {!BOTTOM_TABS.some((entry) => entry.name === tab) && <CustomTabPanel tab={[...fateTabs, ...customTabs].find((entry) => entry.name === tab)} mode={activeMode} catalog={data.catalog} character={activeCharacter} upsertCharacter={upsertCharacter} />}
       </div>}
     </GoldPanel>
   );
 }
 
-function CatalogCardPanel({ items, mode = "grid", fallback = [], orderKey }) {
+function CatalogCardPanel({ items, mode = "grid", fallback = [], orderKey, character, upsertCharacter }) {
   const [dragged, setDragged] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const [order, setOrder] = useState(() => readCardOrder(orderKey));
@@ -693,6 +693,9 @@ function CatalogCardPanel({ items, mode = "grid", fallback = [], orderKey }) {
       {orderedItems.map((item, index) => {
         const imageUrl = item.fateAbility?.cardImageUrl || item.imageUrl;
         const showTitle = !item.fateAbility || item.fateAbility.showTitleOnSheet;
+        const usage = item.fateAbility?.usage;
+        const state = character?.choices?.fateCardStates?.[item.id] ?? {};
+        const disabled = fateCardDisabled(item, state);
         return (
           <div
             key={item.id}
@@ -710,11 +713,12 @@ function CatalogCardPanel({ items, mode = "grid", fallback = [], orderKey }) {
               setDragged(null);
               setDropTarget(null);
             }}
-            className={`grid content-start gap-2 border p-2 ${dropTarget === item.id ? "border-[#ffd88c] bg-[#d6a14d]/16" : "border-[#a8752a]/35 bg-black/25"}`}
+            className={`grid content-start gap-2 border p-2 ${disabled ? "opacity-45 grayscale" : ""} ${dropTarget === item.id ? "border-[#ffd88c] bg-[#d6a14d]/16" : "border-[#a8752a]/35 bg-black/25"}`}
           >
             {showTitle && <div className="text-base font-light text-white">{item.name}</div>}
             {imageUrl && <button onClick={() => setViewerIndex(index)} className="grid place-items-center"><img src={imageUrl} alt="" className="max-h-56 w-full object-contain" /></button>}
             {!imageUrl && item.description && <p className="text-sm leading-relaxed text-[#cfc2aa]">{item.description}</p>}
+            {usage?.enabled && character && upsertCharacter && <FateCardUsageControls item={item} character={character} upsertCharacter={upsertCharacter} />}
           </div>
         );
       })}
@@ -722,6 +726,101 @@ function CatalogCardPanel({ items, mode = "grid", fallback = [], orderKey }) {
     {viewerIndex !== null && <CardViewer items={orderedItems} index={viewerIndex} onIndex={setViewerIndex} onClose={() => setViewerIndex(null)} />}
     </>
   );
+}
+
+function FateCardUsageControls({ item, character, upsertCharacter }) {
+  const usage = item.fateAbility?.usage ?? {};
+  const states = character.choices.fateCardStates ?? {};
+  const state = states[item.id] ?? {};
+  const used = Number(state.used ?? 0);
+  const maxUses = Number(usage.maxUses ?? 0);
+  const activations = Number(state.activations ?? 0);
+  const activationMax = Number(usage.activationMax ?? 0);
+  const rolls = state.rolls ?? [];
+  const counter = Number(state.counter ?? 0);
+
+  function patchState(patch) {
+    upsertCharacter({
+      ...character,
+      choices: {
+        ...character.choices,
+        fateCardStates: {
+          ...states,
+          [item.id]: { ...state, ...patch }
+        }
+      },
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  function addRoll() {
+    patchState({ rolls: [...rolls, rollDice(usage.rollDice)] });
+  }
+
+  function fillRolls() {
+    const count = Math.max(0, Number(usage.rollCount ?? 0) || 0);
+    patchState({ rolls: Array.from({ length: count }, () => rollDice(usage.rollDice)) });
+  }
+
+  return (
+    <div className="grid gap-2 border-t border-[#a8752a]/25 pt-2 text-xs text-[#cfc2aa]">
+      {maxUses > 0 && (
+        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
+          <span>{used}/{maxUses} genutzt</span>
+          <button type="button" onClick={() => patchState({ used: Math.min(maxUses, used + 1) })} disabled={used >= maxUses} className="border border-[#a8752a]/40 px-2 py-1 text-[#ffd88c] disabled:text-[#8c8170]">Benutzen</button>
+          <button type="button" onClick={() => patchState({ used: Math.max(0, used - 1) })} className="border border-[#a8752a]/30 px-2 py-1"><Minus className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
+      {Number(usage.counterMax ?? 0) > 0 && (
+        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
+          <span>{usage.counterName || "Counter"}: {counter}/{usage.counterMax}</span>
+          <button type="button" onClick={() => patchState({ counter: Math.min(Number(usage.counterMax), counter + 1) })} className="border border-[#a8752a]/30 px-2 py-1"><Plus className="h-3.5 w-3.5" /></button>
+          <button type="button" onClick={() => patchState({ counter: Math.max(0, counter - 1) })} className="border border-[#a8752a]/30 px-2 py-1"><Minus className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
+      {(usage.rollDice || Number(usage.rollCount ?? 0) > 0) && (
+        <div className="grid gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>{usage.rollName || "Wuerfel"}: {rolls.length ? rolls.join(", ") : "leer"}</span>
+            <button type="button" onClick={fillRolls} className="border border-[#a8752a]/40 px-2 py-1 text-[#ffd88c]">Wuerfeln</button>
+            <button type="button" onClick={addRoll} className="border border-[#a8752a]/30 px-2 py-1"><Plus className="h-3.5 w-3.5" /></button>
+          </div>
+          {rolls.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {rolls.map((value, index) => (
+                <button key={`${value}-${index}`} type="button" onClick={() => patchState({ rolls: rolls.filter((_, entryIndex) => entryIndex !== index) })} className="border border-[#d6a14d]/45 bg-[#d6a14d]/10 px-2 py-1 text-[#ffd88c]" title="Benutzen">
+                  {value}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {activationMax > 0 && (
+        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
+          <span>{usage.activationName || "Aktivierung"}: {activations}/{activationMax}{state.active ? " aktiv" : ""}</span>
+          <button type="button" onClick={() => patchState({ activations: Math.min(activationMax, activations + 1), active: true })} disabled={activations >= activationMax} className="border border-[#a8752a]/40 px-2 py-1 text-[#ffd88c] disabled:text-[#8c8170]">Aktivieren</button>
+          <button type="button" onClick={() => patchState({ activations: Math.max(0, activations - 1), active: activations - 1 > 0 ? state.active : false })} className="border border-[#a8752a]/30 px-2 py-1"><Minus className="h-3.5 w-3.5" /></button>
+          {state.active && <button type="button" onClick={() => patchState({ active: false })} className="col-span-3 border border-[#a8752a]/30 px-2 py-1 text-left">Aktiven Effekt beenden</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function fateCardDisabled(item, state) {
+  const usage = item.fateAbility?.usage;
+  if (!usage?.enabled) return false;
+  const maxUses = Number(usage.maxUses ?? 0);
+  const activationMax = Number(usage.activationMax ?? 0);
+  return (maxUses > 0 && Number(state.used ?? 0) >= maxUses) || (activationMax > 0 && Number(state.activations ?? 0) >= activationMax);
+}
+
+function rollDice(formula) {
+  const match = String(formula || "1W6").trim().match(/^(\d*)\s*[wWdD]\s*(\d+)$/);
+  const count = Math.max(1, Number(match?.[1] || 1) || 1);
+  const sides = Math.max(1, Number(match?.[2] || 6) || 6);
+  return Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1).reduce((sum, value) => sum + value, 0);
 }
 
 function CardViewer({ items, index, onIndex, onClose }) {
@@ -1234,7 +1333,7 @@ function uniqueTabs(tabs) {
   return Array.from(new Map(tabs.map((entry) => [entry.name, entry])).values());
 }
 
-function CustomTabPanel({ tab, mode, catalog, character }) {
+function CustomTabPanel({ tab, mode, catalog, character, upsertCharacter }) {
   if (!tab) return <SortablePanel mode={mode} items={["Dieser Reiter ist leer."]} />;
   if (tab.generatedByFateCategory) {
     const category = tab.category;
@@ -1249,7 +1348,7 @@ function CustomTabPanel({ tab, mode, catalog, character }) {
             {items.length ? `${items.length}${category.selectionLimit ? `/${category.selectionLimit}` : ""} gewaehlt.` : "Noch keine Auswahl getroffen."}
           </div>
         )}
-        <CatalogCardPanel mode={mode} items={items} orderKey={panelOrderKey(character, tab.name)} />
+        <CatalogCardPanel mode={mode} items={items} orderKey={panelOrderKey(character, tab.name)} character={character} upsertCharacter={upsertCharacter} />
       </div>
     );
   }

@@ -48,7 +48,7 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
     .map((id) => findWeaponItem(catalog, id))
     .filter(Boolean);
   const activeItems = [...weapons, armorItem].filter(Boolean);
-  const activeEffects = collectPropertyEffects(activeItems, catalog);
+  const activeEffects = [...collectPropertyEffects(activeItems, catalog), ...collectActiveFateEffects(character, catalog)];
   const attributes = applyAttributeEffects(baseAttributes, activeEffects);
   const mainFate = findItem(catalog, choices.mainFateId, "fate");
   const sideFate = findItem(catalog, choices.sideFateId, "fate");
@@ -251,6 +251,16 @@ function normalizeLegacyDamageDie(damage) {
 
 function collectPropertyEffects(items, catalog) {
   return items.flatMap((item) => resolveEffects(item, catalog));
+}
+
+function collectActiveFateEffects(character, catalog) {
+  const states = character.choices?.fateCardStates ?? {};
+  const categoryIds = Object.values(character.choices?.selectedFateCategoryEntryIds ?? {}).flat();
+  const ids = Array.from(new Set([...(character.choices?.selectedFateCardIds ?? []), ...categoryIds]));
+  return ids
+    .map((id) => catalog.find((item) => item.id === id && item.fateAbility?.usage?.enabled && states[id]?.active))
+    .filter(Boolean)
+    .flatMap((item) => item.fateAbility?.usage?.activationEffects ?? []);
 }
 
 function resolveEffects(item, catalog) {

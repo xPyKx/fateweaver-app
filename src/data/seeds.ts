@@ -329,18 +329,67 @@ export const seedCatalog: CatalogItem[] = [
     description: "Erhöhe den Stress-Bonus dieses Charakters um 1."
   },
   {
-    id: "rest-short-focus",
+    id: "rest-short-wounds",
     type: "restOption",
-    name: "Fokus sammeln",
-    description: "Kurze Rast: ordnet Gedanken und reduziert Druck.",
-    rest: { restKind: "short", effect: "Stress stabilisieren" }
+    name: "Wunden versorgen",
+    description: "Beschreibe, wie du dich voruebergehend versorgst oder einem Verbuendeten hilfst.",
+    rest: { restKind: "short", effect: "1W4 HP wiederherstellen" }
   },
   {
-    id: "rest-long-recover",
+    id: "rest-short-stress",
     type: "restOption",
-    name: "Regeneration",
-    description: "Lange Rast: erholt Körper und Geist.",
-    rest: { restKind: "long", effect: "HP und Stress auffrischen" }
+    name: "Stress abbauen",
+    description: "Beschreibe, wie du Dampf ablaesst oder dich zusammenreisst.",
+    rest: { restKind: "short", effect: "1W4 Stress abbauen" }
+  },
+  {
+    id: "rest-short-armor",
+    type: "restOption",
+    name: "Ruestung reparieren",
+    description: "Beschreibe, wie du deine Ruestung reparierst.",
+    rest: { restKind: "short", effect: "1W4 Haltbarkeit wiederherstellen" }
+  },
+  {
+    id: "rest-short-prepare",
+    type: "restOption",
+    name: "Vorbereiten",
+    description: "Beschreibe, wie du dich auf das naechste Abenteuer vorbereitest.",
+    rest: { restKind: "short", effect: "1 Inspiration, gemeinsam 2 Inspiration" }
+  },
+  {
+    id: "rest-long-wounds",
+    type: "restOption",
+    name: "Alle Wunden versorgen",
+    description: "Beschreibe, wie du dich selbst versorgst oder einem Verbuendeten hilfst.",
+    rest: { restKind: "long", effect: "Alle markierten HP heilen" }
+  },
+  {
+    id: "rest-long-stress",
+    type: "restOption",
+    name: "Allen Stress abbauen",
+    description: "Beschreibe, wie du Dampf ablaesst oder dich zusammenreisst.",
+    rest: { restKind: "long", effect: "Allen markierten Stress entfernen" }
+  },
+  {
+    id: "rest-long-armor",
+    type: "restOption",
+    name: "Ruestung reparieren",
+    description: "Beschreibe, wie du deine Ruestung reparierst.",
+    rest: { restKind: "long", effect: "1W4 Haltbarkeit wiederherstellen" }
+  },
+  {
+    id: "rest-long-prepare",
+    type: "restOption",
+    name: "Vorbereiten",
+    description: "Beschreibe, wie du dich auf das naechste Abenteuer vorbereitest.",
+    rest: { restKind: "long", effect: "1 Inspiration, gemeinsam 2 Inspiration" }
+  },
+  {
+    id: "rest-long-project",
+    type: "restOption",
+    name: "Arbeit an einem Projekt",
+    description: "Beginne oder setze die Arbeit an einem Projekt fort.",
+    rest: { restKind: "long", effect: "Projektfortschritt" }
   },
   {
     id: "sheet-tab-startfaehigkeiten",

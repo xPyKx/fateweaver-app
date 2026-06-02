@@ -492,7 +492,7 @@ function FateAbilityFields({ item, catalog, savePatch }: SpecificEditorProps & {
         Überschrift im Inventar anzeigen
       </label>
       <ImageInput label="Kartenbild" value={ability.cardImageUrl ?? ""} onChange={(cardImageUrl) => savePatch({ fateAbility: { ...ability, cardImageUrl } })} />
-      {(ability.kind === "fateCard" || !isDefaultFateAbilityKind(ability.kind)) && <FateUsageFields ability={ability} save={(usage) => savePatch({ fateAbility: { ...ability, usage } })} />}
+      <FateUsageFields ability={ability} save={(usage) => savePatch({ fateAbility: { ...ability, usage } })} />
     </div>
   );
 }

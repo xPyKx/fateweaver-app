@@ -145,16 +145,20 @@ export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, 
   const [inviteCampaignId, setInviteCampaignId] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [joinCampaignId, setJoinCampaignId] = useState("");
+  const [overviewWorkspaceId, setOverviewWorkspaceId] = useState("all");
   const activeWorkspaceId = activeWorkspace?.id ?? data.activeWorkspaceId;
+  const showUserGroups = Boolean(profile?.isGm || profile?.isAdmin);
+  const characterWorkspaceFilter = showUserGroups
+    ? (overviewWorkspaceId === "all" ? "" : overviewWorkspaceId || activeWorkspaceId)
+    : activeWorkspaceId;
   const workspaceInvites = (data.workspaceInvites ?? []).filter((invite) => invite.workspaceId === activeWorkspaceId && invite.status === "open");
   const workspaceMembers = (activeWorkspace?.members ?? []).filter((member) => member.status !== "removed");
   const workspaceCampaigns = (data.campaigns ?? []).filter((campaign) => campaign.workspaceId === activeWorkspaceId);
   const joinedCampaigns = (data.campaigns ?? []).filter((campaign) => campaign.members?.some((member) => member.userId === currentUserId && member.status === "active"));
   const characters = data.characters
-    .filter((character) => !activeWorkspaceId || character.workspaceId === activeWorkspaceId)
+    .filter((character) => !characterWorkspaceFilter || character.workspaceId === characterWorkspaceFilter)
     .filter((character) => currentUserId && (profile?.isGm || !character.ownerId || character.ownerId === currentUserId));
   const ownCharacters = data.characters.filter((character) => currentUserId && (!character.ownerId || character.ownerId === currentUserId));
-  const showUserGroups = Boolean(profile?.isGm || profile?.isAdmin);
   const userGroups = useMemo(() => buildUserGroups(characters, managedUsers, currentUserId, profile), [characters, managedUsers, currentUserId, profile]);
 
   useEffect(() => {
@@ -201,8 +205,9 @@ export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, 
               <div className="grid gap-2">
                 <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-[#f2ca75]"><Users className="h-4 w-4" /> Spielrunde</div>
                 <div className="flex flex-wrap gap-2">
+                  <button onClick={() => setOverviewWorkspaceId("all")} className={`border px-3 py-2 text-sm ${overviewWorkspaceId === "all" ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>Alle</button>
                   {(data.workspaces ?? []).map((workspace) => (
-                    <button key={workspace.id} onClick={() => setActiveWorkspace(workspace.id)} className={`border px-3 py-2 text-sm ${workspace.id === activeWorkspaceId ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{workspace.name}</button>
+                    <button key={workspace.id} onClick={() => { setOverviewWorkspaceId(workspace.id); setActiveWorkspace(workspace.id); }} className={`border px-3 py-2 text-sm ${overviewWorkspaceId !== "all" && workspace.id === characterWorkspaceFilter ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{workspace.name}</button>
                   ))}
                 </div>
               </div>

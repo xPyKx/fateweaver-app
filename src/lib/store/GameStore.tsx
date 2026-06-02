@@ -449,12 +449,16 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
         .filter(([id, count]) => catalogIds.has(id) && Number(count) > 0)
         .map(([id, count]) => [id, Number(count)])
     );
+    const mainFateId = catalogHas(character.choices?.mainFateId, "fate") ? character.choices.mainFateId : undefined;
+    const sideFateId = catalogHas(character.choices?.sideFateId, "fate") ? character.choices.sideFateId : undefined;
+    const allowedFateIds = allowedFateIdsForChoices(character.choices, mainFateId, sideFateId, catalog);
     const selectedFateCardIds = cleanIds(character.choices?.selectedFateCardIds).filter((id) => {
       const item = catalog.find((entry) => entry.id === id);
-      return item?.type === "fateCard" || item?.type === "fateAbility";
+      return Boolean(item && fateCardBelongsToFates(item, allowedFateIds));
     });
-    const selectedFateCategoryEntryIds = normalizeFateCategorySelections(character.choices?.selectedFateCategoryEntryIds, catalog);
-    const fateCardStates = normalizeFateCardStates(character.choices?.fateCardStates, catalog);
+    const selectedFateCategoryEntryIds = normalizeFateCategorySelections(character.choices?.selectedFateCategoryEntryIds, catalog, allowedFateIds);
+    const selectedFateCategoryEntryFlatIds = Object.values(selectedFateCategoryEntryIds).flat();
+    const fateCardStates = normalizeFateCardStates(character.choices?.fateCardStates, catalog, new Set([...selectedFateCardIds, ...selectedFateCategoryEntryFlatIds]));
     const weaponAttributeSelections = Object.fromEntries(
       Object.entries(character.choices?.weaponAttributeSelections ?? {}).filter(([weaponId]) => selectedWeapons.includes(weaponId))
     );
@@ -464,8 +468,8 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
       ownerId: character.ownerId ?? userId,
       choices: {
         ...character.choices,
-        mainFateId: catalogHas(character.choices?.mainFateId, "fate") ? character.choices.mainFateId : undefined,
-        sideFateId: catalogHas(character.choices?.sideFateId, "fate") ? character.choices.sideFateId : undefined,
+        mainFateId,
+        sideFateId,
         selectedWeapons,
         storedWeaponIds,
         weaponAttributeSelections,
@@ -529,12 +533,30 @@ function normalizeGmSession(session?: GmSessionData): GmSessionData {
   });
 }
 
-function normalizeFateCategorySelections(selections: Record<string, string[]> | undefined, catalog: CatalogItem[]) {
+function allowedFateIdsForChoices(choices: Character["choices"] | undefined, mainFateId: string | undefined, sideFateId: string | undefined, catalog: CatalogItem[]) {
+  const extraFateIds = Object.values(choices?.levelUps ?? {})
+    .map((choice) => choice.extraFateId)
+    .filter((id): id is string => Boolean(id && catalog.some((item) => item.id === id && item.type === "fate")));
+  return new Set(unique([mainFateId, sideFateId, ...extraFateIds].filter(Boolean) as string[]));
+}
+
+function fateCardBelongsToFates(item: CatalogItem, allowedFateIds: Set<string>) {
+  if (item.type === "fateAbility") {
+    return item.fateAbility?.kind === "fateCard" && allowedFateIds.has(item.fateAbility.fateId);
+  }
+  if (item.type === "fateCard") {
+    return Boolean(item.tags?.some((tag) => allowedFateIds.has(tag)));
+  }
+  return false;
+}
+
+function normalizeFateCategorySelections(selections: Record<string, string[]> | undefined, catalog: CatalogItem[], allowedFateIds?: Set<string>) {
   const result: Record<string, string[]> = {};
   Object.entries(selections ?? {}).forEach(([categoryId, ids]) => {
     const fate = catalog.find((item) => item.type === "fate" && item.fate?.abilityCategories?.some((category) => category.id === categoryId));
     const category = fate?.fate?.abilityCategories?.find((entry) => entry.id === categoryId);
     if (!fate || !category) return;
+    if (allowedFateIds && !allowedFateIds.has(fate.id)) return;
     const validIds = unique(ids).filter((id) => catalog.some((item) => item.id === id && item.type === "fateAbility" && item.fateAbility?.fateId === fate.id && (item.fateAbility.categoryId === categoryId || item.fateAbility.kind === categoryId)));
     const limit = Number(category.selectionLimit ?? 0);
     result[categoryId] = limit > 0 ? validIds.slice(0, limit) : validIds;
@@ -542,11 +564,11 @@ function normalizeFateCategorySelections(selections: Record<string, string[]> | 
   return result;
 }
 
-function normalizeFateCardStates(states: Character["choices"]["fateCardStates"] | undefined, catalog: CatalogItem[]) {
+function normalizeFateCardStates(states: Character["choices"]["fateCardStates"] | undefined, catalog: CatalogItem[], allowedIds?: Set<string>) {
   const validIds = new Set(catalog.filter((item) => item.type === "fateAbility" || item.type === "fateCard").map((item) => item.id));
   return Object.fromEntries(
     Object.entries(states ?? {})
-      .filter(([id]) => validIds.has(id))
+      .filter(([id]) => validIds.has(id) && (!allowedIds || allowedIds.has(id)))
       .map(([id, state]) => [id, {
         used: Math.max(0, Number(state?.used ?? 0) || 0),
         counter: Math.max(0, Number(state?.counter ?? 0) || 0),

@@ -96,4 +96,26 @@ describe("game store data merge", () => {
     expect(next.choices.levelUps?.["2"]).toMatchObject({ option: undefined, fateCardId: undefined });
     expect(next.choices.levelUps?.["3"]).toMatchObject({ option: "hp", fateCardId: undefined, attributeIncreases: ["kraft"] });
   });
+
+  it("removes stored fate cards that do not belong to current fates", () => {
+    const character = createCharacter();
+    character.choices.mainFateId = "fate-arkana";
+    character.choices.sideFateId = "fate-klinge";
+    character.choices.selectedFateCardIds = ["card-licht", "card-arkana"];
+    character.choices.fateCardStates = { "card-licht": { used: 1 }, "card-arkana": { used: 1 } };
+
+    const normalized = normalizeLoadedData(appData({
+      characters: [character],
+      catalog: [
+        { id: "fate-arkana", type: "fate", name: "Arkana", description: "" },
+        { id: "fate-klinge", type: "fate", name: "Klinge", description: "" },
+        { id: "fate-licht", type: "fate", name: "Licht", description: "" },
+        { id: "card-licht", type: "fateAbility", name: "Heilendes Licht", description: "", fateAbility: { fateId: "fate-licht", kind: "fateCard", level: 1 } },
+        { id: "card-arkana", type: "fateAbility", name: "Arkana Karte", description: "", fateAbility: { fateId: "fate-arkana", kind: "fateCard", level: 1 } }
+      ]
+    }));
+
+    expect(normalized.characters[0].choices.selectedFateCardIds).toEqual(["card-arkana"]);
+    expect(normalized.characters[0].choices.fateCardStates).toEqual({ "card-arkana": { used: 1, counter: 0, rolls: [], activations: 0, active: false } });
+  });
 });

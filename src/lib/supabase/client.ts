@@ -229,13 +229,16 @@ export async function loadRemoteData(userId?: string) {
   const remoteCharacters = await loadRemoteCharacters().catch(() => []);
   const base = appData ?? emptyRemoteAppData();
   const deletedCharacterIds = omitExistingCharacterDeletes(base.deletedCharacterIds, remoteCharacters);
+  const deletedWorkspaceIds = base.deletedWorkspaceIds ?? [];
+  const visibleWorkspaceData = omitDeletedWorkspaces(workspaceData, deletedWorkspaceIds);
   const hasRemoteData = appData || messages.length || remoteCharacters.length || (workspaceData.workspaces ?? []).length || (campaignData.campaigns ?? []).length;
   return hasRemoteData ? {
     ...base,
-    ...workspaceData,
+    ...visibleWorkspaceData,
     ...campaignData,
-    workspaces: mergeById(base.workspaces ?? [], workspaceData.workspaces ?? []),
-    workspaceInvites: mergeById(base.workspaceInvites ?? [], workspaceData.workspaceInvites ?? []),
+    deletedWorkspaceIds,
+    workspaces: mergeById(base.workspaces ?? [], visibleWorkspaceData.workspaces ?? []).filter((workspace) => !deletedWorkspaceIds.includes(workspace.id)),
+    workspaceInvites: mergeById(base.workspaceInvites ?? [], visibleWorkspaceData.workspaceInvites ?? []),
     campaigns: mergeById(base.campaigns ?? [], campaignData.campaigns ?? []),
     campaignSessions: mergeById(base.campaignSessions ?? [], campaignData.campaignSessions ?? []),
     deletedCharacterIds,
@@ -275,6 +278,8 @@ export async function loadVisibleRemoteData(profile?: UserProfile, userId?: stri
   const remoteMessages = await loadRemoteMessages(profile, userId).catch(() => []);
   const messages = mergeById(stateMessages, remoteMessages);
   const workspaceData = await loadRemoteWorkspaceData(profile, userId).catch(emptyRemoteWorkspaceData);
+  const deletedWorkspaceIds = base.deletedWorkspaceIds ?? [];
+  const visibleWorkspaceData = omitDeletedWorkspaces(workspaceData, deletedWorkspaceIds);
   const campaignData = await loadRemoteCampaignData().catch(emptyRemoteCampaignData);
   const stateCampaigns = rows.reduce((merged: any[], row: any) => mergeById(merged, row.data?.campaigns ?? []), []);
   const campaigns = mergeById(stateCampaigns, campaignData.campaigns ?? []);
@@ -283,8 +288,9 @@ export async function loadVisibleRemoteData(profile?: UserProfile, userId?: stri
   const customGmModules = rows.reduce((merged: any[], row: any) => mergeById(merged, row.data?.customGmModules ?? []), []);
   return {
     ...base,
-    workspaces: mergeById(base.workspaces ?? [], workspaceData.workspaces ?? []),
-    workspaceInvites: mergeById(base.workspaceInvites ?? [], workspaceData.workspaceInvites ?? []),
+    deletedWorkspaceIds,
+    workspaces: mergeById(base.workspaces ?? [], visibleWorkspaceData.workspaces ?? []).filter((workspace) => !deletedWorkspaceIds.includes(workspace.id)),
+    workspaceInvites: mergeById(base.workspaceInvites ?? [], visibleWorkspaceData.workspaceInvites ?? []),
     characters,
     deletedCharacterIds,
     session,
@@ -314,6 +320,7 @@ export async function saveRemoteData(data: AppData, userId?: string) {
   if (error) throw error;
   await upsertRemoteMessages(remoteData.messages ?? [], userId).catch(() => undefined);
   await upsertRemoteWorkspaceData(remoteData, userId).catch(() => undefined);
+  await deleteRemoteWorkspaces(remoteData.deletedWorkspaceIds ?? []).catch(() => undefined);
   await upsertRemoteCampaignData(remoteData).catch(() => undefined);
   await upsertRemoteCharacters(remoteData.characters ?? [], userId);
   await deleteRemoteCharacters(remoteData.deletedCharacterIds ?? []);
@@ -430,6 +437,14 @@ async function upsertRemoteWorkspaceData(data: AppData, userId: string) {
     const { error } = await supabase.from("workspace_invites").upsert(invites.map(toWorkspaceInviteRow));
     if (error) throw error;
   }
+}
+
+async function deleteRemoteWorkspaces(workspaceIds: string[]) {
+  if (!supabase || !workspaceIds.length) return;
+  const ids = workspaceIds.filter(isUuid);
+  if (!ids.length) return;
+  const { error } = await supabase.from("workspaces").delete().in("id", ids);
+  if (error) throw error;
 }
 
 async function loadRemoteCampaignData(): Promise<Pick<AppData, "campaigns" | "campaignSessions">> {
@@ -838,6 +853,15 @@ function omitExistingCharacterDeletes(deletedCharacterIds: string[] | undefined,
   if (!deletedCharacterIds?.length || !characters.length) return deletedCharacterIds ?? [];
   const existingIds = new Set(characters.map((character) => character.id));
   return deletedCharacterIds.filter((id) => !existingIds.has(id));
+}
+
+function omitDeletedWorkspaces(data: Pick<AppData, "workspaces" | "workspaceInvites">, deletedWorkspaceIds: string[]) {
+  if (!deletedWorkspaceIds.length) return data;
+  const deleted = new Set(deletedWorkspaceIds);
+  return {
+    workspaces: (data.workspaces ?? []).filter((workspace) => !deleted.has(workspace.id)),
+    workspaceInvites: (data.workspaceInvites ?? []).filter((invite) => !deleted.has(invite.workspaceId))
+  };
 }
 
 function emptyRemoteWorkspaceData(): Pick<AppData, "workspaces" | "workspaceInvites"> {

@@ -552,6 +552,7 @@ export interface WorkspaceInvite {
 
 export interface AppData {
   workspaces?: Workspace[];
+  deletedWorkspaceIds?: string[];
   workspaceInvites?: WorkspaceInvite[];
   activeWorkspaceId?: string;
   characters: Character[];

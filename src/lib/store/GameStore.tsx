@@ -212,6 +212,7 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
       activeWorkspace,
       setActiveWorkspace: (id) => setData((current) => ({ ...current, activeWorkspaceId: id })),
       createWorkspace: (name) => setData((current) => addWorkspaceToData(current, name, currentUserId, profile?.email)),
+      deleteWorkspace: (id) => setData((current) => deleteWorkspaceInData(current, id)),
       inviteWorkspaceMember: (email, role = "player", campaignId) => setData((current) => inviteWorkspaceMemberInData(current, email, role, currentUserId, campaignId)),
       acceptWorkspaceInvite: (code) => {
         const normalizedCode = code.trim().toUpperCase();
@@ -411,7 +412,9 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
 
 export function normalizeLoadedData(data: AppData, userId?: string): AppData {
   data = migrateWorkspaceIds(data);
-  const workspaces = normalizeWorkspaces(data.workspaces, data.activeWorkspaceId, userId);
+  const deletedWorkspaceIds = unique(data.deletedWorkspaceIds ?? []);
+  const deletedWorkspaceSet = new Set(deletedWorkspaceIds);
+  const workspaces = normalizeWorkspaces((data.workspaces ?? []).filter((workspace) => !deletedWorkspaceSet.has(workspace.id)), data.activeWorkspaceId, userId);
   const activeWorkspaceId = data.activeWorkspaceId && workspaces.some((workspace) => workspace.id === data.activeWorkspaceId)
     ? data.activeWorkspaceId
     : workspaces[0]?.id;
@@ -490,14 +493,15 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
     workspaces,
     workspaceInvites: cleanWorkspaceInvites(data.workspaceInvites, workspaces),
     activeWorkspaceId,
+    deletedWorkspaceIds,
     catalog,
     deletedCatalogItemIds,
     deletedCharacterIds,
-    historyEvents: (data.historyEvents ?? []).filter((entry) => !entry.characterId || !deletedCharacterSet.has(entry.characterId)).map((entry) => ({ ...entry, workspaceId: entry.workspaceId ?? activeWorkspaceId })),
-    messages: cleanMessages(data.messages, deletedCharacterSet).map((message) => ({ ...message, workspaceId: message.workspaceId ?? activeWorkspaceId })),
-    campaigns: cleanCampaigns(data.campaigns, deletedCharacterSet).map((campaign) => ({ ...campaign, workspaceId: campaign.workspaceId ?? activeWorkspaceId })),
-    campaignSessions: cleanCampaignSessions(data.campaignSessions, data.campaigns).map((session) => ({ ...session, workspaceId: session.workspaceId ?? activeWorkspaceId })),
-    customGmModules: cleanCustomGmModules(data.customGmModules, deletedCharacterSet).map((module) => ({ ...module, workspaceId: module.workspaceId ?? activeWorkspaceId })),
+    historyEvents: (data.historyEvents ?? []).filter((entry) => !entry.workspaceId || !deletedWorkspaceSet.has(entry.workspaceId)).filter((entry) => !entry.characterId || !deletedCharacterSet.has(entry.characterId)).map((entry) => ({ ...entry, workspaceId: entry.workspaceId ?? activeWorkspaceId })),
+    messages: cleanMessages(data.messages, deletedCharacterSet).filter((message) => !message.workspaceId || !deletedWorkspaceSet.has(message.workspaceId)).map((message) => ({ ...message, workspaceId: message.workspaceId ?? activeWorkspaceId })),
+    campaigns: cleanCampaigns(data.campaigns, deletedCharacterSet).filter((campaign) => !campaign.workspaceId || !deletedWorkspaceSet.has(campaign.workspaceId)).map((campaign) => ({ ...campaign, workspaceId: campaign.workspaceId ?? activeWorkspaceId })),
+    campaignSessions: cleanCampaignSessions(data.campaignSessions, data.campaigns).filter((session) => !session.workspaceId || !deletedWorkspaceSet.has(session.workspaceId)).map((session) => ({ ...session, workspaceId: session.workspaceId ?? activeWorkspaceId })),
+    customGmModules: cleanCustomGmModules(data.customGmModules, deletedCharacterSet).filter((module) => !module.workspaceId || !deletedWorkspaceSet.has(module.workspaceId)).map((module) => ({ ...module, workspaceId: module.workspaceId ?? activeWorkspaceId })),
     infoHints: normalizeInfoHints((data.infoHints ?? []).filter((hint) => !deletedCatalogItemSet.has(hint.target)).map((hint) => ({ ...hint, workspaceId: hint.workspaceId ?? activeWorkspaceId }))),
     activeCharacterId,
     characters,
@@ -639,7 +643,8 @@ function migrateWorkspaceIds(data: AppData): AppData {
 }
 
 function currentWorkspaceId(data: AppData, userId?: string) {
-  const workspaces = normalizeWorkspaces(data.workspaces, data.activeWorkspaceId, userId);
+  const deletedWorkspaceSet = new Set(data.deletedWorkspaceIds ?? []);
+  const workspaces = normalizeWorkspaces((data.workspaces ?? []).filter((workspace) => !deletedWorkspaceSet.has(workspace.id)), data.activeWorkspaceId, userId);
   return data.activeWorkspaceId && workspaces.some((workspace) => workspace.id === data.activeWorkspaceId)
     ? data.activeWorkspaceId
     : workspaces[0]?.id;
@@ -662,6 +667,27 @@ function addWorkspaceToData(data: AppData, name: string, userId?: string, email?
     ...data,
     workspaces: [...(data.workspaces ?? []), workspace],
     activeWorkspaceId: workspace.id
+  };
+}
+
+function deleteWorkspaceInData(data: AppData, id: string): AppData {
+  const workspaces = (data.workspaces ?? []).filter((workspace) => workspace.id !== id);
+  const deletedCampaignIds = new Set((data.campaigns ?? []).filter((campaign) => campaign.workspaceId === id).map((campaign) => campaign.id));
+  const nextActiveWorkspaceId = data.activeWorkspaceId === id ? workspaces[0]?.id : data.activeWorkspaceId;
+  return {
+    ...data,
+    deletedWorkspaceIds: unique([...(data.deletedWorkspaceIds ?? []), id]),
+    activeWorkspaceId: nextActiveWorkspaceId,
+    workspaces,
+    workspaceInvites: (data.workspaceInvites ?? []).filter((invite) => invite.workspaceId !== id),
+    characters: (data.characters ?? []).map((character) => character.workspaceId === id ? { ...character, workspaceId: nextActiveWorkspaceId, updatedAt: new Date().toISOString() } : character),
+    catalog: (data.catalog ?? []).map((item) => item.workspaceId === id ? { ...item, workspaceId: nextActiveWorkspaceId, updatedAt: new Date().toISOString() } : item),
+    campaigns: (data.campaigns ?? []).filter((campaign) => campaign.workspaceId !== id),
+    campaignSessions: (data.campaignSessions ?? []).filter((session) => session.workspaceId !== id && !deletedCampaignIds.has(session.campaignId)),
+    customGmModules: (data.customGmModules ?? []).filter((module) => module.workspaceId !== id && !deletedCampaignIds.has(module.campaignId ?? "")),
+    messages: (data.messages ?? []).filter((message) => message.workspaceId !== id),
+    historyEvents: (data.historyEvents ?? []).filter((event) => event.workspaceId !== id),
+    infoHints: (data.infoHints ?? []).map((hint) => hint.workspaceId === id ? { ...hint, workspaceId: nextActiveWorkspaceId } : hint)
   };
 }
 
@@ -835,6 +861,8 @@ function createInviteCode() {
 }
 
 export function mergeAppData(local: AppData, remote: AppData): AppData {
+  const deletedWorkspaceIds = unique([...(local.deletedWorkspaceIds ?? []), ...(remote.deletedWorkspaceIds ?? [])]);
+  const deletedWorkspaceSet = new Set(deletedWorkspaceIds);
   const remoteCharacterIds = new Set((remote.characters ?? []).map((character) => character.id));
   const deletedCharacterIds = unique([...(local.deletedCharacterIds ?? []), ...(remote.deletedCharacterIds ?? [])])
     .filter((id) => !remoteCharacterIds.has(id));
@@ -848,31 +876,32 @@ export function mergeAppData(local: AppData, remote: AppData): AppData {
       (remote.catalog ?? []).filter((item) => !deletedCatalogItemSet.has(item.id))
     ),
     infoHints: mergeById(local.infoHints ?? [], remote.infoHints ?? []),
-    workspaces: mergeById(local.workspaces ?? [], remote.workspaces ?? []),
-    workspaceInvites: mergeById(local.workspaceInvites ?? [], remote.workspaceInvites ?? []),
-    activeWorkspaceId: local.activeWorkspaceId ?? remote.activeWorkspaceId,
+    deletedWorkspaceIds,
+    workspaces: mergeById(local.workspaces ?? [], remote.workspaces ?? []).filter((workspace) => !deletedWorkspaceSet.has(workspace.id)),
+    workspaceInvites: mergeById(local.workspaceInvites ?? [], remote.workspaceInvites ?? []).filter((invite) => !deletedWorkspaceSet.has(invite.workspaceId)),
+    activeWorkspaceId: deletedWorkspaceSet.has(local.activeWorkspaceId ?? "") ? remote.activeWorkspaceId : local.activeWorkspaceId ?? remote.activeWorkspaceId,
     deletedCharacterIds,
     deletedCatalogItemIds,
     historyEvents: mergeById(
-      (local.historyEvents ?? []).filter((entry) => !entry.characterId || !deletedCharacterSet.has(entry.characterId)),
-      (remote.historyEvents ?? []).filter((entry) => !entry.characterId || !deletedCharacterSet.has(entry.characterId))
+      (local.historyEvents ?? []).filter((entry) => !entry.workspaceId || !deletedWorkspaceSet.has(entry.workspaceId)).filter((entry) => !entry.characterId || !deletedCharacterSet.has(entry.characterId)),
+      (remote.historyEvents ?? []).filter((entry) => !entry.workspaceId || !deletedWorkspaceSet.has(entry.workspaceId)).filter((entry) => !entry.characterId || !deletedCharacterSet.has(entry.characterId))
     ),
     messages: mergeById(
       cleanMessages(local.messages, deletedCharacterSet),
       cleanMessages(remote.messages, deletedCharacterSet)
-    ),
+    ).filter((message) => !message.workspaceId || !deletedWorkspaceSet.has(message.workspaceId)),
     campaigns: mergeById(
       cleanCampaigns(local.campaigns, deletedCharacterSet),
       cleanCampaigns(remote.campaigns, deletedCharacterSet)
-    ),
+    ).filter((campaign) => !campaign.workspaceId || !deletedWorkspaceSet.has(campaign.workspaceId)),
     campaignSessions: mergeById(
       cleanCampaignSessions(local.campaignSessions, [...(local.campaigns ?? []), ...(remote.campaigns ?? [])]),
       cleanCampaignSessions(remote.campaignSessions, [...(local.campaigns ?? []), ...(remote.campaigns ?? [])])
-    ),
+    ).filter((session) => !session.workspaceId || !deletedWorkspaceSet.has(session.workspaceId)),
     customGmModules: mergeById(
       cleanCustomGmModules(local.customGmModules, deletedCharacterSet),
       cleanCustomGmModules(remote.customGmModules, deletedCharacterSet)
-    ),
+    ).filter((module) => !module.workspaceId || !deletedWorkspaceSet.has(module.workspaceId)),
     characters: mergeCharacters(
       (local.characters ?? []).filter((character) => !deletedCharacterSet.has(character.id)),
       (remote.characters ?? []).filter((character) => !deletedCharacterSet.has(character.id))

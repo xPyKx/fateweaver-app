@@ -51,10 +51,10 @@ export function GMSettings() {
   const filteredFateAbilities = fateAbilities.filter((item) => item.fateAbility?.kind === activeFateAbilityKind || item.fateAbility?.categoryId === activeFateAbilityKind);
   const hasSubcategoryColumn = type === "magicItem" || type === "gameOption" || type === "backgroundQuestion";
   const gridColumns = type === "fate" && activeFate
-    ? "xl:grid-cols-[210px_280px_240px_300px_minmax(420px,1fr)]"
+    ? "xl:grid-cols-[minmax(170px,0.75fr)_minmax(220px,0.95fr)_minmax(190px,0.85fr)_minmax(230px,1fr)_minmax(320px,1.45fr)]"
     : hasSubcategoryColumn
-      ? "xl:grid-cols-[210px_240px_300px_minmax(460px,1fr)]"
-      : "xl:grid-cols-[230px_320px_minmax(460px,1fr)]";
+      ? "xl:grid-cols-[minmax(170px,0.8fr)_minmax(200px,0.85fr)_minmax(250px,1fr)_minmax(320px,1.5fr)]"
+      : "xl:grid-cols-[minmax(180px,0.85fr)_minmax(260px,1fr)_minmax(320px,1.6fr)]";
 
   function createItem() {
     if (type === "fate" && activeFate) {
@@ -95,8 +95,8 @@ export function GMSettings() {
     const category: FateAbilityCategoryData = {
       id: `fateCategory-${crypto.randomUUID()}`,
       name,
-      mode: "automaticByLevel",
-      trigger: "mainFate",
+      mode: "choicePool",
+      trigger: "anyFate",
       targetTabName: name,
       minLevel: 1,
       selectionLimit: 1
@@ -177,13 +177,13 @@ export function GMSettings() {
         </div>
       )}
 
-      <section className={`grid gap-4 ${gridColumns}`}>
-        <aside className="border border-[#a8752a]/35 bg-black/24 p-4">
+      <section className={`grid min-w-0 gap-4 ${gridColumns}`}>
+        <aside className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
           <div className="grid gap-2">
             {catalogTypes.map((entry) => (
               <button
                 key={entry}
-                className={`border px-3 py-3 text-left text-xs font-black uppercase tracking-[0.1em] transition ${type === entry ? "border-[#d6a14d]/70 bg-[#d6a14d]/14 text-[#ffd88c]" : "border-[#a8752a]/25 bg-black/25 text-[#cfc2aa] hover:border-[#d6a14d]/55 hover:text-[#ffd88c]"}`}
+                className={`min-w-0 whitespace-normal break-words border px-3 py-3 text-left text-xs font-black uppercase tracking-[0.1em] transition ${type === entry ? "border-[#d6a14d]/70 bg-[#d6a14d]/14 text-[#ffd88c]" : "border-[#a8752a]/25 bg-black/25 text-[#cfc2aa] hover:border-[#d6a14d]/55 hover:text-[#ffd88c]"}`}
                 onClick={() => {
                   setType(entry);
                   setSelectedId(undefined);
@@ -198,7 +198,7 @@ export function GMSettings() {
         </aside>
 
         {hasSubcategoryColumn && (
-          <aside className="border border-[#a8752a]/35 bg-black/24 p-4">
+          <aside className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
             <div className="mb-3">
               <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Unterkategorien</div>
               <h2 className="text-xl font-light text-white">{labelForType(type)}</h2>
@@ -258,7 +258,7 @@ export function GMSettings() {
           </aside>
         )}
 
-        <aside className="border border-[#a8752a]/35 bg-black/24 p-4">
+        <aside className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-xl font-light text-white">{labelForType(type)}</h2>
             <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#8c8170]">{items.length}</span>
@@ -309,7 +309,7 @@ export function GMSettings() {
           />
         )}
 
-        <section className="border border-[#a8752a]/35 bg-black/24 p-4">
+        <section className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
           {selected ? (
             <Editor item={selected} catalog={data.catalog} characters={data.characters} properties={properties} gameOptions={gameOptions} savePatch={savePatch} onSaved={() => showNotice(`"${selected.name}" gespeichert.`)} />
           ) : (

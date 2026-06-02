@@ -134,7 +134,7 @@ function UserCharacterGroup({ group, catalog, open, onToggle, onOpenCharacter, o
 }
 
 export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, onCreateCharacter }) {
-  const { data, ready, authLoading, profile, currentUserId, activeWorkspace, setActiveWorkspace, createWorkspace, inviteWorkspaceMember, acceptWorkspaceInvite, attachCharacterToCampaign, revokeWorkspaceInvite, removeWorkspaceMember, deleteCharacter, setActiveCharacter, upsertCharacter } = useGameStore();
+  const { data, ready, authLoading, profile, currentUserId, activeWorkspace, setActiveWorkspace, createWorkspace, deleteWorkspace, inviteWorkspaceMember, acceptWorkspaceInvite, attachCharacterToCampaign, revokeWorkspaceInvite, removeWorkspaceMember, deleteCharacter, setActiveCharacter, upsertCharacter } = useGameStore();
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [confirmation, setConfirmation] = useState("");
   const [managedUsers, setManagedUsers] = useState([]);
@@ -154,6 +154,7 @@ export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, 
   const workspaceInvites = (data.workspaceInvites ?? []).filter((invite) => invite.workspaceId === activeWorkspaceId && invite.status === "open");
   const workspaceMembers = (activeWorkspace?.members ?? []).filter((member) => member.status !== "removed");
   const workspaceCampaigns = (data.campaigns ?? []).filter((campaign) => campaign.workspaceId === activeWorkspaceId);
+  const canDeleteWorkspace = (data.workspaces ?? []).length > 1;
   const joinedCampaigns = (data.campaigns ?? []).filter((campaign) => campaign.members?.some((member) => member.userId === currentUserId && member.status === "active"));
   const characters = data.characters
     .filter((character) => !characterWorkspaceFilter || character.workspaceId === characterWorkspaceFilter)
@@ -177,6 +178,13 @@ export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, 
     deleteCharacter(deleteTarget.id);
     setDeleteTarget(null);
     setConfirmation("");
+  }
+
+  function confirmDeleteWorkspace(workspace) {
+    const confirmation = window.prompt(`Spielrunde "${workspace.name}" loeschen? Gib exakt "Löschen" ein.`);
+    if (confirmation !== "Löschen") return;
+    deleteWorkspace(workspace.id);
+    if (overviewWorkspaceId === workspace.id) setOverviewWorkspaceId("all");
   }
 
   return (
@@ -207,7 +215,10 @@ export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, 
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => setOverviewWorkspaceId("all")} className={`border px-3 py-2 text-sm ${overviewWorkspaceId === "all" ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>Alle</button>
                   {(data.workspaces ?? []).map((workspace) => (
-                    <button key={workspace.id} onClick={() => { setOverviewWorkspaceId(workspace.id); setActiveWorkspace(workspace.id); }} className={`border px-3 py-2 text-sm ${overviewWorkspaceId !== "all" && workspace.id === characterWorkspaceFilter ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{workspace.name}</button>
+                    <span key={workspace.id} className={`inline-grid grid-cols-[1fr_auto] border text-sm ${overviewWorkspaceId !== "all" && workspace.id === characterWorkspaceFilter ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>
+                      <button onClick={() => { setOverviewWorkspaceId(workspace.id); setActiveWorkspace(workspace.id); }} className="min-w-0 px-3 py-2 text-left">{workspace.name}</button>
+                      {canDeleteWorkspace && <button onClick={() => confirmDeleteWorkspace(workspace)} className="grid w-9 place-items-center border-l border-[#a8752a]/35 text-red-200" title="Spielrunde loeschen"><Trash2 className="h-4 w-4" /></button>}
+                    </span>
                   ))}
                 </div>
               </div>

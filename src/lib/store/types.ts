@@ -30,6 +30,7 @@ export interface GameStore {
   activeWorkspace?: Workspace;
   setActiveWorkspace: (id: string) => void;
   createWorkspace: (name: string) => void;
+  deleteWorkspace: (id: string) => void;
   inviteWorkspaceMember: (email: string, role?: WorkspaceMemberRole, campaignId?: string) => void;
   acceptWorkspaceInvite: (code: string) => void;
   attachCharacterToCampaign: (campaignId: string, characterId: string) => void;
@@ -57,4 +58,3 @@ export interface GameStore {
   sendMessage: (message: NewMessageInput) => void;
   markMessageRead: (id: string) => void;
 }
-

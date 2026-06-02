@@ -7,13 +7,13 @@ interface FieldProps {
 
 export function Field({ label, value, type = "text", onChange }: FieldProps) {
   return (
-    <label className="grid gap-1.5 text-sm text-[#cfc2aa]">
+    <label className="grid min-w-0 gap-1.5 text-sm text-[#cfc2aa]">
       <span className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#f2ca75]">{label}</span>
       <input
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-11 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none transition focus:border-[#f2ca75]"
+        className="min-h-11 min-w-0 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none transition focus:border-[#f2ca75]"
       />
     </label>
   );

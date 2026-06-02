@@ -161,14 +161,14 @@ export function FateAbilityKindColumn({ activeKind, abilities, categories = [], 
       </div>
       <div className="grid gap-2">
         {fateAbilityKinds.map((kind) => (
-          <button key={kind.key} onClick={() => onSelect(kind.key)} className={`flex items-center justify-between border px-3 py-3 text-left text-sm ${activeKind === kind.key ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}>
-            <span>{kind.label}</span>
+          <button key={kind.key} onClick={() => onSelect(kind.key)} className={`flex min-w-0 items-center justify-between gap-2 border px-3 py-3 text-left text-sm ${activeKind === kind.key ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}>
+            <span className="min-w-0 break-words">{kind.label}</span>
             <span className="text-xs text-[#8c8170]">{abilities.filter((item) => item.fateAbility?.kind === kind.key).length}</span>
           </button>
         ))}
         {categories.map((category) => (
-          <button key={category.id} onClick={() => onSelect(category.id)} className={`flex items-center justify-between border px-3 py-3 text-left text-sm ${activeKind === category.id ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}>
-            <span>{category.name}</span>
+          <button key={category.id} onClick={() => onSelect(category.id)} className={`flex min-w-0 items-center justify-between gap-2 border px-3 py-3 text-left text-sm ${activeKind === category.id ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}>
+            <span className="min-w-0 break-words">{category.name}</span>
             <span className="text-xs text-[#8c8170]">{abilities.filter((item) => item.fateAbility?.kind === category.id || item.fateAbility?.categoryId === category.id).length}</span>
           </button>
         ))}
@@ -183,7 +183,7 @@ export function FateAbilityKindColumn({ activeKind, abilities, categories = [], 
 export function FateAbilityColumn({ fate, kind, abilities, activeId, deleteCatalogItem, selectAbility }: { fate: CatalogItem; kind: FateAbilityKind; abilities: CatalogItem[]; activeId?: string; deleteCatalogItem: (id: string) => void; selectAbility: (id: string) => void }) {
   const category = fate.fate?.abilityCategories?.find((entry) => entry.id === kind);
   return (
-    <aside className="border border-[#a8752a]/35 bg-black/24 p-4">
+    <aside className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
       <div className="mb-3">
         <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">{category?.name ?? labelForFateAbilityKind(kind)}</div>
         <h2 className="text-xl font-light text-white">{fate.name}</h2>
@@ -191,7 +191,7 @@ export function FateAbilityColumn({ fate, kind, abilities, activeId, deleteCatal
       </div>
       <div className="mt-4 grid gap-2">
         {abilities.map((ability) => (
-          <div key={ability.id} className={`grid grid-cols-[1fr_auto] gap-2 border p-2 ${activeId === ability.id ? "border-[#d6a14d]/70 bg-[#d6a14d]/12" : "border-[#a8752a]/25 bg-black/25"}`}>
+          <div key={ability.id} className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 border p-2 ${activeId === ability.id ? "border-[#d6a14d]/70 bg-[#d6a14d]/12" : "border-[#a8752a]/25 bg-black/25"}`}>
             <button onClick={() => selectAbility(ability.id)} className="min-w-0 text-left">
               <div className="truncate text-sm font-semibold text-white">{ability.name}</div>
               <div className="truncate text-xs text-[#8c8170]">{fateAbilityMeta(ability)}</div>
@@ -659,9 +659,9 @@ export function HintDialog({ target, hint, item, itemName, onSave, onPatchItem, 
 
 function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
-    <label className="grid gap-1.5 text-sm text-[#cfc2aa]">
+    <label className="grid min-w-0 gap-1.5 text-sm text-[#cfc2aa]">
       <span className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#f2ca75]">{label}</span>
-      <textarea className="min-h-28 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none transition focus:border-[#f2ca75]" value={value} onChange={(event) => onChange(event.target.value)} />
+      <textarea className="min-h-28 min-w-0 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none transition focus:border-[#f2ca75]" value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }

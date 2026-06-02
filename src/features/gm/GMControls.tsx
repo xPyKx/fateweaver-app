@@ -1,6 +1,7 @@
 import { Field } from "../../components/Field";
 import { fileToPersistentImageUrl } from "../../lib/images/persistentImage";
 import type { ItemRarity, MagicItemKind } from "../../types/domain";
+import { Trash2 } from "lucide-react";
 
 const rarities: { key: ItemRarity; label: string; color: string }[] = [
   { key: "common", label: "Gewoehnlich", color: "bg-gray-400" },
@@ -11,9 +12,9 @@ const rarities: { key: ItemRarity; label: string; color: string }[] = [
 
 export function Select({ label, value, options, onChange }: { label: string; value: string; options: [string, string][]; onChange: (value: string) => void }) {
   return (
-    <label className="grid gap-1.5 text-sm text-[#cfc2aa]">
+    <label className="grid min-w-0 gap-1.5 text-sm text-[#cfc2aa]">
       <span className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#f2ca75]">{label}</span>
-      <select className="min-h-11 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none transition focus:border-[#f2ca75]" value={value} onChange={(event) => onChange(event.target.value)}>
+      <select className="min-h-11 min-w-0 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none transition focus:border-[#f2ca75]" value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
       </select>
     </label>
@@ -23,9 +24,9 @@ export function Select({ label, value, options, onChange }: { label: string; val
 export function SignedNumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
   const displayValue = value >= 0 ? `+${value}` : String(value);
   return (
-    <label className="grid gap-1.5 text-sm text-[#cfc2aa]">
+    <label className="grid min-w-0 gap-1.5 text-sm text-[#cfc2aa]">
       <span className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#f2ca75]">{label}</span>
-      <div className="grid grid-cols-[1fr_auto_auto] border border-[#a8752a]/35 bg-black/30">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] border border-[#a8752a]/35 bg-black/30">
         <input value={displayValue} onChange={(event) => onChange(parseSignedNumber(event.target.value))} className="min-h-11 min-w-0 bg-transparent px-3 text-[#f4ead7] outline-none" />
         <button type="button" onClick={() => onChange(value - 1)} className="grid h-11 w-9 place-items-center border-l border-[#a8752a]/35 text-[#cfc2aa]">-</button>
         <button type="button" onClick={() => onChange(value + 1)} className="grid h-11 w-9 place-items-center border-l border-[#a8752a]/35 text-[#cfc2aa]">+</button>
@@ -42,7 +43,14 @@ export function ImageInput({ label, value, onChange }: { label: string; value: s
 
   return (
     <div className="grid gap-2" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); handleFile(event.dataTransfer.files?.[0]); }}>
-      <Field label={`${label} URL`} value={value.startsWith("data:") ? "Lokales Bild gespeichert" : value} onChange={onChange} />
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+        <Field label={`${label} URL`} value={value.startsWith("data:") ? "Lokales Bild gespeichert" : value} onChange={onChange} />
+        {value && (
+          <button type="button" onClick={() => onChange("")} className="inline-flex min-h-11 items-center justify-center gap-2 border border-red-400/45 px-3 text-sm font-bold uppercase text-red-200" title={`${label} entfernen`}>
+            <Trash2 className="h-4 w-4" /> Entfernen
+          </button>
+        )}
+      </div>
       <label className="inline-flex min-h-11 cursor-pointer items-center justify-center border border-dashed border-[#a8752a]/45 bg-black/30 px-3 text-center text-sm font-bold uppercase tracking-wide text-[#cfc2aa] hover:border-[#f2ca75]">
         Bild hochladen oder hier ablegen
         <input className="hidden" type="file" accept="image/*" onChange={(event) => handleFile(event.target.files?.[0])} />

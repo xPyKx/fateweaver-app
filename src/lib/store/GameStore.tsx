@@ -242,7 +242,8 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
           const existing = current.characters.find((entry) => entry.id === character.id);
           const exists = Boolean(existing);
           const workspaceId = currentWorkspaceId(current, currentUserId);
-          const nextCharacter = { ...character, ownerId: character.ownerId ?? currentUserId, workspaceId: character.workspaceId ?? workspaceId, updatedAt: new Date().toISOString() };
+          const preparedCharacter = existing ? resetFateInventoryOnFateChange(existing, character) : character;
+          const nextCharacter = { ...preparedCharacter, ownerId: preparedCharacter.ownerId ?? currentUserId, workspaceId: preparedCharacter.workspaceId ?? workspaceId, updatedAt: new Date().toISOString() };
           const historyEvents = appendCharacterHistory(current.historyEvents ?? [], existing, nextCharacter, currentUserId, profile?.isGm ? "gm" : "player");
           return {
             ...current,
@@ -975,6 +976,39 @@ function mergeCharacters(local: Character[], remote: Character[]) {
     if (!remoteItem || Date.parse(item.updatedAt ?? "") >= Date.parse(remoteItem.updatedAt ?? "")) merged.set(item.id, item);
   });
   return Array.from(merged.values());
+}
+
+export function resetFateInventoryOnFateChange(previous: Character, next: Character): Character {
+  const previousChoices = previous.choices ?? {};
+  const nextChoices = next.choices ?? {};
+  const fateChanged = previousChoices.mainFateId !== nextChoices.mainFateId || previousChoices.sideFateId !== nextChoices.sideFateId;
+  if (!fateChanged) return next;
+  return {
+    ...next,
+    choices: {
+      ...nextChoices,
+      selectedFateCardIds: [],
+      selectedFateCategoryEntryIds: {},
+      fateCardStates: {},
+      levelUps: resetFateLevelUpChoices(nextChoices.levelUps)
+    }
+  };
+}
+
+function resetFateLevelUpChoices(levelUps: Character["choices"]["levelUps"]) {
+  if (!levelUps) return levelUps;
+  return Object.fromEntries(Object.entries(levelUps).map(([level, choice]) => {
+    const fateOption = choice.option === "fateCard" || choice.option === "specialization" || choice.option === "fateWeaver";
+    return [level, {
+      ...choice,
+      option: fateOption ? undefined : choice.option,
+      fateCardId: undefined,
+      fateWeaverCardId: undefined,
+      levelFateCardId: undefined,
+      specializationId: undefined,
+      extraFateId: undefined
+    }];
+  }));
 }
 
 function addMessageToData(data: AppData, input: NewMessageInput, actorUserId?: string, actorRole: "gm" | "player" | "system" = "player"): AppData {

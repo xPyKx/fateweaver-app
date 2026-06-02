@@ -271,10 +271,14 @@ export function GMSettings() {
                 active={selectedId === item.id}
                 hint={data.infoHints.find((entry) => entry.target === item.id)}
                 onSelect={() => {
+                  if (item.type === "fate") {
+                    setActiveFateId(item.id);
+                    setSelectedId(undefined);
+                    return;
+                  }
                   setSelectedId(item.id);
-                  if (item.type === "fate") setActiveFateId(item.id);
                 }}
-                onInfo={() => setHintTarget(item.id)}
+                onInfo={() => item.type === "fate" ? setSelectedId(item.id) : setHintTarget(item.id)}
                 onDelete={() => confirmDelete(item)}
               />
             ))}

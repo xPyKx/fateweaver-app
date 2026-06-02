@@ -1,4 +1,5 @@
 import { CircleDot, Info, Save, Trash2, X } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Field } from "../../components/Field";
 import type { AttributeKey, BackgroundQuestionKind, CatalogItem, CatalogType, Character, FateAbilityCategoryData, FateAbilityCategoryMode, FateAbilityCategoryTrigger, FateAbilityKind, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget } from "../../types/domain";
@@ -183,6 +184,8 @@ export function FateAbilityKindColumn({ activeKind, abilities, categories = [], 
 
 export function FateAbilityColumn({ fate, kind, abilities, activeId, deleteCatalogItem, selectAbility }: { fate: CatalogItem; kind: FateAbilityKind; abilities: CatalogItem[]; activeId?: string; deleteCatalogItem: (id: string) => void; selectAbility: (id: string) => void }) {
   const category = fate.fate?.abilityCategories?.find((entry) => entry.id === kind);
+  const standardAbilities = kind === "fateCard" ? abilities.filter((ability) => !ability.fateAbility?.spellBuilder) : abilities;
+  const spellBuilderAbilities = kind === "fateCard" ? abilities.filter((ability) => ability.fateAbility?.spellBuilder) : [];
   return (
     <aside className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
       <div className="mb-3">
@@ -190,21 +193,32 @@ export function FateAbilityColumn({ fate, kind, abilities, activeId, deleteCatal
         <h2 className="text-xl font-light text-white">{fate.name}</h2>
         <p className="mt-1 text-xs text-[#8c8170]">{category ? categorySummary(category) : `Ueber "+ Neuer Eintrag" oben wird hier eine Faehigkeit angelegt.`}</p>
       </div>
-      <div className="mt-4 grid gap-2">
-        {abilities.map((ability) => (
-          <div key={ability.id} className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 border p-2 ${activeId === ability.id ? "border-[#d6a14d]/70 bg-[#d6a14d]/12" : "border-[#a8752a]/25 bg-black/25"}`}>
-            <button onClick={() => selectAbility(ability.id)} className="min-w-0 text-left">
-              <div className="truncate text-sm font-semibold text-white">{ability.name}</div>
-              <div className="truncate text-xs text-[#8c8170]">{fateAbilityMeta(ability)}</div>
-            </button>
-            <button onClick={() => deleteCatalogItem(ability.id)} className="grid h-8 w-8 place-items-center border border-red-400/45 text-red-200">
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        ))}
+      <div className="mt-4 grid gap-3">
+        <FateAbilityGroup title={kind === "fateCard" ? "Standard Level-Fatekarten" : undefined} abilities={standardAbilities} activeId={activeId} selectAbility={selectAbility} deleteCatalogItem={deleteCatalogItem} />
+        {spellBuilderAbilities.length > 0 && <FateAbilityGroup title="Zauberbaukasten-Karten" abilities={spellBuilderAbilities} activeId={activeId} selectAbility={selectAbility} deleteCatalogItem={deleteCatalogItem} />}
         {!abilities.length && <div className="border border-dashed border-[#a8752a]/30 p-4 text-sm text-[#8c8170]">Keine Eintraege in dieser Faehigkeitsart.</div>}
       </div>
     </aside>
+  );
+}
+
+function FateAbilityGroup({ title, abilities, activeId, selectAbility, deleteCatalogItem }: { title?: string; abilities: CatalogItem[]; activeId?: string; selectAbility: (id: string) => void; deleteCatalogItem: (id: string) => void }) {
+  if (!abilities.length) return null;
+  return (
+    <div className="grid gap-2">
+      {title && <div className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#f2ca75]">{title}</div>}
+      {abilities.map((ability) => (
+        <div key={ability.id} className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 border p-2 ${activeId === ability.id ? "border-[#d6a14d]/70 bg-[#d6a14d]/12" : "border-[#a8752a]/25 bg-black/25"}`}>
+          <button onClick={() => selectAbility(ability.id)} className="min-w-0 text-left">
+            <div className="truncate text-sm font-semibold text-white">{ability.name}</div>
+            <div className="truncate text-xs text-[#8c8170]">{fateAbilityMeta(ability)}</div>
+          </button>
+          <button onClick={() => deleteCatalogItem(ability.id)} className="grid h-8 w-8 place-items-center border border-red-400/45 text-red-200">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -528,23 +542,37 @@ function FateUsageFields({ ability, save }: { ability: NonNullable<CatalogItem["
         Nutzungen, Counter oder aktive Effekte fuer diese Karte
       </label>
       {enabled && (
-        <>
-          <div className="grid gap-2 md:grid-cols-3">
-            <Field label="Nutzungen bis ausgegraut" type="number" value={usage.maxUses ?? 0} onChange={(maxUses) => patch({ maxUses: Math.max(0, Number(maxUses) || 0) })} />
-            <Select label="Nutzungen refreshen" value={usage.refreshTrigger ?? "none"} onChange={(refreshTrigger) => patch({ refreshTrigger: refreshTrigger as NonNullable<typeof usage>["refreshTrigger"] })} options={refreshOptions} />
-            <Field label="Counter Name" value={usage.counterName ?? ""} onChange={(counterName) => patch({ counterName })} />
-            <Field label="Counter Maximum" type="number" value={usage.counterMax ?? 0} onChange={(counterMax) => patch({ counterMax: Math.max(0, Number(counterMax) || 0) })} />
-            <Select label="Counter Attribut" value={usage.counterAttribute ?? ""} onChange={(counterAttribute) => patch({ counterAttribute: counterAttribute as NonNullable<typeof usage>["counterAttribute"] })} options={[["", "Festes Maximum"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
-            <Field label="Wuerfelvorrat Name" value={usage.rollName ?? ""} onChange={(rollName) => patch({ rollName })} />
-            <Field label="Wuerfel Formel" value={usage.rollDice ?? ""} onChange={(rollDice) => patch({ rollDice })} />
-            <Field label="Wuerfel Anzahl" type="number" value={usage.rollCount ?? 0} onChange={(rollCount) => patch({ rollCount: Math.max(0, Number(rollCount) || 0) })} />
-            <Select label="Wuerfel refreshen" value={usage.rollRefreshTrigger ?? "none"} onChange={(rollRefreshTrigger) => patch({ rollRefreshTrigger: rollRefreshTrigger as NonNullable<typeof usage>["rollRefreshTrigger"] })} options={refreshOptions} />
-            <Field label="Aktivierung Name" value={usage.activationName ?? ""} onChange={(activationName) => patch({ activationName })} />
-            <Field label="Aktivierungen Maximum" type="number" value={usage.activationMax ?? 0} onChange={(activationMax) => patch({ activationMax: Math.max(0, Number(activationMax) || 0) })} />
-            <Select label="Aktivierungen refreshen" value={usage.activationRefreshTrigger ?? "none"} onChange={(activationRefreshTrigger) => patch({ activationRefreshTrigger: activationRefreshTrigger as NonNullable<typeof usage>["activationRefreshTrigger"] })} options={refreshOptions} />
-            <Select label="Aktive Dauer" value={usage.activationDuration ?? "none"} onChange={(activationDuration) => patch({ activationDuration: activationDuration as NonNullable<typeof usage>["activationDuration"] })} options={durationOptions} />
+        <div className="grid gap-4">
+          <div className="grid gap-3 lg:grid-cols-2">
+            <UsageSection title="Nutzungen" text="Zaehlt direkte Benutzungen und graut die Karte bei Erreichen des Maximums aus.">
+              <Field label="Maximum" type="number" value={usage.maxUses ?? 0} onChange={(maxUses) => patch({ maxUses: Math.max(0, Number(maxUses) || 0) })} />
+              <Select label="Refresh" value={usage.refreshTrigger ?? "none"} onChange={(refreshTrigger) => patch({ refreshTrigger: refreshTrigger as NonNullable<typeof usage>["refreshTrigger"] })} options={refreshOptions} />
+            </UsageSection>
+            <UsageSection title="Counter" text="Freier Zaehler fuer Aufladungen, Marken oder Attribut-basierte Ressourcen.">
+              <Field label="Name" value={usage.counterName ?? ""} onChange={(counterName) => patch({ counterName })} />
+              <div className="grid gap-2 md:grid-cols-2">
+                <Field label="Festes Maximum" type="number" value={usage.counterMax ?? 0} onChange={(counterMax) => patch({ counterMax: Math.max(0, Number(counterMax) || 0) })} />
+                <Select label="Oder Attribut" value={usage.counterAttribute ?? ""} onChange={(counterAttribute) => patch({ counterAttribute: counterAttribute as NonNullable<typeof usage>["counterAttribute"] })} options={[["", "Kein Attribut"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
+              </div>
+            </UsageSection>
+            <UsageSection title="Wuerfelvorrat" text="Wuerfel werden hinterlegt und im Inventar einzeln ausgegeben.">
+              <Field label="Name" value={usage.rollName ?? ""} onChange={(rollName) => patch({ rollName })} />
+              <div className="grid gap-2 md:grid-cols-3">
+                <Field label="Formel" value={usage.rollDice ?? ""} onChange={(rollDice) => patch({ rollDice })} />
+                <Field label="Anzahl" type="number" value={usage.rollCount ?? 0} onChange={(rollCount) => patch({ rollCount: Math.max(0, Number(rollCount) || 0) })} />
+                <Select label="Refresh" value={usage.rollRefreshTrigger ?? "none"} onChange={(rollRefreshTrigger) => patch({ rollRefreshTrigger: rollRefreshTrigger as NonNullable<typeof usage>["rollRefreshTrigger"] })} options={refreshOptions} />
+              </div>
+            </UsageSection>
+            <UsageSection title="Aktivierung" text="Aktiviert einen Effekt bis zur hinterlegten Dauer und begrenzt die Anzahl.">
+              <Field label="Name" value={usage.activationName ?? ""} onChange={(activationName) => patch({ activationName })} />
+              <div className="grid gap-2 md:grid-cols-3">
+                <Field label="Maximum" type="number" value={usage.activationMax ?? 0} onChange={(activationMax) => patch({ activationMax: Math.max(0, Number(activationMax) || 0) })} />
+                <Select label="Refresh" value={usage.activationRefreshTrigger ?? "none"} onChange={(activationRefreshTrigger) => patch({ activationRefreshTrigger: activationRefreshTrigger as NonNullable<typeof usage>["activationRefreshTrigger"] })} options={refreshOptions} />
+                <Select label="Dauer" value={usage.activationDuration ?? "none"} onChange={(activationDuration) => patch({ activationDuration: activationDuration as NonNullable<typeof usage>["activationDuration"] })} options={durationOptions} />
+              </div>
+            </UsageSection>
           </div>
-          <div className="grid gap-2">
+          <div className="grid gap-2 border border-[#a8752a]/25 bg-black/20 p-3">
             <div className="flex items-center justify-between">
               <div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Aktive Werteffekte</div>
               <button type="button" onClick={() => patch({ activationEffects: [...effects, { id: crypto.randomUUID(), target: "dodge", value: 0 }] })} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Effekt +</button>
@@ -560,9 +588,21 @@ function FateUsageFields({ ability, save }: { ability: NonNullable<CatalogItem["
               </div>
             ))}
           </div>
-        </>
+        </div>
       )}
     </div>
+  );
+}
+
+function UsageSection({ title, text, children }: { title: string; text: string; children: ReactNode }) {
+  return (
+    <section className="grid content-start gap-3 border border-[#a8752a]/25 bg-black/20 p-3">
+      <div>
+        <div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">{title}</div>
+        <div className="mt-1 text-xs leading-relaxed text-[#8c8170]">{text}</div>
+      </div>
+      {children}
+    </section>
   );
 }
 

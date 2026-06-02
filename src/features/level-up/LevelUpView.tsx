@@ -488,6 +488,8 @@ function SpellBuilderPanel({ level, character, fates, upsertCatalogItem, patchLe
     power: "oneDie"
   });
   const [busy, setBusy] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState("");
   const [error, setError] = useState("");
   const fate = fates.find((entry) => entry.id === fateId);
   const spellAttribute = fate?.fate?.spellAttribute ? attributeLabels[fate.fate.spellAttribute] : "Zauberattribut";
@@ -514,6 +516,7 @@ function SpellBuilderPanel({ level, character, fates, upsertCatalogItem, patchLe
         level,
         stress: stressCost
       });
+      setPreviewImageUrl(cardImageUrl);
       const now = new Date().toISOString();
       const item: CatalogItem = {
         id: `fateAbility-${crypto.randomUUID()}`,
@@ -548,6 +551,26 @@ function SpellBuilderPanel({ level, character, fates, upsertCatalogItem, patchLe
       setError("Zauberkarte konnte nicht generiert werden. Pruefe das Template-Bild.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function updatePreview() {
+    if (!fate?.fate?.spellTemplateImageUrl || !canGenerate) return;
+    setPreviewBusy(true);
+    setError("");
+    try {
+      const cardImageUrl = await renderSpellCard({
+        templateImageUrl: fate.fate.spellTemplateImageUrl,
+        name: name.trim(),
+        text: spellText.trim(),
+        level,
+        stress: stressCost
+      });
+      setPreviewImageUrl(cardImageUrl);
+    } catch {
+      setError("Vorschau konnte nicht generiert werden. Pruefe das Template-Bild.");
+    } finally {
+      setPreviewBusy(false);
     }
   }
 
@@ -589,9 +612,18 @@ function SpellBuilderPanel({ level, character, fates, upsertCatalogItem, patchLe
         </div>
         {totalCost > 20 && <div className="border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-700">Du kannst maximal 20 Punkte ausgeben.</div>}
         {error && <div className="border border-red-300 bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div>}
-        <button onClick={generate} disabled={!canGenerate || busy} className="inline-flex min-h-11 w-fit items-center gap-2 border border-[#d6a14d] bg-[#45208a] px-4 py-2 text-sm font-black uppercase text-white disabled:cursor-not-allowed disabled:bg-gray-500">
-          <Wand2 className="h-4 w-4" /> {busy ? "Karte wird erzeugt..." : "Zauberkarte erzeugen"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={generate} disabled={!canGenerate || busy} className="inline-flex min-h-11 w-fit items-center gap-2 border border-[#d6a14d] bg-[#45208a] px-4 py-2 text-sm font-black uppercase text-white disabled:cursor-not-allowed disabled:bg-gray-500">
+            <Wand2 className="h-4 w-4" /> {busy ? "Karte wird erzeugt..." : "Zauberkarte erzeugen"}
+          </button>
+          <button onClick={updatePreview} disabled={!canGenerate || previewBusy} className="inline-flex min-h-11 w-fit items-center gap-2 border border-[#d6a14d]/60 bg-white px-4 py-2 text-sm font-black uppercase text-[#111827] disabled:cursor-not-allowed disabled:opacity-45">
+            {previewBusy ? "Vorschau wird erzeugt..." : "Vorschau aktualisieren"}
+          </button>
+        </div>
+        <div className="grid gap-2 border border-[#d6a14d]/45 bg-white/75 p-3">
+          <div className="text-xs font-black uppercase text-[#6b7280]">Karten-Vorschau</div>
+          {previewImageUrl ? <img src={previewImageUrl} alt="" className="mx-auto max-h-[520px] w-full object-contain" /> : <div className="grid min-h-64 place-items-center border border-dashed border-[#d6a14d]/35 text-sm text-[#6b7280]">Vorschau erzeugen, um die fertige Karte zu sehen.</div>}
+        </div>
       </div>
     </PickerShell>
   );
@@ -729,8 +761,25 @@ function FateCardGrid({ cards, selectedId, onSelect }: { cards: CatalogItem[]; s
 
 function ExpandableFateCardGrid({ cards, selectedId, onSelect }: { cards: CatalogItem[]; selectedId?: string; onSelect: (id: string) => void }) {
   const [viewer, setViewer] = useState<CatalogItem>();
+  const standardCards = cards.filter((card) => !card.fateAbility?.spellBuilder);
+  const spellBuilderCards = cards.filter((card) => card.fateAbility?.spellBuilder);
   return (
     <>
+      <div className="grid gap-4">
+        <FateCardGridSection title="Standard Level-Fatekarten" cards={standardCards} selectedId={selectedId} onSelect={onSelect} setViewer={setViewer} />
+        {spellBuilderCards.length > 0 && <FateCardGridSection title="Zauberbaukasten-Karten" cards={spellBuilderCards} selectedId={selectedId} onSelect={onSelect} setViewer={setViewer} />}
+        {!cards.length && <div className="border border-dashed border-[#d6a14d]/45 p-6 text-[#6b7280]">Keine verfuegbare Level-Fatekarte gefunden.</div>}
+      </div>
+      {viewer && <LevelCardViewer item={viewer} onClose={() => setViewer(undefined)} />}
+    </>
+  );
+}
+
+function FateCardGridSection({ title, cards, selectedId, onSelect, setViewer }: { title: string; cards: CatalogItem[]; selectedId?: string; onSelect: (id: string) => void; setViewer: (item: CatalogItem) => void }) {
+  if (!cards.length) return null;
+  return (
+    <div className="grid gap-3">
+      <div className="text-sm font-black uppercase text-[#111827]">{title}</div>
       <div className="grid gap-3 md:grid-cols-2">
         {cards.map((card) => {
           const active = selectedId === card.id;
@@ -746,10 +795,8 @@ function ExpandableFateCardGrid({ cards, selectedId, onSelect }: { cards: Catalo
             </div>
           );
         })}
-        {!cards.length && <div className="border border-dashed border-[#d6a14d]/45 p-6 text-[#6b7280]">Keine verfuegbare Level-Fatekarte gefunden.</div>}
       </div>
-      {viewer && <LevelCardViewer item={viewer} onClose={() => setViewer(undefined)} />}
-    </>
+    </div>
   );
 }
 

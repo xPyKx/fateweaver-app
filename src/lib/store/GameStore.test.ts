@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AppData, CatalogItem } from "../../types/domain";
+import { createCharacter } from "../../lib/rules/characterRules";
 import { mergeAppData, normalizeLoadedData } from "./GameStore";
 
 const item: CatalogItem = {
@@ -41,6 +42,22 @@ describe("game store data merge", () => {
 
     expect(merged.catalog.some((entry) => entry.id === item.id)).toBe(false);
     expect(merged.deletedCatalogItemIds).toEqual([item.id]);
+  });
+
+  it("keeps remote table characters visible when an old delete marker exists", () => {
+    const character = {
+      ...createCharacter(),
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "Remote Held",
+      updatedAt: "2026-06-02T10:00:00.000Z"
+    };
+    const merged = mergeAppData(
+      appData({ deletedCharacterIds: [character.id] }),
+      appData({ characters: [character] })
+    );
+
+    expect(merged.characters).toEqual([character]);
+    expect(merged.deletedCharacterIds).toEqual([]);
   });
 
   it("removes deprecated demo fates from loaded data", () => {

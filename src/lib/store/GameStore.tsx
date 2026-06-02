@@ -835,7 +835,9 @@ function createInviteCode() {
 }
 
 export function mergeAppData(local: AppData, remote: AppData): AppData {
-  const deletedCharacterIds = unique([...(local.deletedCharacterIds ?? []), ...(remote.deletedCharacterIds ?? [])]);
+  const remoteCharacterIds = new Set((remote.characters ?? []).map((character) => character.id));
+  const deletedCharacterIds = unique([...(local.deletedCharacterIds ?? []), ...(remote.deletedCharacterIds ?? [])])
+    .filter((id) => !remoteCharacterIds.has(id));
   const deletedCharacterSet = new Set(deletedCharacterIds);
   const deletedCatalogItemIds = unique([...(local.deletedCatalogItemIds ?? []), ...(remote.deletedCatalogItemIds ?? [])]);
   const deletedCatalogItemSet = new Set(deletedCatalogItemIds);

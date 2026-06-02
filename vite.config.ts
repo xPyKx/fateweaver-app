@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     port: 5173,
     watch: {
-      ignored: ["**/.codex_prompt*/**", "**/dist/**", "**/node_modules/**"]
+      ignored: [/(^|[\\/])\.codex_(prompt.*|tmp)([\\/]|$)/, /(^|[\\/])dist([\\/]|$)/, /(^|[\\/])node_modules([\\/]|$)/]
     }
   }
 });

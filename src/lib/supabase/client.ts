@@ -228,6 +228,7 @@ export async function loadRemoteData(userId?: string) {
   const campaignData = await loadRemoteCampaignData().catch(emptyRemoteCampaignData);
   const remoteCharacters = await loadRemoteCharacters().catch(() => []);
   const base = appData ?? emptyRemoteAppData();
+  const deletedCharacterIds = omitExistingCharacterDeletes(base.deletedCharacterIds, remoteCharacters);
   const hasRemoteData = appData || messages.length || remoteCharacters.length || (workspaceData.workspaces ?? []).length || (campaignData.campaigns ?? []).length;
   return hasRemoteData ? {
     ...base,
@@ -237,6 +238,7 @@ export async function loadRemoteData(userId?: string) {
     workspaceInvites: mergeById(base.workspaceInvites ?? [], workspaceData.workspaceInvites ?? []),
     campaigns: mergeById(base.campaigns ?? [], campaignData.campaigns ?? []),
     campaignSessions: mergeById(base.campaignSessions ?? [], campaignData.campaignSessions ?? []),
+    deletedCharacterIds,
     characters: mergeCharacters(base.characters ?? [], remoteCharacters),
     messages: mergeById(base.messages ?? [], messages)
   } : undefined;
@@ -260,6 +262,7 @@ export async function loadVisibleRemoteData(profile?: UserProfile, userId?: stri
   const remoteCharacters = await loadRemoteCharacters().catch(() => []);
   const stateCharacters = rows.flatMap((row: any) => ((row.data?.characters ?? []) as any[]).map((character) => ({ ...character, ownerId: character.ownerId ?? row.user_id })));
   const characters = remoteCharacters.length ? mergeCharacters(stateCharacters, remoteCharacters) : stateCharacters;
+  const deletedCharacterIds = omitExistingCharacterDeletes(base.deletedCharacterIds, remoteCharacters);
   const session = rows.flatMap((row: any) => row.data?.session ?? []);
   const gmSession = rows.reduce((merged: any, row: any) => ({
     shops: mergeById(merged.shops, row.data?.gmSession?.shops ?? []),
@@ -283,6 +286,7 @@ export async function loadVisibleRemoteData(profile?: UserProfile, userId?: stri
     workspaces: mergeById(base.workspaces ?? [], workspaceData.workspaces ?? []),
     workspaceInvites: mergeById(base.workspaceInvites ?? [], workspaceData.workspaceInvites ?? []),
     characters,
+    deletedCharacterIds,
     session,
     historyEvents,
     messages,
@@ -828,6 +832,12 @@ function mergeCharacters(local: Character[], remote: Character[]) {
     if (!remoteItem || Date.parse(item.updatedAt ?? "") >= Date.parse(remoteItem.updatedAt ?? "")) merged.set(item.id, item);
   });
   return Array.from(merged.values());
+}
+
+function omitExistingCharacterDeletes(deletedCharacterIds: string[] | undefined, characters: Character[]) {
+  if (!deletedCharacterIds?.length || !characters.length) return deletedCharacterIds ?? [];
+  const existingIds = new Set(characters.map((character) => character.id));
+  return deletedCharacterIds.filter((id) => !existingIds.has(id));
 }
 
 function emptyRemoteWorkspaceData(): Pick<AppData, "workspaces" | "workspaceInvites"> {

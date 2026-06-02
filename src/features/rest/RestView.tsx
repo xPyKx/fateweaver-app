@@ -211,7 +211,22 @@ function defaultRestData(item: CatalogItem): Partial<NonNullable<CatalogItem["re
   if (item.id === "rest-long-stress") return { effectTarget: "stress", targetMode: "single", amountKind: "fixed", amount: 99 };
   if (item.id === "rest-long-armor") return { effectTarget: "armorSlot", targetMode: "single", amountKind: "dice", dice: "1W4" };
   if (item.id === "rest-long-prepare") return { effectTarget: "inspiration", targetMode: "multiple", amountKind: "fixed", amount: 1, groupBonus: 1 };
+  const text = normalizeRestText(`${item.name} ${item.rest?.effect ?? ""} ${item.description ?? ""}`);
+  const isLong = item.rest?.restKind === "long";
+  const isDice = text.includes("1w4");
+  if (text.includes("wunden") || text.includes("hp")) return { effectTarget: "hp", targetMode: "single", amountKind: isLong && !isDice ? "fixed" : "dice", amount: isLong && !isDice ? 99 : undefined, dice: isLong && !isDice ? undefined : "1W4" };
+  if (text.includes("stress")) return { effectTarget: "stress", targetMode: "single", amountKind: isLong && !isDice ? "fixed" : "dice", amount: isLong && !isDice ? 99 : undefined, dice: isLong && !isDice ? undefined : "1W4" };
+  if (text.includes("ruestung") || text.includes("rustung") || text.includes("rüstung") || text.includes("haltbarkeit") || text.includes("ruestungsplatz") || text.includes("rustungsplatz")) return { effectTarget: "armorSlot", targetMode: "single", amountKind: isDice ? "dice" : "fixed", amount: isDice ? undefined : 1, dice: isDice ? "1W4" : undefined };
+  if (text.includes("vorbereiten") || text.includes("inspiration")) return { effectTarget: "inspiration", targetMode: "multiple", amountKind: "fixed", amount: 1, groupBonus: text.includes("gemeinsam") || text.includes("verbuendeten") || text.includes("verbundeten") ? 1 : 0 };
   return undefined;
+}
+
+function normalizeRestText(value: string) {
+  return value.toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss");
 }
 
 function RestActionInputs({ option, detail, actorId, characters, onPatch }: { option: CatalogItem; detail: { targetCharacterId?: string; result?: string; participantIds?: string[] }; actorId: string; characters: Character[]; onPatch: (patch: Partial<{ targetCharacterId: string; result: string; participantIds: string[] }>) => void }) {

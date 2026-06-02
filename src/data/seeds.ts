@@ -333,56 +333,56 @@ export const seedCatalog: CatalogItem[] = [
     type: "restOption",
     name: "Wunden versorgen",
     description: "Beschreibe, wie du dich voruebergehend versorgst oder einem Verbuendeten hilfst.",
-    rest: { restKind: "short", effect: "1W4 HP wiederherstellen" }
+    rest: { restKind: "short", effect: "1W4 HP wiederherstellen", effectTarget: "hp", targetMode: "single", amountKind: "dice", dice: "1W4" }
   },
   {
     id: "rest-short-stress",
     type: "restOption",
     name: "Stress abbauen",
     description: "Beschreibe, wie du Dampf ablaesst oder dich zusammenreisst.",
-    rest: { restKind: "short", effect: "1W4 Stress abbauen" }
+    rest: { restKind: "short", effect: "1W4 Stress abbauen", effectTarget: "stress", targetMode: "single", amountKind: "dice", dice: "1W4" }
   },
   {
     id: "rest-short-armor",
     type: "restOption",
     name: "Ruestung reparieren",
     description: "Beschreibe, wie du deine Ruestung reparierst.",
-    rest: { restKind: "short", effect: "1W4 Haltbarkeit wiederherstellen" }
+    rest: { restKind: "short", effect: "1W4 Haltbarkeit wiederherstellen", effectTarget: "armorSlot", targetMode: "single", amountKind: "dice", dice: "1W4" }
   },
   {
     id: "rest-short-prepare",
     type: "restOption",
     name: "Vorbereiten",
     description: "Beschreibe, wie du dich auf das naechste Abenteuer vorbereitest.",
-    rest: { restKind: "short", effect: "1 Inspiration, gemeinsam 2 Inspiration" }
+    rest: { restKind: "short", effect: "1 Inspiration, gemeinsam 2 Inspiration", effectTarget: "inspiration", targetMode: "multiple", amountKind: "fixed", amount: 1, groupBonus: 1 }
   },
   {
     id: "rest-long-wounds",
     type: "restOption",
     name: "Alle Wunden versorgen",
     description: "Beschreibe, wie du dich selbst versorgst oder einem Verbuendeten hilfst.",
-    rest: { restKind: "long", effect: "Alle markierten HP heilen" }
+    rest: { restKind: "long", effect: "Alle markierten HP heilen", effectTarget: "hp", targetMode: "single", amountKind: "fixed", amount: 99 }
   },
   {
     id: "rest-long-stress",
     type: "restOption",
     name: "Allen Stress abbauen",
     description: "Beschreibe, wie du Dampf ablaesst oder dich zusammenreisst.",
-    rest: { restKind: "long", effect: "Allen markierten Stress entfernen" }
+    rest: { restKind: "long", effect: "Allen markierten Stress entfernen", effectTarget: "stress", targetMode: "single", amountKind: "fixed", amount: 99 }
   },
   {
     id: "rest-long-armor",
     type: "restOption",
     name: "Ruestung reparieren",
     description: "Beschreibe, wie du deine Ruestung reparierst.",
-    rest: { restKind: "long", effect: "1W4 Haltbarkeit wiederherstellen" }
+    rest: { restKind: "long", effect: "1W4 Haltbarkeit wiederherstellen", effectTarget: "armorSlot", targetMode: "single", amountKind: "dice", dice: "1W4" }
   },
   {
     id: "rest-long-prepare",
     type: "restOption",
     name: "Vorbereiten",
     description: "Beschreibe, wie du dich auf das naechste Abenteuer vorbereitest.",
-    rest: { restKind: "long", effect: "1 Inspiration, gemeinsam 2 Inspiration" }
+    rest: { restKind: "long", effect: "1 Inspiration, gemeinsam 2 Inspiration", effectTarget: "inspiration", targetMode: "multiple", amountKind: "fixed", amount: 1, groupBonus: 1 }
   },
   {
     id: "rest-long-project",

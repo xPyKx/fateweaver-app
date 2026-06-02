@@ -15,8 +15,8 @@ export function RestView({ onBack }: { onBack?: () => void }) {
   const session = data.session.find((entry) => entry.characterId === character.id) ?? createSession(character.id);
   const shortRestCount = session.shortRestCount ?? (session.shortRestUsed ? 1 : 0);
   const hint = data.infoHints.find((entry) => entry.target === "rest");
-  const shortOptions = data.catalog.filter((item) => item.type === "restOption" && item.rest?.restKind === "short");
-  const longOptions = data.catalog.filter((item) => item.type === "restOption" && item.rest?.restKind === "long");
+  const shortOptions = data.catalog.filter((item) => item.type === "restOption" && item.rest?.restKind === "short").map(withStructuredRestDefaults);
+  const longOptions = data.catalog.filter((item) => item.type === "restOption" && item.rest?.restKind === "long").map(withStructuredRestDefaults);
   const originRest = originRestRules(character, data.catalog, kind);
   const options = [...(kind === "short" ? shortOptions : longOptions), ...originRest.includedActions];
   const additionalOptions = originRest.additionalActions;
@@ -183,6 +183,35 @@ function originRestRules(character: Character, catalog: CatalogItem[], kind: "sh
     extraActions: abilities.reduce((sum, ability) => sum + Math.max(0, ability.restExtraActions ?? 0), 0),
     rerolls: abilities.reduce((sum, ability) => sum + Math.max(0, ability.restRerolls ?? 0), 0)
   };
+}
+
+function withStructuredRestDefaults(item: CatalogItem): CatalogItem {
+  const defaults = defaultRestData(item);
+  if (!defaults || !item.rest) return item;
+  return {
+    ...item,
+    rest: {
+      ...item.rest,
+      effectTarget: item.rest.effectTarget ?? defaults.effectTarget,
+      targetMode: item.rest.targetMode ?? defaults.targetMode,
+      amountKind: item.rest.amountKind ?? defaults.amountKind,
+      amount: item.rest.amount ?? defaults.amount,
+      dice: item.rest.dice ?? defaults.dice,
+      groupBonus: item.rest.groupBonus ?? defaults.groupBonus
+    }
+  };
+}
+
+function defaultRestData(item: CatalogItem): Partial<NonNullable<CatalogItem["rest"]>> | undefined {
+  if (item.id === "rest-short-wounds") return { effectTarget: "hp", targetMode: "single", amountKind: "dice", dice: "1W4" };
+  if (item.id === "rest-short-stress") return { effectTarget: "stress", targetMode: "single", amountKind: "dice", dice: "1W4" };
+  if (item.id === "rest-short-armor") return { effectTarget: "armorSlot", targetMode: "single", amountKind: "dice", dice: "1W4" };
+  if (item.id === "rest-short-prepare") return { effectTarget: "inspiration", targetMode: "multiple", amountKind: "fixed", amount: 1, groupBonus: 1 };
+  if (item.id === "rest-long-wounds") return { effectTarget: "hp", targetMode: "single", amountKind: "fixed", amount: 99 };
+  if (item.id === "rest-long-stress") return { effectTarget: "stress", targetMode: "single", amountKind: "fixed", amount: 99 };
+  if (item.id === "rest-long-armor") return { effectTarget: "armorSlot", targetMode: "single", amountKind: "dice", dice: "1W4" };
+  if (item.id === "rest-long-prepare") return { effectTarget: "inspiration", targetMode: "multiple", amountKind: "fixed", amount: 1, groupBonus: 1 };
+  return undefined;
 }
 
 function RestActionInputs({ option, detail, actorId, characters, onPatch }: { option: CatalogItem; detail: { targetCharacterId?: string; result?: string; participantIds?: string[] }; actorId: string; characters: Character[]; onPatch: (patch: Partial<{ targetCharacterId: string; result: string; participantIds: string[] }>) => void }) {

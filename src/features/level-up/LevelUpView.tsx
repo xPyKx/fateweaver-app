@@ -13,7 +13,7 @@ import {
   tierForLevel
 } from "../../lib/rules/characterRules";
 import { useGameStore } from "../../lib/store/GameStore";
-import type { AttributeKey, CatalogItem, Character, ExperienceEntry, LevelUpChoice, LevelUpOptionKey } from "../../types/domain";
+import type { AttributeKey, CatalogItem, Character, ExperienceEntry, FateAbilityCategoryData, LevelUpChoice, LevelUpOptionKey } from "../../types/domain";
 
 const options: Array<{ key: LevelUpOptionKey; title: string; description: string; target?: number }> = [
   { key: "attributes", title: "Attribute erhöhen", description: "Erhöhe 2 Attribute um +1.", target: 2 },
@@ -302,7 +302,7 @@ function OptionDetail({ option, level, character, catalog, choice, patchLevel, u
   if (option === "experiences") return <ExperiencePicker character={character} choice={choice} patchLevel={patchLevel} />;
   if (option === "fateCard") return <AdditionalFateCardOption level={level} character={character} catalog={catalog} choice={choice} patchLevel={patchLevel} />;
   if (option === "fateWeaver") return <FateWeaverPicker level={level} character={character} catalog={catalog} choice={choice} patchLevel={patchLevel} />;
-  if (option === "specialization") return <SpecializationPicker character={character} catalog={catalog} choice={choice} patchLevel={patchLevel} />;
+  if (option === "specialization") return <SpecializationPicker level={level} character={character} catalog={catalog} choice={choice} patchLevel={patchLevel} updateCharacter={updateCharacter} />;
   const simple = options.find((entry) => entry.key === option);
   return <Placeholder title={simple?.title ?? "Level-up"} text={simple?.description ?? "Diese Option wird direkt im Charakterbogen berechnet."} icon={<Check className="h-8 w-8" />} />;
 }
@@ -785,29 +785,86 @@ function FateWeaverPicker({ level, character, catalog, choice, patchLevel }: { l
   );
 }
 
-function SpecializationPicker({ character, catalog, choice, patchLevel }: { character: Character; catalog: CatalogItem[]; choice: LevelUpChoice; patchLevel: (patch: Partial<LevelUpChoice>) => void }) {
+function SpecializationPicker({ level, character, catalog, choice, patchLevel, updateCharacter }: { level: number; character: Character; catalog: CatalogItem[]; choice: LevelUpChoice; patchLevel: (patch: Partial<LevelUpChoice>) => void; updateCharacter: (character: Character) => void }) {
   const fateIds = [character.choices.mainFateId, character.choices.sideFateId].filter(Boolean);
   const specs = catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.kind === "specialization" && fateIds.includes(item.fateAbility.fateId));
   return (
-    <PickerShell title="Spezialisierung" current={choice.specializationId ? 1 : 0} total={1}>
-      <div className="grid gap-3">
-        {specs.map((spec) => {
-          const features = catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.kind === "specializationFeature" && (item.fateAbility.specializationId ?? item.fateAbility.fateId) === spec.id);
-          return (
-            <div key={spec.id} className="grid gap-2">
-              <StepButton active={choice.specializationId === spec.id} title={spec.name} value={spec.fateAbility?.specializationTier ?? "Lehrling"} onClick={() => patchLevel({ specializationId: spec.id })} />
-              {features.length > 0 && (
-                <div className="grid gap-2 border border-[#d6a14d]/30 bg-white/60 p-2">
-                  {features.map((feature) => <div key={feature.id} className="text-sm"><span className="font-bold">{feature.name}</span>{feature.description && <span className="text-[#374151]"> - {feature.description}</span>}</div>)}
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {!specs.length && <div className="border border-dashed border-[#d6a14d]/45 p-6 text-[#6b7280]">Keine Spezialisierungen für die gewählten Fates hinterlegt.</div>}
-      </div>
-    </PickerShell>
+    <div className="grid gap-5">
+      <PickerShell title="Spezialisierung" current={choice.specializationId ? 1 : 0} total={1}>
+        <div className="grid gap-3">
+          {specs.map((spec) => {
+            const features = catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.kind === "specializationFeature" && (item.fateAbility.specializationId ?? item.fateAbility.fateId) === spec.id);
+            return (
+              <div key={spec.id} className="grid gap-2">
+                <StepButton active={choice.specializationId === spec.id} title={spec.name} value={spec.fateAbility?.specializationTier ?? "Lehrling"} onClick={() => patchLevel({ specializationId: spec.id })} />
+                {features.length > 0 && (
+                  <div className="grid gap-2 border border-[#d6a14d]/30 bg-white/60 p-2">
+                    {features.map((feature) => <div key={feature.id} className="text-sm"><span className="font-bold">{feature.name}</span>{feature.description && <span className="text-[#374151]"> - {feature.description}</span>}</div>)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {!specs.length && <div className="border border-dashed border-[#d6a14d]/45 p-6 text-[#6b7280]">Keine Spezialisierungen für die gewählten Fates hinterlegt.</div>}
+        </div>
+      </PickerShell>
+      <FateCategoryChoicePools level={level} character={characterWithTemporarySpecialization(character, choice.specializationId)} catalog={catalog} updateCharacter={updateCharacter} />
+    </div>
   );
+}
+
+function FateCategoryChoicePools({ level, character, catalog, updateCharacter }: { level: number; character: Character; catalog: CatalogItem[]; updateCharacter: (character: Character) => void }) {
+  const pools = availableFateCategoryPools(character, catalog, level);
+  if (!pools.length) return null;
+  const selections = character.choices.selectedFateCategoryEntryIds ?? {};
+  function updateSelection(categoryId: string, ids: string[]) {
+    const { __preview: _preview, ...levelUps } = character.choices.levelUps ?? {};
+    updateCharacter({
+      ...character,
+      choices: {
+        ...character.choices,
+        levelUps,
+        selectedFateCategoryEntryIds: { ...selections, [categoryId]: ids }
+      },
+      updatedAt: new Date().toISOString()
+    });
+  }
+  return (
+    <div className="grid gap-4">
+      {pools.map(({ category, items }) => (
+        <PickerShell key={category.id} title={category.name} current={(selections[category.id] ?? []).length} total={category.selectionLimit ?? 1}>
+          <div className="grid gap-3 md:grid-cols-2">
+            {items.map((item) => {
+              const selected = selections[category.id] ?? [];
+              const active = selected.includes(item.id);
+              const limit = category.selectionLimit ?? 1;
+              const locked = selected.length >= limit && !active;
+              return (
+                <button key={item.id} disabled={locked} onClick={() => updateSelection(category.id, active ? selected.filter((id) => id !== item.id) : [...selected, item.id].slice(-limit))} className={`grid gap-2 border p-3 text-left disabled:cursor-not-allowed disabled:opacity-45 ${active ? "border-[#d6a14d] bg-[#45208a] text-white" : "border-[#d6a14d]/45 bg-white/80 text-[#111827]"}`}>
+                  <span className="font-black uppercase">{item.name}</span>
+                  {item.description && <span className="text-sm leading-relaxed text-[#374151]">{item.description}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </PickerShell>
+      ))}
+    </div>
+  );
+}
+
+function characterWithTemporarySpecialization(character: Character, specializationId?: string): Character {
+  if (!specializationId) return character;
+  return {
+    ...character,
+    choices: {
+      ...character.choices,
+      levelUps: {
+        ...(character.choices.levelUps ?? {}),
+        __preview: { specializationId }
+      }
+    }
+  };
 }
 
 function PickerShell({ title, current, total, children }: { title: string; current: number; total: number; children: ReactNode }) {
@@ -882,14 +939,13 @@ function newExperienceWritten(character: Character, level: number) {
 function availableFateCards(character: Character, catalog: CatalogItem[], level: number, allowedFateIds?: string[], includeSelectedId?: string) {
   const fateIds = allowedFateIds ?? [character.choices.mainFateId, character.choices.sideFateId].filter(Boolean) as string[];
   const selectedIds = new Set(character.choices.selectedFateCardIds ?? []);
-  const selectedSpecializations = new Set(Object.values(character.choices.levelUps ?? {}).map((choice) => choice.specializationId).filter(Boolean));
   return catalog
     .filter((item) => {
       if (selectedIds.has(item.id) && item.id !== includeSelectedId) return false;
       if (item.type === "fateAbility") {
         if ((item.fateAbility?.level ?? 1) > level || !fateIds.includes(item.fateAbility?.fateId ?? "")) return false;
         if (item.fateAbility?.kind === "fateCard") return true;
-        return customChoicePoolCardAvailable(item, catalog, selectedSpecializations);
+        return false;
       }
       if (item.type === "fateCard") return item.tags?.some((tag) => fateIds.includes(tag)) && (levelFromTags(item.tags) ?? 1) <= level;
       return false;
@@ -897,15 +953,34 @@ function availableFateCards(character: Character, catalog: CatalogItem[], level:
     .sort((a, b) => (a.fateAbility?.level ?? levelFromTags(a.tags) ?? 1) - (b.fateAbility?.level ?? levelFromTags(b.tags) ?? 1) || a.name.localeCompare(b.name, "de", { sensitivity: "base" }));
 }
 
-function customChoicePoolCardAvailable(item: CatalogItem, catalog: CatalogItem[], selectedSpecializations: Set<string | undefined>) {
-  const fate = catalog.find((entry) => entry.id === item.fateAbility?.fateId && entry.type === "fate");
-  const category = fate?.fate?.abilityCategories?.find((entry) => entry.id === (item.fateAbility?.categoryId ?? item.fateAbility?.kind));
-  if (!category || category.mode !== "choicePool") return false;
+function availableFateCategoryPools(character: Character, catalog: CatalogItem[], level: number) {
+  const choices = character.choices ?? {};
+  const selectedSpecializations = new Set(Object.values(choices.levelUps ?? {}).map((choice) => choice.specializationId).filter(Boolean));
+  const fateIds = [choices.mainFateId, choices.sideFateId].filter(Boolean);
+  const fates = fateIds.map((id) => catalog.find((item) => item.id === id && item.type === "fate")).filter(Boolean) as CatalogItem[];
+  return fates.flatMap((fate) => (fate.fate?.abilityCategories ?? []).flatMap((category) => {
+    if (category.mode !== "choicePool" || !categoryAppliesToCharacter(category, fate.id, choices, selectedSpecializations, level)) return [];
+    const items = catalog
+      .filter((item) => item.type === "fateAbility" && item.fateAbility?.fateId === fate.id)
+      .filter((item) => item.fateAbility?.categoryId === category.id || item.fateAbility?.kind === category.id)
+      .filter((item) => (item.fateAbility?.level ?? 1) <= level)
+      .filter((item) => !item.fateAbility?.specializationId || selectedSpecializations.has(item.fateAbility.specializationId))
+      .sort((a, b) => (a.fateAbility?.level ?? 1) - (b.fateAbility?.level ?? 1) || a.name.localeCompare(b.name, "de", { sensitivity: "base" }));
+    return items.length ? [{ fate, category, items }] : [];
+  }));
+}
+
+function categoryAppliesToCharacter(category: FateAbilityCategoryData, fateId: string, choices: Character["choices"], selectedSpecializations: Set<string | undefined>, level: number) {
+  if ((category.minLevel ?? 1) > level) return false;
+  if (category.trigger === "manual") return false;
+  if (category.trigger === "mainFate") return choices.mainFateId === fateId;
+  if (category.trigger === "sideFate") return choices.sideFateId === fateId;
+  if (category.trigger === "anyFate") return choices.mainFateId === fateId || choices.sideFateId === fateId;
   if (category.trigger === "specialization") {
-    if (category.specializationId && !selectedSpecializations.has(category.specializationId)) return false;
-    if (item.fateAbility?.specializationId && !selectedSpecializations.has(item.fateAbility.specializationId)) return false;
+    if (category.specializationId) return selectedSpecializations.has(category.specializationId);
+    return selectedSpecializations.size > 0;
   }
-  return category.trigger !== "manual";
+  return false;
 }
 
 function levelFromTags(tags?: string[]) {

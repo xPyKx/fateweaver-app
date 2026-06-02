@@ -5,7 +5,7 @@ import { Field } from "../../components/Field";
 import { canvasToPersistentImageUrl, fileToPreviewImageUrl } from "../../lib/images/persistentImage";
 import { attributeLabels, attributeVariants, createCharacter } from "../../lib/rules/characterRules";
 import { useGameStore } from "../../lib/store/GameStore";
-import type { AttributeKey, BackgroundQuestionKind, CatalogItem, Character, ExperienceEntry } from "../../types/domain";
+import type { AttributeKey, BackgroundQuestionKind, CatalogItem, Character, ExperienceEntry, FateAbilityCategoryData } from "../../types/domain";
 
 type MainStep = "start" | "fates" | "build" | "origin" | "background" | "level";
 type BuildCategory = "attributes" | "weapons" | "armor" | "equipment" | "fateCards";
@@ -271,7 +271,12 @@ function BuildDetail({ category, draft, catalog, patchCharacter, patchChoices }:
   if (category === "weapons") return <SelectableList title="Startwaffen" items={catalog.filter((item) => item.type === "weapon")} catalog={catalog} selected={draft.choices.selectedWeapons} limit={2} meta={(item) => `${item.weapon?.hand === "twoHand" ? "Zweihändig" : "Einhändig"} · ${item.weapon?.slot === "secondary" ? "Sekundärwaffe" : "Primärwaffe"}`} onChange={(selectedWeapons) => patchChoices({ selectedWeapons })} />;
   if (category === "armor") return <SelectableList title="Startrüstung" items={catalog.filter((item) => item.type === "armor")} catalog={catalog} selected={draft.choices.selectedArmorId ? [draft.choices.selectedArmorId] : []} limit={1} meta={(item) => `Rüstungswert ${item.armor?.armorValue ?? 0} · ${propertyNames(item, catalog).join(", ")}`} onChange={(ids) => patchChoices({ selectedArmorId: ids[0] })} />;
   if (category === "equipment") return <EquipmentDetail draft={draft} catalog={catalog} patchChoices={patchChoices} />;
-  return <CardSelection title="Fatekarten" items={fateCardsForCharacter(draft, catalog)} selected={draft.choices.selectedFateCardIds} limit={2} onChange={(selectedFateCardIds) => patchChoices({ selectedFateCardIds })} />;
+  return (
+    <div className="grid gap-6">
+      <CardSelection title="Fatekarten" items={fateCardsForCharacter(draft, catalog)} selected={draft.choices.selectedFateCardIds} limit={2} onChange={(selectedFateCardIds) => patchChoices({ selectedFateCardIds })} />
+      <FateCategoryChoicePools character={draft} catalog={catalog} onChange={(selectedFateCategoryEntryIds) => patchChoices({ selectedFateCategoryEntryIds })} />
+    </div>
+  );
 }
 
 function AttributesDetail({ draft, patchCharacter, patchChoices }: { draft: Character; patchCharacter: (patch: Partial<Character>) => void; patchChoices: (patch: Partial<Character["choices"]>) => void }) {
@@ -359,6 +364,49 @@ function CardSelection({ title, items, selected, limit, onChange }: { title: str
         })}
       </div>
       {viewer && <ImageViewer item={viewer} onClose={() => setViewer(undefined)} />}
+    </div>
+  );
+}
+
+function FateCategoryChoicePools({ character, catalog, onChange }: { character: Character; catalog: CatalogItem[]; onChange: (value: Record<string, string[]>) => void }) {
+  const pools = availableFateCategoryPools(character, catalog, character.level, { includeSpecialization: false });
+  if (!pools.length) return null;
+  const selections = character.choices.selectedFateCategoryEntryIds ?? {};
+  return (
+    <div className="grid gap-4">
+      {pools.map(({ category, items }) => (
+        <ChoicePool
+          key={category.id}
+          title={category.name}
+          items={items}
+          selected={selections[category.id] ?? []}
+          limit={category.selectionLimit ?? 1}
+          onChange={(ids) => onChange({ ...selections, [category.id]: ids })}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ChoicePool({ title, items, selected, limit, onChange }: { title: string; items: CatalogItem[]; selected: string[]; limit: number; onChange: (ids: string[]) => void }) {
+  return (
+    <div className="grid gap-3 border border-[#a8752a]/35 bg-black/20 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-xl font-light text-white">{title}</h3>
+        <CounterBadge current={selected.length} total={limit || items.length} optional={false} />
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {items.map((item) => {
+          const active = selected.includes(item.id);
+          const locked = selected.length >= limit && !active;
+          return (
+            <button key={item.id} disabled={locked} onClick={() => onChange(active ? selected.filter((id) => id !== item.id) : [...selected, item.id].slice(-limit))} className={`border p-3 text-left disabled:cursor-not-allowed disabled:opacity-45 ${active ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}>
+              <div className="font-bold text-white">{item.name}</div>
+              {item.description && <div className="mt-1 text-sm text-[#cfc2aa]">{item.description}</div>}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -495,6 +543,36 @@ function fateCardsForCharacter(character: Character, catalog: CatalogItem[]) {
   const abilities = catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.kind === "fateCard" && item.fateAbility.level === 1 && fateIds.includes(item.fateAbility.fateId));
   const legacy = catalog.filter((item) => item.type === "fateCard" && item.tags?.some((tag) => fateIds.includes(tag)) && item.tags?.includes("level-1"));
   return [...abilities, ...legacy];
+}
+
+function availableFateCategoryPools(character: Character, catalog: CatalogItem[], level: number, options: { includeSpecialization: boolean }) {
+  const choices = character.choices ?? {};
+  const selectedSpecializations = new Set(Object.values(choices.levelUps ?? {}).map((choice) => choice.specializationId).filter(Boolean));
+  const fateIds = [choices.mainFateId, choices.sideFateId].filter(Boolean);
+  const fates = fateIds.map((id) => catalog.find((item) => item.id === id && item.type === "fate")).filter(Boolean) as CatalogItem[];
+  return fates.flatMap((fate) => (fate.fate?.abilityCategories ?? []).flatMap((category) => {
+    if (category.mode !== "choicePool") return [];
+    if (!categoryAppliesToCharacter(category, fate.id, choices, selectedSpecializations, level, options.includeSpecialization)) return [];
+    const items = catalog
+      .filter((item) => item.type === "fateAbility" && item.fateAbility?.fateId === fate.id)
+      .filter((item) => item.fateAbility?.categoryId === category.id || item.fateAbility?.kind === category.id)
+      .filter((item) => (item.fateAbility?.level ?? 1) <= level)
+      .filter((item) => !item.fateAbility?.specializationId || selectedSpecializations.has(item.fateAbility.specializationId));
+    return items.length ? [{ fate, category, items }] : [];
+  }));
+}
+
+function categoryAppliesToCharacter(category: FateAbilityCategoryData, fateId: string, choices: Character["choices"], selectedSpecializations: Set<string | undefined>, level: number, includeSpecialization: boolean) {
+  if ((category.minLevel ?? 1) > level) return false;
+  if (category.trigger === "manual") return false;
+  if (category.trigger === "mainFate") return choices.mainFateId === fateId;
+  if (category.trigger === "sideFate") return choices.sideFateId === fateId;
+  if (category.trigger === "anyFate") return choices.mainFateId === fateId || choices.sideFateId === fateId;
+  if (category.trigger === "specialization") {
+    if (!includeSpecialization) return false;
+    return category.specializationId ? selectedSpecializations.has(category.specializationId) : selectedSpecializations.size > 0;
+  }
+  return false;
 }
 
 function propertyItems(item: CatalogItem, catalog: CatalogItem[]) {

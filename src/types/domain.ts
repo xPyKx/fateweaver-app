@@ -265,6 +265,7 @@ export interface CharacterChoices {
   selectedEquipmentCounts?: Record<string, number>;
   selectedMaterialCounts?: Record<string, number>;
   selectedFateCardIds: string[];
+  selectedFateCategoryEntryIds?: Record<string, string[]>;
   attunedItemIds?: string[];
   inventoryCollapsed?: boolean;
   dismissedShopIds?: string[];

@@ -656,7 +656,7 @@ function BottomPanel() {
         {tab === "Transmutation" && <CatalogCardPanel mode={activeMode} items={selectedByIds(data.catalog, activeCharacter?.choices.transmutationId ? [activeCharacter.choices.transmutationId] : [])} />}
         {tab === "Materialien" && <MaterialPanel character={activeCharacter} catalog={data.catalog} upsertCharacter={upsertCharacter} mode={activeMode} onReturn={returnInventoryItem} />}
         {tab === "Notizen" && <textarea className="min-h-44 w-full border border-[#a8752a]/30 bg-black/25 p-4 text-[#f4ead7] outline-none" placeholder="Notizen..." />}
-        {!BOTTOM_TABS.some((entry) => entry.name === tab) && <CustomTabPanel tab={[...fateTabs, ...customTabs].find((entry) => entry.name === tab)} mode={activeMode} catalog={data.catalog} character={activeCharacter} upsertCharacter={upsertCharacter} />}
+        {!BOTTOM_TABS.some((entry) => entry.name === tab) && <CustomTabPanel tab={[...fateTabs, ...customTabs].find((entry) => entry.name === tab)} mode={activeMode} catalog={data.catalog} character={activeCharacter} />}
       </div>}
     </GoldPanel>
   );
@@ -1234,49 +1234,19 @@ function uniqueTabs(tabs) {
   return Array.from(new Map(tabs.map((entry) => [entry.name, entry])).values());
 }
 
-function CustomTabPanel({ tab, mode, catalog, character, upsertCharacter }) {
+function CustomTabPanel({ tab, mode, catalog, character }) {
   if (!tab) return <SortablePanel mode={mode} items={["Dieser Reiter ist leer."]} />;
   if (tab.generatedByFateCategory) {
     const category = tab.category;
-    const selectedIds = character?.choices?.selectedFateCardIds ?? [];
+    const selectedIds = character?.choices?.selectedFateCategoryEntryIds?.[category.id] ?? [];
     const items = category?.mode === "choicePool"
       ? tab.items.filter((item) => selectedIds.includes(item.id))
       : tab.items;
-    function toggleChoice(itemId) {
-      if (!character || !upsertCharacter) return;
-      const limit = Math.max(0, Number(category?.selectionLimit ?? 0));
-      const categoryItemIds = new Set(tab.items.map((item) => item.id));
-      const currentCategoryIds = selectedIds.filter((id) => categoryItemIds.has(id));
-      const selected = currentCategoryIds.includes(itemId);
-      const nextCategoryIds = selected
-        ? currentCategoryIds.filter((id) => id !== itemId)
-        : limit && currentCategoryIds.length >= limit
-          ? [...currentCategoryIds.slice(1), itemId]
-          : [...currentCategoryIds, itemId];
-      upsertCharacter({
-        ...character,
-        choices: {
-          ...character.choices,
-          selectedFateCardIds: [...selectedIds.filter((id) => !categoryItemIds.has(id)), ...nextCategoryIds]
-        },
-        updatedAt: new Date().toISOString()
-      });
-    }
     return (
       <div className="grid gap-3">
         {category?.mode === "choicePool" && (
-          <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3 text-sm text-[#cfc2aa]">
-            <div>{items.length}{category.selectionLimit ? `/${category.selectionLimit}` : ""} gewaehlt.</div>
-            <div className="flex flex-wrap gap-2">
-              {tab.items.map((item) => {
-                const selected = selectedIds.includes(item.id);
-                return (
-                  <button key={item.id} onClick={() => toggleChoice(item.id)} className={`border px-3 py-2 text-left text-sm ${selected ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/35 bg-black/25 text-[#cfc2aa]"}`}>
-                    {item.name}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="border border-[#a8752a]/30 bg-black/20 p-3 text-sm text-[#cfc2aa]">
+            {items.length ? `${items.length}${category.selectionLimit ? `/${category.selectionLimit}` : ""} gewaehlt.` : "Noch keine Auswahl getroffen."}
           </div>
         )}
         <CatalogCardPanel mode={mode} items={items} orderKey={panelOrderKey(character, tab.name)} />

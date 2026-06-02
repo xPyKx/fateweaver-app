@@ -289,7 +289,7 @@ export function GMSettings() {
             categories={activeFateCategories}
             onSelect={(kind) => {
               setActiveFateAbilityKind(kind);
-              setSelectedId(undefined);
+              setSelectedId(isDefaultFateAbilityKind(kind) ? undefined : activeFate.id);
             }}
             onCreateCategory={createFateCategory}
           />

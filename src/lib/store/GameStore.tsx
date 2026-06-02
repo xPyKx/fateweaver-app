@@ -452,6 +452,7 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
       const item = catalog.find((entry) => entry.id === id);
       return item?.type === "fateCard" || item?.type === "fateAbility";
     });
+    const selectedFateCategoryEntryIds = normalizeFateCategorySelections(character.choices?.selectedFateCategoryEntryIds, catalog);
     const weaponAttributeSelections = Object.fromEntries(
       Object.entries(character.choices?.weaponAttributeSelections ?? {}).filter(([weaponId]) => selectedWeapons.includes(weaponId))
     );
@@ -475,6 +476,7 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
         selectedEquipmentCounts,
         selectedMaterialCounts,
         selectedFateCardIds,
+        selectedFateCategoryEntryIds,
         attunedItemIds: cleanIds(character.choices?.attunedItemIds),
         dismissedShopIds: unique(character.choices?.dismissedShopIds ?? []),
         levelUps: character.choices?.levelUps ?? {},
@@ -522,6 +524,19 @@ function normalizeGmSession(session?: GmSessionData): GmSessionData {
     inventoryHistory: session?.inventoryHistory ?? [],
     attunementLimit: session?.attunementLimit ?? 3
   });
+}
+
+function normalizeFateCategorySelections(selections: Record<string, string[]> | undefined, catalog: CatalogItem[]) {
+  const result: Record<string, string[]> = {};
+  Object.entries(selections ?? {}).forEach(([categoryId, ids]) => {
+    const fate = catalog.find((item) => item.type === "fate" && item.fate?.abilityCategories?.some((category) => category.id === categoryId));
+    const category = fate?.fate?.abilityCategories?.find((entry) => entry.id === categoryId);
+    if (!fate || !category) return;
+    const validIds = unique(ids).filter((id) => catalog.some((item) => item.id === id && item.type === "fateAbility" && item.fateAbility?.fateId === fate.id && (item.fateAbility.categoryId === categoryId || item.fateAbility.kind === categoryId)));
+    const limit = Number(category.selectionLimit ?? 0);
+    result[categoryId] = limit > 0 ? validIds.slice(0, limit) : validIds;
+  });
+  return result;
 }
 
 function normalizeCatalogItems(items: CatalogItem[]) {

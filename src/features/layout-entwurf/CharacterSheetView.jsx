@@ -1640,7 +1640,7 @@ function formatMessageDate(value) {
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("de-DE");
 }
 
-export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter, onLevelUp }) {
+export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter, onLevelUp, onRest }) {
   const { data, activeCharacter, upsertCharacter, updateGmSession, sendMessage, markMessageRead } = useGameStore();
   const character = data.characters.find((entry) => entry.id === selectedCharacter) ?? activeCharacter;
   const [inspiration, setInspiration] = useState(2);
@@ -1724,7 +1724,7 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
               {unreadGmMessage && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500" />}
             </div>
             <ActionButton icon={<ChevronsUp className="h-4 w-4" />} onClick={onLevelUp}>Level Up</ActionButton>
-            <ActionButton icon={<Moon className="h-4 w-4" />}>Rast</ActionButton>
+            <ActionButton icon={<Moon className="h-4 w-4" />} onClick={onRest}>Rast</ActionButton>
             <ActionButton icon={<Settings className="h-4 w-4" />} onClick={onEditCharacter}>Charakter Editor</ActionButton>
           </div>
 

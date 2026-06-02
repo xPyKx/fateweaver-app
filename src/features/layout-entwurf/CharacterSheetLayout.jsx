@@ -8,6 +8,7 @@ const CreationWizard = lazy(() => import("../creation-wizard/CreationWizard").th
 const GMSettings = lazy(() => import("../gm/GMSettings").then((module) => ({ default: module.GMSettings })));
 const GMDashboardView = lazy(() => import("../gm-session/GMSessionView").then((module) => ({ default: module.GMDashboardView })));
 const LevelUpView = lazy(() => import("../level-up/LevelUpView").then((module) => ({ default: module.LevelUpView })));
+const RestView = lazy(() => import("../rest/RestView").then((module) => ({ default: module.RestView })));
 
 export default function CharacterSheetLayout() {
   const { data, activeCharacter } = useGameStore();
@@ -47,10 +48,18 @@ export default function CharacterSheetLayout() {
     );
   }
 
+  if (page === "rest") {
+    return (
+      <FeaturePage>
+        <RestView onBack={() => setPage("sheet")} />
+      </FeaturePage>
+    );
+  }
+
   if (page === "sheet") {
     return (
       <Suspense fallback={<PageLoading label="Charakterbogen wird geladen" />}>
-        <CharacterSheetView selectedCharacter={currentCharacterId} onBack={() => setPage("overview")} onEditCharacter={() => setPage("create")} onLevelUp={() => setPage("level")} />
+        <CharacterSheetView selectedCharacter={currentCharacterId} onBack={() => setPage("overview")} onEditCharacter={() => setPage("create")} onLevelUp={() => setPage("level")} onRest={() => setPage("rest")} />
       </Suspense>
     );
   }

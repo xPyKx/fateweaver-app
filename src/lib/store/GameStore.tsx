@@ -1168,6 +1168,7 @@ function ensureSession(session: SessionState[], characterId: string) {
       id: crypto.randomUUID(),
       characterId,
       shortRestUsed: false,
+      shortRestCount: 0,
       longRestUsed: false,
       updatedAt: new Date().toISOString()
     }

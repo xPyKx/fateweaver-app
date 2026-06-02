@@ -480,6 +480,7 @@ export function createSeedData(): AppData {
         id: crypto.randomUUID(),
         characterId: character.id,
         shortRestUsed: false,
+        shortRestCount: 0,
         longRestUsed: false,
         updatedAt: new Date().toISOString()
       }

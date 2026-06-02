@@ -536,6 +536,7 @@ export interface SessionState {
   id: string;
   characterId: string;
   shortRestUsed: boolean;
+  shortRestCount?: number;
   longRestUsed: boolean;
   updatedAt: string;
 }

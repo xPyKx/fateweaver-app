@@ -361,14 +361,14 @@ export const seedCatalog: CatalogItem[] = [
     type: "restOption",
     name: "Alle Wunden versorgen",
     description: "Beschreibe, wie du dich selbst versorgst oder einem Verbuendeten hilfst.",
-    rest: { restKind: "long", effect: "Alle markierten HP heilen", effectTarget: "hp", targetMode: "single", amountKind: "fixed", amount: 99 }
+    rest: { restKind: "long", effect: "Alle markierten HP heilen", effectTarget: "hp", targetMode: "single", amountKind: "all" }
   },
   {
     id: "rest-long-stress",
     type: "restOption",
     name: "Allen Stress abbauen",
     description: "Beschreibe, wie du Dampf ablaesst oder dich zusammenreisst.",
-    rest: { restKind: "long", effect: "Allen markierten Stress entfernen", effectTarget: "stress", targetMode: "single", amountKind: "fixed", amount: 99 }
+    rest: { restKind: "long", effect: "Allen markierten Stress entfernen", effectTarget: "stress", targetMode: "single", amountKind: "all" }
   },
   {
     id: "rest-long-armor",

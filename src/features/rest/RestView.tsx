@@ -207,15 +207,15 @@ function defaultRestData(item: CatalogItem): Partial<NonNullable<CatalogItem["re
   if (item.id === "rest-short-stress") return { effectTarget: "stress", targetMode: "single", amountKind: "dice", dice: "1W4" };
   if (item.id === "rest-short-armor") return { effectTarget: "armorSlot", targetMode: "single", amountKind: "dice", dice: "1W4" };
   if (item.id === "rest-short-prepare") return { effectTarget: "inspiration", targetMode: "multiple", amountKind: "fixed", amount: 1, groupBonus: 1 };
-  if (item.id === "rest-long-wounds") return { effectTarget: "hp", targetMode: "single", amountKind: "fixed", amount: 99 };
-  if (item.id === "rest-long-stress") return { effectTarget: "stress", targetMode: "single", amountKind: "fixed", amount: 99 };
+  if (item.id === "rest-long-wounds") return { effectTarget: "hp", targetMode: "single", amountKind: "all" };
+  if (item.id === "rest-long-stress") return { effectTarget: "stress", targetMode: "single", amountKind: "all" };
   if (item.id === "rest-long-armor") return { effectTarget: "armorSlot", targetMode: "single", amountKind: "dice", dice: "1W4" };
   if (item.id === "rest-long-prepare") return { effectTarget: "inspiration", targetMode: "multiple", amountKind: "fixed", amount: 1, groupBonus: 1 };
   const text = normalizeRestText(`${item.name} ${item.rest?.effect ?? ""} ${item.description ?? ""}`);
   const isLong = item.rest?.restKind === "long";
   const isDice = text.includes("1w4");
-  if (text.includes("wunden") || text.includes("hp")) return { effectTarget: "hp", targetMode: "single", amountKind: isLong && !isDice ? "fixed" : "dice", amount: isLong && !isDice ? 99 : undefined, dice: isLong && !isDice ? undefined : "1W4" };
-  if (text.includes("stress")) return { effectTarget: "stress", targetMode: "single", amountKind: isLong && !isDice ? "fixed" : "dice", amount: isLong && !isDice ? 99 : undefined, dice: isLong && !isDice ? undefined : "1W4" };
+  if (text.includes("wunden") || text.includes("hp")) return { effectTarget: "hp", targetMode: "single", amountKind: isLong && !isDice ? "all" : "dice", dice: isLong && !isDice ? undefined : "1W4" };
+  if (text.includes("stress")) return { effectTarget: "stress", targetMode: "single", amountKind: isLong && !isDice ? "all" : "dice", dice: isLong && !isDice ? undefined : "1W4" };
   if (text.includes("ruestung") || text.includes("rustung") || text.includes("rüstung") || text.includes("haltbarkeit") || text.includes("ruestungsplatz") || text.includes("rustungsplatz")) return { effectTarget: "armorSlot", targetMode: "single", amountKind: isDice ? "dice" : "fixed", amount: isDice ? undefined : 1, dice: isDice ? "1W4" : undefined };
   if (text.includes("vorbereiten") || text.includes("inspiration")) return { effectTarget: "inspiration", targetMode: "multiple", amountKind: "fixed", amount: 1, groupBonus: text.includes("gemeinsam") || text.includes("verbuendeten") || text.includes("verbundeten") ? 1 : 0 };
   return undefined;
@@ -283,8 +283,8 @@ function actionReady(option: CatalogItem, detail?: { result?: string; participan
 function applyRestAction(option: CatalogItem, detail: { targetCharacterId?: string; result?: string; participantIds?: string[] }, actorId: string, updates: Map<string, Character>) {
   const rest = option.rest;
   if (!rest?.effectTarget) return;
-  const amount = rest.amountKind === "dice" ? Math.max(0, Number(detail.result) || 0) : Math.max(0, Number(rest.amount ?? 0) || 0);
-  if (amount <= 0) return;
+  const amount = rest.amountKind === "all" ? Number.POSITIVE_INFINITY : rest.amountKind === "dice" ? Math.max(0, Number(detail.result) || 0) : Math.max(0, Number(rest.amount ?? 0) || 0);
+  if (rest.amountKind !== "all" && amount <= 0) return;
   const targetIds = rest.targetMode === "multiple" ? (detail.participantIds?.length ? detail.participantIds : [actorId]) : [detail.targetCharacterId || actorId];
   if (rest.effectTarget === "inspiration") {
     const value = amount + (targetIds.length > 1 ? Math.max(0, rest.groupBonus ?? 0) : 0);
@@ -292,9 +292,9 @@ function applyRestAction(option: CatalogItem, detail: { targetCharacterId?: stri
     return;
   }
   targetIds.forEach((targetId) => {
-    if (rest.effectTarget === "hp") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, hpMarked: Math.max(0, (resources.hpMarked ?? 0) - amount) }));
-    if (rest.effectTarget === "stress") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, stressMarked: Math.max(0, (resources.stressMarked ?? 0) - amount) }));
-    if (rest.effectTarget === "armorSlot") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, armorMarked: Math.max(0, (resources.armorMarked ?? 0) - amount) }));
+    if (rest.effectTarget === "hp") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, hpMarked: rest.amountKind === "all" ? 0 : Math.max(0, (resources.hpMarked ?? 0) - amount) }));
+    if (rest.effectTarget === "stress") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, stressMarked: rest.amountKind === "all" ? 0 : Math.max(0, (resources.stressMarked ?? 0) - amount) }));
+    if (rest.effectTarget === "armorSlot") patchCharacterResource(updates, targetId, (resources) => ({ ...resources, armorMarked: rest.amountKind === "all" ? 0 : Math.max(0, (resources.armorMarked ?? 0) - amount) }));
   });
 }
 

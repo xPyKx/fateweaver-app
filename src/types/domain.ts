@@ -204,7 +204,7 @@ export interface RestData {
   effect: string;
   effectTarget?: "stress" | "hp" | "armorSlot" | "inspiration";
   targetMode?: "single" | "multiple";
-  amountKind?: "fixed" | "dice";
+  amountKind?: "fixed" | "dice" | "all";
   amount?: number;
   dice?: string;
   groupBonus?: number;

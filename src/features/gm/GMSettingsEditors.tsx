@@ -745,10 +745,12 @@ function RestFields({ item, savePatch }: SpecificEditorProps) {
       <Select label="Rastart" value={rest.restKind} onChange={(restKind) => savePatch({ rest: { ...rest, restKind: restKind as "short" | "long" } })} options={[["short", "Kurze Rast"], ["long", "Lange Rast"]]} />
       <Select label="Effekt" value={rest.effectTarget ?? ""} onChange={(effectTarget) => savePatch({ rest: { ...rest, effectTarget: effectTarget as NonNullable<typeof rest["effectTarget"]> } })} options={[["", "Nur Text"], ["stress", "Stress"], ["hp", "HP"], ["armorSlot", "Ruestungsplatz"], ["inspiration", "Inspiration"]]} />
       <Select label="Ziel" value={rest.targetMode ?? "single"} onChange={(targetMode) => savePatch({ rest: { ...rest, targetMode: targetMode as "single" | "multiple" } })} options={[["single", "Ein Ziel"], ["multiple", "Mehrere Ziele"]]} />
-      <Select label="Anzahl Art" value={rest.amountKind ?? "fixed"} onChange={(amountKind) => savePatch({ rest: { ...rest, amountKind: amountKind as "fixed" | "dice" } })} options={[["fixed", "Feste Anzahl"], ["dice", "Wuerfelwurf"]]} />
+      <Select label="Anzahl Art" value={rest.amountKind ?? "fixed"} onChange={(amountKind) => savePatch({ rest: { ...rest, amountKind: amountKind as "fixed" | "dice" | "all" } })} options={[["fixed", "Feste Anzahl"], ["dice", "Wuerfelwurf"], ["all", "Alle"]]} />
       {rest.amountKind === "dice"
         ? <Field label="Wuerfel" value={rest.dice ?? "1W4"} onChange={(dice) => savePatch({ rest: { ...rest, dice } })} />
-        : <Select label="Anzahl" value={String(rest.amount ?? 1)} onChange={(amount) => savePatch({ rest: { ...rest, amount: Number(amount) } })} options={Array.from({ length: 12 }, (_, index) => [String(index + 1), String(index + 1)])} />}
+        : rest.amountKind === "all"
+          ? <div className="border border-[#a8752a]/30 bg-black/20 p-3 text-sm text-[#cfc2aa]">Alle markierten Rechtecke des Ziels werden bereinigt.</div>
+          : <Select label="Anzahl" value={String(rest.amount ?? 1)} onChange={(amount) => savePatch({ rest: { ...rest, amount: Number(amount) } })} options={Array.from({ length: 12 }, (_, index) => [String(index + 1), String(index + 1)])} />}
       <Field label="Effekttext" value={rest.effect} onChange={(effect) => savePatch({ rest: { ...rest, effect } })} />
       <Select label="Gemeinsam Bonus" value={String(rest.groupBonus ?? 0)} onChange={(groupBonus) => savePatch({ rest: { ...rest, groupBonus: Number(groupBonus) } })} options={Array.from({ length: 6 }, (_, index) => [String(index), index ? `+${index}` : "Kein Bonus"])} />
     </div>

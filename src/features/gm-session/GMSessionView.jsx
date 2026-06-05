@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, ArrowLeft, CalendarDays, Check, Circle, Gift, LayoutGrid, MessageSquare, MoreHorizontal, PackagePlus, Plus, Send, Store, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BookOpen, CalendarDays, Check, Circle, Gift, LayoutGrid, MessageSquare, MoreHorizontal, PackagePlus, Plus, Send, Store, Trash2, Upload, X } from "lucide-react";
 import { Select } from "../../components/SelectControl";
 import { fileToPersistentImageUrl } from "../../lib/images/persistentImage";
 import { useGameStore } from "../../lib/store/GameStore";
@@ -58,6 +58,7 @@ export function GMDashboardView({ onBack }) {
     { key: "players", label: "Spieler", description: "Charaktere, Inventar und Kurzwerte", icon: <Gift className="h-4 w-4" />, count: workspaceData.characters.length },
     { key: "campaigns", label: "Kampagnen", description: "Kampagnen, Sessions und Zuordnungen", icon: <CalendarDays className="h-4 w-4" />, count: (workspaceData.campaigns ?? []).length },
     { key: "shops", label: "Shops", description: "Shops, Gruppen und Freigaben", icon: <Store className="h-4 w-4" />, count: gmSession.shops.length },
+    { key: "releases", label: "Freigaben", description: "Orte, Bibliotheken und Handout-Seiten", icon: <BookOpen className="h-4 w-4" />, count: handoutPageCount(workspaceData.customGmModules ?? []) },
     { key: "messages", label: "Nachrichten", description: "GM- und Spieler-Kommunikation", icon: <MessageSquare className="h-4 w-4" />, count: unreadMessages || (workspaceData.messages ?? []).length },
     { key: "customModules", label: "GM-Baukasten", description: "NSC, Orte, Fraktionen und eigene Bausteine", icon: <LayoutGrid className="h-4 w-4" />, count: (workspaceData.customGmModules ?? []).length },
     { key: "history", label: "History", description: "Timeline aller Ereignisse", icon: <PackagePlus className="h-4 w-4" />, count: historyEvents.length }
@@ -95,6 +96,7 @@ export function GMDashboardView({ onBack }) {
         {module === "players" && <PlayerModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} onGive={giveItem} onMessage={sendMessage} history={historyEvents} />}
         {module === "campaigns" && <CampaignModule data={workspaceData} gmSession={gmSession} onSaveCampaign={upsertCampaign} onDeleteCampaign={deleteCampaign} onSaveSession={upsertCampaignSession} onDeleteSession={deleteCampaignSession} />}
         {module === "shops" && <ShopModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} />}
+        {module === "releases" && <ReleaseCenterModule data={workspaceData} onSave={upsertCustomGmModule} />}
         {module === "messages" && <MessageModule data={workspaceData} onMessage={sendMessage} />}
         {module === "customModules" && <CustomModulesModule data={workspaceData} onSave={upsertCustomGmModule} onDelete={deleteCustomGmModule} />}
         {module === "history" && <HistoryModule data={workspaceData} history={historyEvents} />}
@@ -434,6 +436,138 @@ function CampaignSessionCard({ session, characters, shops, campaign, onPatch, on
   return <div className="grid gap-3 border border-[#a8752a]/30 bg-black/25 p-3"><div className="flex flex-wrap gap-3"><input value={session.name} onChange={(event) => onPatch({ name: event.target.value })} className="min-w-0 flex-1 bg-transparent text-xl text-white outline-none" /><input type="date" value={session.scheduledAt ?? ""} onChange={(event) => onPatch({ scheduledAt: event.target.value || undefined })} className="min-h-9 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200"><Trash2 className="h-4 w-4" /></button></div><textarea value={session.notes ?? ""} onChange={(event) => onPatch({ notes: event.target.value })} placeholder="Session-Notizen" className="min-h-24 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" /><div className="grid gap-2"><div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Charaktere</div><div className="flex flex-wrap gap-2">{campaignCharacters.map((character) => <button key={character.id} onClick={() => toggleList("characterIds", character.id)} className={`border px-2 py-1 text-xs ${session.characterIds?.includes(character.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{character.name}</button>)}</div></div><div className="grid gap-2"><div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Shops vorbereiten</div><div className="flex flex-wrap gap-2">{shops.map((shop) => <button key={shop.id} onClick={() => toggleList("shopIds", shop.id)} className={`border px-2 py-1 text-xs ${session.shopIds?.includes(shop.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{shop.name}</button>)}</div></div></div>;
 }
 
+function ReleaseCenterModule({ data, onSave }) {
+  const modules = data.customGmModules ?? [];
+  const locations = modules.filter((module) => (module.itemType ?? "note") === "location" && (module.status ?? "draft") !== "archived").sort(byUpdated);
+  const handouts = modules.filter((module) => (module.itemType ?? "note") === "handout" && (module.status ?? "draft") !== "archived").sort(byName);
+  const [selectedLocationId, setSelectedLocationId] = useState(locations[0]?.id ?? "all");
+  const [selectedHandoutId, setSelectedHandoutId] = useState("");
+  const [newLocationName, setNewLocationName] = useState("");
+  const visibleHandouts = selectedLocationId === "all" ? handouts : handouts.filter((module) => module.releaseLocationId === selectedLocationId);
+  const selectedHandout = handouts.find((module) => module.id === selectedHandoutId) ?? visibleHandouts[0];
+  const unassignedOptions = selectedLocationId === "all" ? [] : handouts.filter((module) => module.releaseLocationId !== selectedLocationId);
+
+  function createLocation() {
+    const name = newLocationName.trim();
+    if (!name) return;
+    const now = new Date().toISOString();
+    const location = { id: crypto.randomUUID(), name, itemType: "location", status: "active", visibility: "gm", scope: "global", tags: [], summary: "", gmNotes: "", playerText: "", fields: [], createdAt: now, updatedAt: now };
+    onSave(location);
+    setSelectedLocationId(location.id);
+    setNewLocationName("");
+  }
+
+  function assignHandout(handoutId) {
+    const handout = handouts.find((module) => module.id === handoutId);
+    if (!handout || selectedLocationId === "all") return;
+    onSave({ ...handout, releaseLocationId: selectedLocationId, updatedAt: new Date().toISOString() });
+    setSelectedHandoutId(handout.id);
+  }
+
+  function patchHandout(handout, patchData) {
+    onSave({ ...handout, ...patchData, visibility: "players", status: "active", updatedAt: new Date().toISOString() });
+  }
+
+  function patchPage(handout, pageId, patchData) {
+    patchHandout(handout, { handoutPages: (handout.handoutPages ?? []).map((page) => page.id === pageId ? { ...page, ...patchData } : page) });
+  }
+
+  function addPage(handout) {
+    const pages = handout.handoutPages ?? [];
+    patchHandout(handout, { handoutPages: [...pages, { id: crypto.randomUUID(), title: `Seite ${pages.length + 1}`, body: "", releasedToCharacterIds: [] }] });
+  }
+
+  function toggleRelease(handout, page, characterId) {
+    const released = page.releasedToCharacterIds ?? [];
+    patchPage(handout, page.id, { releasedToCharacterIds: released.includes(characterId) ? released.filter((id) => id !== characterId) : [...released, characterId] });
+  }
+
+  function setPageRelease(handout, page, characterIds) {
+    patchPage(handout, page.id, { releasedToCharacterIds: unique(characterIds) });
+  }
+
+  return (
+    <section className="grid gap-4 xl:grid-cols-[300px_minmax(280px,0.75fr)_minmax(420px,1.2fr)]">
+      <div className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
+        <div>
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Freigabe-Orte</div>
+          <div className="mt-1 text-sm text-[#8c8170]">Bibliotheken, Laeden, Orte oder andere Szenen fuer schnelle Handout-Freigaben.</div>
+        </div>
+        <button onClick={() => setSelectedLocationId("all")} className={`border px-3 py-3 text-left ${selectedLocationId === "all" ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}>Alle Handouts</button>
+        {locations.map((location) => {
+          const count = handouts.filter((handout) => handout.releaseLocationId === location.id).length;
+          return <button key={location.id} onClick={() => setSelectedLocationId(location.id)} className={`grid grid-cols-[1fr_auto] gap-2 border px-3 py-3 text-left ${selectedLocationId === location.id ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}><span className="min-w-0 truncate">{location.name}</span><span className="text-xs text-[#8c8170]">{count}</span></button>;
+        })}
+        <div className="mt-3 grid gap-2 border-t border-[#a8752a]/25 pt-3">
+          <input value={newLocationName} onChange={(event) => setNewLocationName(event.target.value)} placeholder="Neuer Ort, z. B. Geheime Bibliothek" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+          <button onClick={createLocation} disabled={!newLocationName.trim()} className="min-h-10 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Ort erstellen</button>
+        </div>
+      </div>
+
+      <div className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
+        <div className="flex items-center gap-3">
+          <div className="mr-auto">
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Handouts / Buecher</div>
+            <div className="mt-1 text-sm text-[#8c8170]">{visibleHandouts.length} in dieser Auswahl.</div>
+          </div>
+          <span className="border border-[#a8752a]/35 px-2 py-1 text-xs text-[#cfc2aa]">{handouts.length}</span>
+        </div>
+        {selectedLocationId !== "all" && <Select value="" onChange={assignHandout} options={[["", "Handout diesem Ort zuordnen"], ...unassignedOptions.map((handout) => [handout.id, handout.name])]} />}
+        <div className="grid max-h-[640px] gap-2 overflow-auto pr-1">
+          {visibleHandouts.map((handout) => {
+            const pages = handout.handoutPages ?? [];
+            const releasedCount = pages.reduce((sum, page) => sum + (page.releasedToCharacterIds?.length ? 1 : 0), 0);
+            return (
+              <button key={handout.id} onClick={() => setSelectedHandoutId(handout.id)} className={`grid gap-2 border p-3 text-left ${selectedHandout?.id === handout.id ? "border-[#ffd88c] bg-[#d6a14d]/12" : "border-[#a8752a]/30 bg-black/25 hover:border-[#d6a14d]/55"}`}>
+                <div className="text-lg text-white">{handout.name}</div>
+                <div className="text-xs text-[#8c8170]">{pages.length} Seiten, {releasedCount} mit Freigabe</div>
+                {handout.summary && <p className="line-clamp-2 text-sm text-[#cfc2aa]">{handout.summary}</p>}
+              </button>
+            );
+          })}
+          {!visibleHandouts.length && <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Noch keine Handouts in dieser Auswahl.</div>}
+        </div>
+      </div>
+
+      <div className="min-w-0 border border-[#a8752a]/35 bg-black/25 p-4">
+        {selectedHandout ? (
+          <div className="grid gap-4">
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="mr-auto">
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Seitenfreigabe</div>
+                <h2 className="text-2xl font-light text-white">{selectedHandout.name}</h2>
+              </div>
+              <button onClick={() => addPage(selectedHandout)} className="border border-[#a8752a]/40 px-3 py-2 text-sm text-[#ffd88c]">Seite +</button>
+            </div>
+            <div className="grid gap-3">
+              {(selectedHandout.handoutPages ?? []).map((page, index) => {
+                const released = page.releasedToCharacterIds ?? [];
+                return (
+                  <div key={page.id} className="grid gap-3 border border-[#a8752a]/25 bg-black/20 p-3">
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+                      <input value={page.title} onChange={(event) => patchPage(selectedHandout, page.id, { title: event.target.value })} className="min-h-10 min-w-0 border border-[#a8752a]/25 bg-black/20 px-3 text-[#f4ead7] outline-none" />
+                      <button onClick={() => setPageRelease(selectedHandout, page, data.characters.map((character) => character.id))} className="border border-[#a8752a]/35 px-3 py-2 text-xs text-[#ffd88c]">Alle</button>
+                      <button onClick={() => setPageRelease(selectedHandout, page, [])} className="border border-red-300/35 px-3 py-2 text-xs text-red-200">Sperren</button>
+                    </div>
+                    <textarea value={page.body} onChange={(event) => patchPage(selectedHandout, page.id, { body: event.target.value })} placeholder={`Inhalt fuer Seite ${index + 1}`} className="min-h-24 border border-[#a8752a]/25 bg-black/20 p-3 text-sm text-[#cfc2aa] outline-none" />
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {data.characters.map((character) => {
+                        const active = released.includes(character.id);
+                        return <button key={character.id} onClick={() => toggleRelease(selectedHandout, page, character.id)} className={`grid grid-cols-[auto_1fr] items-center gap-2 border px-3 py-2 text-left text-sm ${active ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}><span className={`h-3 w-3 rounded-full border ${active ? "border-[#ffd88c] bg-[#ffd88c]" : "border-[#a8752a]/50"}`} /><span className="min-w-0 truncate">{character.name}</span></button>;
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+              {!(selectedHandout.handoutPages ?? []).length && <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Dieses Handout hat noch keine Seiten. Lege hier direkt Seiten an.</div>}
+            </div>
+          </div>
+        ) : <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Waehle ein Handout/Buch aus.</div>}
+      </div>
+    </section>
+  );
+}
+
 function CustomModulesModule({ data, onSave, onDelete }) {
   const modules = data.customGmModules ?? [];
   const [name, setName] = useState("");
@@ -674,6 +808,14 @@ function unique(items) {
 }
 function byName(a, b) {
   return a.name.localeCompare(b.name, "de", { sensitivity: "base" });
+}
+function byUpdated(a, b) {
+  return Date.parse(b.updatedAt ?? "") - Date.parse(a.updatedAt ?? "") || byName(a, b);
+}
+function handoutPageCount(modules) {
+  return modules
+    .filter((module) => (module.itemType ?? "note") === "handout" && (module.status ?? "draft") !== "archived")
+    .reduce((sum, module) => sum + (module.handoutPages?.length ?? 0), 0);
 }
 
 

@@ -553,6 +553,7 @@ export interface CustomGmModule {
   campaignId?: string;
   sessionId?: string;
   characterId?: string;
+  releaseLocationId?: string;
   tags?: string[];
   summary?: string;
   gmNotes?: string;

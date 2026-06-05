@@ -535,6 +535,13 @@ export interface CustomModuleField {
   value?: string | number | boolean;
 }
 
+export interface CustomModuleHandoutPage {
+  id: string;
+  title: string;
+  body: string;
+  releasedToCharacterIds?: string[];
+}
+
 export interface CustomGmModule {
   id: string;
   workspaceId?: string;
@@ -550,6 +557,7 @@ export interface CustomGmModule {
   summary?: string;
   gmNotes?: string;
   playerText?: string;
+  handoutPages?: CustomModuleHandoutPage[];
   fields: CustomModuleField[];
   createdAt: string;
   updatedAt: string;

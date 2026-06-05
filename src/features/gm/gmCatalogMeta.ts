@@ -65,6 +65,7 @@ export const gameOptionKinds: { key: GameOptionKind; label: string }[] = [
   { key: "damageDie", label: "Schadenswuerfel" },
   { key: "damageType", label: "Schadensart" },
   { key: "weaponHand", label: "Waffenhand" },
+  { key: "fateSymbol", label: "Fatesymbol" },
   { key: "attunementIcon", label: "Einstimmungssymbol" }
 ];
 
@@ -121,11 +122,11 @@ export function labelForGameOptionKind(kind: string) {
 }
 
 export function optionText(item?: CatalogItem) {
-  return item?.gameOption?.text || item?.range?.text || item?.name || "";
+  return item?.range?.text || item?.gameOption?.text || item?.name || "";
 }
 
 export function optionIcon(item?: CatalogItem) {
-  return item?.gameOption?.iconUrl || item?.range?.iconUrl || "";
+  return item?.range?.iconUrl || item?.gameOption?.iconUrl || item?.imageUrl || "";
 }
 
 export function optionPair(item: CatalogItem): [string, string] {

@@ -14,12 +14,13 @@ export default function CharacterSheetLayout() {
   const { data, activeCharacter } = useGameStore();
   const [page, setPage] = useState("overview");
   const [selectedCharacter, setSelectedCharacter] = useState(null);
+  const [createMode, setCreateMode] = useState("create");
   const currentCharacterId = selectedCharacter ?? activeCharacter?.id ?? data.activeCharacterId ?? data.characters[0]?.id ?? null;
 
   if (page === "create") {
     return (
       <FeaturePage onBack={() => setPage("overview")}>
-        <CreationWizard onDone={() => setPage("overview")} onSheet={() => setPage("sheet")} onLevelUp={() => setPage("level")} />
+        <CreationWizard mode={createMode} onDone={() => setPage("overview")} onSheet={() => setPage("sheet")} onLevelUp={() => setPage("level")} />
       </FeaturePage>
     );
   }
@@ -59,7 +60,7 @@ export default function CharacterSheetLayout() {
   if (page === "sheet") {
     return (
       <Suspense fallback={<PageLoading label="Charakterbogen wird geladen" />}>
-        <CharacterSheetView selectedCharacter={currentCharacterId} onBack={() => setPage("overview")} onEditCharacter={() => setPage("create")} onLevelUp={() => setPage("level")} onRest={() => setPage("rest")} />
+        <CharacterSheetView selectedCharacter={currentCharacterId} onBack={() => setPage("overview")} onEditCharacter={() => { setCreateMode("edit"); setPage("create"); }} onLevelUp={() => setPage("level")} onRest={() => setPage("rest")} />
       </Suspense>
     );
   }
@@ -73,6 +74,7 @@ export default function CharacterSheetLayout() {
       onOpenGM={() => setPage("gm")}
       onOpenGMSession={() => setPage("gmDashboard")}
       onCreateCharacter={(id) => {
+        setCreateMode(id ? "edit" : "create");
         setSelectedCharacter(id);
         setPage("create");
       }}

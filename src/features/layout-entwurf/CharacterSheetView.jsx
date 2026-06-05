@@ -55,10 +55,15 @@ function LevelBadge({ level }) {
 }
 
 function FateSymbolBadge({ name, symbolUrl }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => {
+    setImageFailed(false);
+  }, [symbolUrl]);
+  const showImage = Boolean(symbolUrl && !imageFailed);
   return (
     <div className="grid min-w-20 justify-items-center gap-1 text-center" title={name}>
       <div className="grid h-14 w-14 place-items-center overflow-hidden text-[#ffd88c]">
-        {symbolUrl ? <img src={symbolUrl} alt="" className="h-full w-full object-contain" /> : <Sparkles className="h-10 w-10" />}
+        {showImage ? <img src={symbolUrl} alt="" onError={() => setImageFailed(true)} className="h-full w-full object-contain" /> : <Sparkles className="h-10 w-10" />}
       </div>
       <div className="max-w-28">
         <div className="line-clamp-1 text-xs font-bold text-[#f4ead7]">{name}</div>
@@ -279,6 +284,15 @@ function ExperiencesPanel({ entries }) {
   );
 }
 
+function ItemImage({ item, className }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [item?.imageUrl]);
+  if (item?.imageUrl && !failed) return <img src={item.imageUrl} alt="" onError={() => setFailed(true)} className={className} />;
+  return item?.icon ?? null;
+}
+
 function ItemRow({ item, onClick, attunementIconUrl, attuned, onToggleAttunement }) {
   const propertyLabel = [
     ...(item.properties ?? []).map((property) => property.name),
@@ -291,11 +305,11 @@ function ItemRow({ item, onClick, attunementIconUrl, attuned, onToggleAttunement
     <button onClick={onClick} disabled={item.disabled} className={`relative min-h-36 w-full overflow-hidden border border-[#a8752a]/45 bg-black/28 p-3 text-left transition hover:border-[#e6b866] disabled:cursor-not-allowed disabled:opacity-55 ${item.disabled || unmet ? "grayscale opacity-60" : ""}`}>
       <div className="absolute left-2 top-2 h-4 w-4 border-l border-t border-[#e6b866]/55" />
       <div className="absolute right-2 top-2 h-4 w-4 border-r border-t border-[#e6b866]/55" />
-      <div className="pointer-events-none absolute inset-0 grid place-items-center text-[#d79a39] opacity-[0.1]">{item.imageUrl ? <img src={item.imageUrl} alt="" className="h-full w-full object-contain" /> : item.icon}</div>
+      <div className="pointer-events-none absolute inset-0 grid place-items-center text-[#d79a39] opacity-[0.1]"><ItemImage item={item} className="h-full w-full object-contain" /></div>
       <div className="relative z-10 grid min-h-32 gap-3">
         <div className={`grid items-start gap-3 ${isArmor ? "grid-cols-[86px_1fr]" : "grid-cols-[72px_1fr_auto]"}`}>
           <div className={`${isArmor ? "h-20 w-20" : "h-16 w-16"} grid shrink-0 place-items-center overflow-hidden border border-[#a8752a]/30 bg-black/35 text-[#d79a39]`}>
-            {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-full w-full object-contain" /> : item.icon}
+            <ItemImage item={item} className="h-full w-full object-contain" />
           </div>
           <div className="min-w-0">
             <div className="text-[0.65rem] font-black uppercase tracking-[0.18em] text-[#f2ca75]">{item.type}</div>
@@ -1686,6 +1700,61 @@ function PlayerMessageComposer({ character, messages, onSend, onClose }) {
   );
 }
 
+function PlayerHandoutModal({ handouts, onClose }) {
+  const [activeId, setActiveId] = useState(handouts[0]?.id);
+  const active = handouts.find((entry) => entry.id === activeId) ?? handouts[0];
+  return (
+    <div className="fixed inset-0 z-[270] grid place-items-center bg-black/82 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="grid max-h-[90vh] w-full max-w-5xl gap-4 overflow-hidden border border-[#a8752a]/60 bg-[#070b12] p-4 shadow-xl shadow-black/60 md:grid-cols-[260px_1fr]">
+        <div className="grid min-h-0 content-start gap-2 border-r border-[#a8752a]/25 pr-3">
+          <div className="flex items-center justify-between gap-3 md:col-span-2">
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Freigegebene Inhalte</div>
+            <button onClick={onClose} className="grid h-9 w-9 place-items-center border border-[#a8752a]/45 text-[#cfc2aa]"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="grid max-h-[74vh] gap-2 overflow-auto pr-1">
+            {handouts.map((handout) => (
+              <button key={handout.id} onClick={() => setActiveId(handout.id)} className={`border px-3 py-2 text-left ${active?.id === handout.id ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/35 bg-black/25 text-[#cfc2aa]"}`}>
+                <div className="font-semibold">{handout.title}</div>
+                <div className="text-xs text-[#8c8170]">{handout.pages.length} Seite(n)</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="min-h-0 overflow-auto pr-1">
+          {active && (
+            <div className="grid gap-4">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Handout</div>
+                <h2 className="text-3xl font-light text-white">{active.title}</h2>
+                {active.summary && <p className="mt-2 text-[#cfc2aa]">{active.summary}</p>}
+              </div>
+              {active.pages.map((page, index) => (
+                <section key={page.id} className="grid gap-2 border border-[#a8752a]/30 bg-black/25 p-4">
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Ebene {index + 1}</div>
+                  <h3 className="text-xl text-white">{page.title}</h3>
+                  <p className="whitespace-pre-wrap leading-relaxed text-[#cfc2aa]">{page.body}</p>
+                </section>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function playerHandouts(modules, characterId) {
+  return modules
+    .filter((module) => module.itemType === "handout" && module.visibility === "players" && module.status !== "archived")
+    .map((module) => ({
+      id: module.id,
+      title: module.name,
+      summary: module.summary,
+      pages: (module.handoutPages ?? []).filter((page) => (page.releasedToCharacterIds ?? []).includes(characterId))
+    }))
+    .filter((module) => module.pages.length > 0);
+}
+
 function formatMessageDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("de-DE");
@@ -1698,6 +1767,7 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
   const [detailItem, setDetailItem] = useState(null);
   const [shopOpen, setShopOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
+  const [handoutOpen, setHandoutOpen] = useState(false);
   const [dismissedMessageId, setDismissedMessageId] = useState(null);
   const [activeGmMessage, setActiveGmMessage] = useState(null);
   const [fullscreen, setFullscreen] = useState(() => typeof document !== "undefined" && Boolean(document.fullscreenElement));
@@ -1741,6 +1811,7 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
     .filter((message) => message.characterId === character.id || message.toCharacterId === character.id)
     .sort((left, right) => Date.parse(right.createdAt ?? "") - Date.parse(left.createdAt ?? ""));
   const unreadGmMessage = characterMessages.find((message) => message.fromRole === "gm" && message.status === "unread" && message.id !== dismissedMessageId);
+  const visibleHandouts = playerHandouts(data.customGmModules ?? [], character.id);
   function patchResources(patch) {
     upsertCharacter({ ...character, resources: { ...(character.resources ?? {}), ...patch }, updatedAt: new Date().toISOString() });
   }
@@ -1801,6 +1872,7 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
               <ActionButton icon={<MessageSquare className="h-4 w-4" />} onClick={() => setMessageOpen(true)}>Nachricht</ActionButton>
               {unreadGmMessage && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-red-500" />}
             </div>
+            {visibleHandouts.length > 0 && <ActionButton icon={<BookOpen className="h-4 w-4" />} onClick={() => setHandoutOpen(true)}>Handouts</ActionButton>}
             <ActionButton icon={<ChevronsUp className="h-4 w-4" />} onClick={onLevelUp}>Level Up</ActionButton>
             <ActionButton icon={<Moon className="h-4 w-4" />} onClick={onRest}>Rast</ActionButton>
             <ActionButton icon={<Settings className="h-4 w-4" />} onClick={onEditCharacter}>Charakter Editor</ActionButton>
@@ -1916,6 +1988,7 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
             }}
           />
         )}
+        {handoutOpen && <PlayerHandoutModal handouts={visibleHandouts} onClose={() => setHandoutOpen(false)} />}
         <DetailModal item={detailItem} character={character} upsertCharacter={upsertCharacter} attunementIconUrl={sheet.attunementIconUrl} onClose={() => setDetailItem(null)} />
       </div>
     </Shell>

@@ -42,10 +42,10 @@ const backgroundCategories: { key: BackgroundCategory; label: string; target?: n
   { key: "connections", label: "Charakterverbindungen" }
 ];
 
-export function CreationWizard({ onDone, onSheet, onLevelUp }: { onDone: () => void; onSheet?: () => void; onLevelUp?: () => void }) {
+export function CreationWizard({ mode = "create", onDone, onSheet, onLevelUp }: { mode?: "create" | "edit"; onDone: () => void; onSheet?: () => void; onLevelUp?: () => void }) {
   const { activeCharacter, data, upsertCharacter } = useGameStore();
-  const [draft, setDraftState] = useState<Character>(() => activeCharacter ?? createCharacter());
-  const [autosave, setAutosave] = useState(Boolean(activeCharacter));
+  const [draft, setDraftState] = useState<Character>(() => mode === "edit" && activeCharacter ? activeCharacter : createCharacter());
+  const [autosave, setAutosave] = useState(mode === "edit" && Boolean(activeCharacter));
   const [main, setMain] = useState<MainStep>("start");
   const [buildCategory, setBuildCategory] = useState<BuildCategory>("attributes");
   const [originCategory, setOriginCategory] = useState<OriginCategory>("folk");

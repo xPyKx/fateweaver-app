@@ -975,7 +975,8 @@ export function mergeAppData(local: AppData, remote: AppData): AppData {
       inventoryHistory: mergeById(
         (local.gmSession?.inventoryHistory ?? []).filter((entry) => !deletedCharacterSet.has(entry.characterId)),
         (remote.gmSession?.inventoryHistory ?? []).filter((entry) => !deletedCharacterSet.has(entry.characterId))
-      )
+      ),
+      attunementLimit: local.gmSession?.attunementLimit ?? remote.gmSession?.attunementLimit
     },
     activeCharacterId: deletedCharacterSet.has(local.activeCharacterId ?? "") ? remote.activeCharacterId : local.activeCharacterId ?? remote.activeCharacterId
   };
@@ -1114,6 +1115,12 @@ function cleanCustomGmModules(modules: CustomGmModule[] | undefined, deletedChar
       status: module.status ?? "draft",
       visibility: module.visibility ?? "gm",
       tags: unique(module.tags ?? []),
+      handoutPages: (module.handoutPages ?? []).map((page, index) => ({
+        id: page.id ?? crypto.randomUUID(),
+        title: page.title ?? `Seite ${index + 1}`,
+        body: page.body ?? "",
+        releasedToCharacterIds: unique((page.releasedToCharacterIds ?? []).filter((id) => !deletedCharacterSet.has(id)))
+      })),
       fields: module.fields ?? []
     }));
 }

@@ -190,8 +190,8 @@ function normalizeArmor(item, armorData, catalog, attributes) {
 function resolveRange(item, catalog) {
   const range = catalog.find((entry) => (entry.type === "range" || entry.type === "gameOption") && entry.id === item.weapon?.rangeId);
   return {
-    text: range?.gameOption?.text || range?.range?.text || item.weapon?.range || "",
-    iconUrl: range?.gameOption?.iconUrl || range?.range?.iconUrl || item.weapon?.rangeIconUrl || ""
+    text: range?.range?.text || range?.gameOption?.text || item.weapon?.range || "",
+    iconUrl: range?.range?.iconUrl || range?.gameOption?.iconUrl || item.weapon?.rangeIconUrl || ""
   };
 }
 
@@ -211,21 +211,21 @@ function resolveRanges(item, catalog) {
 function resolveWeaponRange(item, catalog, idKey, textKey, iconKey) {
   const range = catalog.find((entry) => (entry.type === "range" || entry.type === "gameOption") && entry.id === item.weapon?.[idKey]);
   return {
-    text: range?.gameOption?.text || range?.range?.text || item.weapon?.[textKey] || "",
-    iconUrl: range?.gameOption?.iconUrl || range?.range?.iconUrl || item.weapon?.[iconKey] || ""
+    text: range?.range?.text || range?.gameOption?.text || item.weapon?.[textKey] || "",
+    iconUrl: range?.range?.iconUrl || range?.gameOption?.iconUrl || item.weapon?.[iconKey] || ""
   };
 }
 
 function resolveOption(id, catalog) {
   const option = catalog.find((entry) => (entry.type === "gameOption" || entry.type === "range") && entry.id === id);
   return {
-    text: option?.gameOption?.text || option?.range?.text || option?.name || "",
-    iconUrl: option?.gameOption?.iconUrl || option?.range?.iconUrl || ""
+    text: option?.range?.text || option?.gameOption?.text || option?.name || "",
+    iconUrl: option?.range?.iconUrl || option?.gameOption?.iconUrl || ""
   };
 }
 
 function optionIcon(item) {
-  return item?.gameOption?.iconUrl || item?.imageUrl || "";
+  return item?.range?.iconUrl || item?.gameOption?.iconUrl || item?.imageUrl || "";
 }
 
 function fateSymbol(item, catalog) {
@@ -233,7 +233,7 @@ function fateSymbol(item, catalog) {
   const symbolItem = item.fate?.symbolItemId
     ? catalog.find((entry) => entry.id === item.fate.symbolItemId)
     : undefined;
-  return item.fate?.symbolUrl || optionIcon(symbolItem) || "";
+  return optionIcon(symbolItem) || item.fate?.symbolUrl || item.imageUrl || "";
 }
 
 function resolveProperties(item, catalog) {

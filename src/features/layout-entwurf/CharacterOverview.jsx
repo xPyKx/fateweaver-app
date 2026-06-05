@@ -6,13 +6,14 @@ import { ActionButton, GoldPanel, Shell } from "./layoutPrimitives";
 import { useGameStore } from "../../lib/store/GameStore";
 import { createCharacter } from "../../lib/rules/characterRules";
 
-function fateSymbol(fate) {
-  return fate?.fate?.symbolUrl || fate?.imageUrl || "";
+function fateSymbol(fate, catalog) {
+  const symbolItem = fate?.fate?.symbolItemId ? catalog.find((item) => item.id === fate.fate.symbolItemId) : undefined;
+  return symbolItem?.gameOption?.iconUrl || symbolItem?.range?.iconUrl || symbolItem?.imageUrl || fate?.fate?.symbolUrl || fate?.imageUrl || "";
 }
 
-function CharacterCard({ character, mainFate, sideFate, onOpen, onDelete, onEdit }) {
-  const mainSymbol = fateSymbol(mainFate);
-  const sideSymbol = fateSymbol(sideFate);
+function CharacterCard({ character, mainFate, sideFate, catalog, onOpen, onDelete, onEdit }) {
+  const mainSymbol = fateSymbol(mainFate, catalog);
+  const sideSymbol = fateSymbol(sideFate, catalog);
 
   return (
     <button onClick={onOpen} className="group relative overflow-hidden border border-[#a8752a]/45 bg-[#0d121c] text-left shadow-2xl shadow-black/40 transition hover:-translate-y-1 hover:border-[#e6b866]">
@@ -85,10 +86,10 @@ export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, 
     onCreateCharacter ? onCreateCharacter(characterId) : onOpenCharacter(characterId);
   }
 
-  function createNewCharacter(workspaceId) {
+  function createNewCharacter(workspaceId, persistImmediately = true) {
     const character = { ...createCharacter(), workspaceId };
-    upsertCharacter(character);
-    onCreateCharacter ? onCreateCharacter(character.id) : onOpenCharacter(character.id);
+    if (persistImmediately) upsertCharacter(character);
+    onCreateCharacter ? onCreateCharacter(persistImmediately ? character.id : undefined) : onOpenCharacter(character.id);
     return character;
   }
 
@@ -168,13 +169,14 @@ export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, 
                 character={character}
                 mainFate={data.catalog.find((item) => item.id === character.choices.mainFateId)}
                 sideFate={data.catalog.find((item) => item.id === character.choices.sideFateId)}
+                catalog={data.catalog}
                 onOpen={() => openCharacter(character.id)}
                 onEdit={() => editCharacter(character.id)}
                 onDelete={() => setDeleteTarget(character)}
               />
             ))}
             <button
-              onClick={() => createNewCharacter()}
+              onClick={() => createNewCharacter(undefined, false)}
               className="flex min-h-[28rem] flex-col items-center justify-center border border-dashed border-[#a8752a]/55 bg-black/20 text-center text-[#cfc2aa] hover:border-[#f2ca75] hover:text-[#f2ca75]"
             >
               <Plus className="mb-4 h-16 w-16" />

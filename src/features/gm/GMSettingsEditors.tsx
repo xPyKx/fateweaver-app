@@ -378,10 +378,11 @@ function supportsItemUsage(item: CatalogItem) {
 
 function RangeFields({ item, savePatch }: SpecificEditorProps) {
   const range = item.range ?? { text: item.description };
+  const option = item.gameOption ?? { kind: "range" as const, text: range.text ?? "" };
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <Field label="Text" value={range.text ?? ""} onChange={(text) => savePatch({ range: { ...range, text } })} />
-      <ImageInput label="Icon" value={range.iconUrl ?? item.imageUrl ?? ""} onChange={(iconUrl) => savePatch({ imageUrl: iconUrl, range: { ...range, iconUrl } })} />
+      <Field label="Text" value={range.text ?? ""} onChange={(text) => savePatch({ range: { ...range, text }, gameOption: { ...option, kind: "range", text } })} />
+      <ImageInput label="Icon" value={range.iconUrl ?? item.imageUrl ?? ""} onChange={(iconUrl) => savePatch({ imageUrl: iconUrl, range: { ...range, iconUrl }, gameOption: { ...option, kind: "range", iconUrl } })} />
     </div>
   );
 }
@@ -441,6 +442,8 @@ function SheetTabFields({ item, characters = [], savePatch }: SpecificEditorProp
 function FateFields({ item, catalog, gameOptions, savePatch }: SpecificEditorProps & { catalog: CatalogItem[]; gameOptions: CatalogItem[] }) {
   const fate = item.fate ?? { levelOneCards: [], abilityCategories: [] };
   const symbols = optionsByKind(gameOptions, "fateSymbol");
+  const selectedSymbol = symbols.find((entry) => entry.id === fate.symbolItemId);
+  const symbolPreview = optionIcon(selectedSymbol) || fate.symbolUrl || "";
   function selectSymbol(symbolItemId: string) {
     const symbol = gameOptions.find((entry) => entry.id === symbolItemId);
     savePatch({ fate: { ...fate, symbolItemId, symbolUrl: optionIcon(symbol) || symbol?.imageUrl || "" } });
@@ -449,6 +452,7 @@ function FateFields({ item, catalog, gameOptions, savePatch }: SpecificEditorPro
     <div className="grid gap-3 md:grid-cols-2">
       <Select label="Fatesymbol" value={fate.symbolItemId ?? ""} onChange={selectSymbol} options={[["", "Kein Symbol"], ...symbols.map(optionPair)]} />
       <ImageInput label="Fatesymbol direkt" value={fate.symbolUrl ?? ""} onChange={(symbolUrl) => savePatch({ fate: { ...fate, symbolUrl } })} />
+      {symbolPreview && <div className="grid place-items-center border border-[#a8752a]/30 bg-black/20 p-3"><img src={symbolPreview} alt="" className="h-20 w-20 object-contain" /></div>}
       <Select label="Zauberattribut" value={fate.spellAttribute ?? ""} onChange={(spellAttribute) => savePatch({ fate: { ...fate, spellAttribute: spellAttribute as AttributeKey | "" } })} options={[["", "Kein Zauberattribut"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
       <Field label="Level-1 Fatekarten IDs" value={fate.levelOneCards.join(", ")} onChange={(value) => savePatch({ fate: { ...fate, levelOneCards: splitList(value) } })} />
       <div className="md:col-span-2">

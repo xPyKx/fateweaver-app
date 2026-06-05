@@ -512,7 +512,77 @@ function CustomModuleCard({ module, data, onSave, onDelete }) {
   function deleteField(fieldId) {
     patch({ fields: (module.fields ?? []).filter((field) => field.id !== fieldId) });
   }
-  return <div className="grid gap-4 border border-[#a8752a]/30 bg-black/25 p-4"><div className="flex flex-wrap gap-3"><input value={module.name} onChange={(event) => patch({ name: event.target.value })} className="min-w-0 flex-1 bg-transparent text-2xl font-light text-white outline-none" /><button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200"><Trash2 className="h-4 w-4" /></button></div><div className="grid gap-2 md:grid-cols-3"><Select value={module.itemType ?? "note"} onChange={(itemType) => patch({ itemType })} options={BUILDER_TYPES} /><Select value={module.status ?? "draft"} onChange={(status) => patch({ status })} options={BUILDER_STATUS} /><Select value={module.visibility ?? "gm"} onChange={(visibility) => patch({ visibility })} options={BUILDER_VISIBILITY} /></div><input value={(module.tags ?? []).join(", ")} onChange={(event) => patch({ tags: event.target.value.split(",").map((entry) => entry.trim()).filter(Boolean) })} placeholder="Tags, durch Komma getrennt" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><TextArea label="Kurzbeschreibung" value={module.summary ?? ""} onChange={(summary) => patch({ summary })} /><TextArea label="GM-Notizen" value={module.gmNotes ?? ""} onChange={(gmNotes) => patch({ gmNotes })} /><TextArea label="Spielertext / Handout" value={module.playerText ?? ""} onChange={(playerText) => patch({ playerText })} /><div className="grid gap-2 border-t border-[#a8752a]/25 pt-3"><div className="flex flex-wrap items-center gap-2"><div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Eigene Felder</div>{["text", "textarea", "number", "checkbox"].map((type) => <button key={type} onClick={() => addField(type)} className="border border-[#a8752a]/35 px-2 py-1 text-xs text-[#cfc2aa]">{type}</button>)}</div>{(module.fields ?? []).map((field) => <div key={field.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-2 md:grid-cols-[180px_1fr_auto]"><input value={field.label} onChange={(event) => patchField(field.id, { label: event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />{field.type === "textarea" ? <textarea value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: event.target.value })} className="min-h-20 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" /> : field.type === "checkbox" ? <label className="flex items-center gap-2 text-sm text-[#cfc2aa]"><input type="checkbox" checked={Boolean(field.value)} onChange={(event) => patchField(field.id, { value: event.target.checked })} /> Aktiv</label> : <input type={field.type === "number" ? "number" : "text"} value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: field.type === "number" ? Number(event.target.value) : event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#cfc2aa] outline-none" />}<button onClick={() => deleteField(field.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button></div>)}</div></div>;
+  const isHandout = (module.itemType ?? "note") === "handout";
+  return (
+    <div className="grid gap-4 border border-[#a8752a]/30 bg-black/25 p-4">
+      <div className="flex flex-wrap gap-3">
+        <input value={module.name} onChange={(event) => patch({ name: event.target.value })} className="min-w-0 flex-1 bg-transparent text-2xl font-light text-white outline-none" />
+        <button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200"><Trash2 className="h-4 w-4" /></button>
+      </div>
+      <div className="grid gap-2 md:grid-cols-3">
+        <Select value={module.itemType ?? "note"} onChange={(itemType) => patch({ itemType })} options={BUILDER_TYPES} />
+        <Select value={module.status ?? "draft"} onChange={(status) => patch({ status })} options={BUILDER_STATUS} />
+        <Select value={module.visibility ?? "gm"} onChange={(visibility) => patch({ visibility })} options={BUILDER_VISIBILITY} />
+      </div>
+      {isHandout && <HandoutPagesEditor module={module} characters={data.characters} onPatch={patch} />}
+      <input value={(module.tags ?? []).join(", ")} onChange={(event) => patch({ tags: event.target.value.split(",").map((entry) => entry.trim()).filter(Boolean) })} placeholder="Tags, durch Komma getrennt" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+      <TextArea label="Kurzbeschreibung" value={module.summary ?? ""} onChange={(summary) => patch({ summary })} />
+      <TextArea label="GM-Notizen" value={module.gmNotes ?? ""} onChange={(gmNotes) => patch({ gmNotes })} />
+      <TextArea label="Spielertext / Handout" value={module.playerText ?? ""} onChange={(playerText) => patch({ playerText })} />
+      <div className="grid gap-2 border-t border-[#a8752a]/25 pt-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Eigene Felder</div>
+          {["text", "textarea", "number", "checkbox"].map((type) => <button key={type} onClick={() => addField(type)} className="border border-[#a8752a]/35 px-2 py-1 text-xs text-[#cfc2aa]">{type}</button>)}
+        </div>
+        {(module.fields ?? []).map((field) => (
+          <div key={field.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-2 md:grid-cols-[180px_1fr_auto]">
+            <input value={field.label} onChange={(event) => patchField(field.id, { label: event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+            {field.type === "textarea"
+              ? <textarea value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: event.target.value })} className="min-h-20 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" />
+              : field.type === "checkbox"
+                ? <label className="flex items-center gap-2 text-sm text-[#cfc2aa]"><input type="checkbox" checked={Boolean(field.value)} onChange={(event) => patchField(field.id, { value: event.target.checked })} /> Aktiv</label>
+                : <input type={field.type === "number" ? "number" : "text"} value={field.value ?? ""} onChange={(event) => patchField(field.id, { value: field.type === "number" ? Number(event.target.value) : event.target.value })} className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#cfc2aa] outline-none" />}
+            <button onClick={() => deleteField(field.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HandoutPagesEditor({ module, characters, onPatch }) {
+  const pages = module.handoutPages ?? [];
+  function patchPage(pageId, patch) {
+    onPatch({ handoutPages: pages.map((page) => page.id === pageId ? { ...page, ...patch } : page) });
+  }
+  function toggleRelease(page, characterId) {
+    const released = page.releasedToCharacterIds ?? [];
+    patchPage(page.id, { releasedToCharacterIds: released.includes(characterId) ? released.filter((id) => id !== characterId) : [...released, characterId] });
+  }
+  return (
+    <div className="grid gap-3 border border-[#a8752a]/25 bg-black/20 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Handout-Seiten</div>
+        <button type="button" onClick={() => onPatch({ handoutPages: [...pages, { id: crypto.randomUUID(), title: `Seite ${pages.length + 1}`, body: "", releasedToCharacterIds: [] }] })} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Seite +</button>
+      </div>
+      {pages.map((page, index) => (
+        <div key={page.id} className="grid gap-2 border border-[#a8752a]/25 bg-black/20 p-3">
+          <div className="flex items-center gap-2">
+            <input value={page.title} onChange={(event) => patchPage(page.id, { title: event.target.value })} className="min-h-10 min-w-0 flex-1 border border-[#a8752a]/25 bg-black/20 px-3 text-[#f4ead7] outline-none" />
+            <button type="button" onClick={() => onPatch({ handoutPages: pages.filter((entry) => entry.id !== page.id) })} className="grid h-10 w-10 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+          </div>
+          <textarea value={page.body} onChange={(event) => patchPage(page.id, { body: event.target.value })} placeholder={`Inhalt fuer Freigabeebene ${index + 1}`} className="min-h-28 border border-[#a8752a]/25 bg-black/20 p-3 text-sm text-[#cfc2aa] outline-none" />
+          <div className="flex flex-wrap gap-2">
+            {characters.map((character) => {
+              const active = (page.releasedToCharacterIds ?? []).includes(character.id);
+              return <button key={character.id} type="button" onClick={() => toggleRelease(page, character.id)} className={`border px-2 py-1 text-xs ${active ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{character.name}</button>;
+            })}
+          </div>
+        </div>
+      ))}
+      {!pages.length && <div className="text-sm text-[#8c8170]">Lege Seiten an und gib jede Seite gezielt fuer Charaktere frei.</div>}
+    </div>
+  );
 }
 
 function normalizeDashboardSession(session) {
@@ -584,7 +654,9 @@ function addItemToCharacter(character, item) {
 }
 function addWeapon(character, id) {
   const choices = character.choices ?? {};
-  return { ...character, choices: { ...choices, storedWeaponIds: unique([...(choices.storedWeaponIds ?? []), id]) }, updatedAt: new Date().toISOString() };
+  const active = choices.selectedWeapons ?? [];
+  const stored = choices.storedWeaponIds ?? [];
+  return { ...character, choices: { ...choices, selectedWeapons: active.includes(id) ? active : active.length < 2 ? [...active, id] : active, storedWeaponIds: active.length < 2 ? stored.filter((entry) => entry !== id) : unique([...stored, id]) }, updatedAt: new Date().toISOString() };
 }
 function historyEntry(characterId, item, action, shopName) {
   return { id: crypto.randomUUID(), characterId, itemId: item.id, itemName: item.name, itemType: item.type === "magicItem" ? "magicItem" : item.type, action, shopName, createdAt: new Date().toISOString() };

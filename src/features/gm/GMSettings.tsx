@@ -18,7 +18,7 @@ import {
   optionKind
 } from "./gmCatalogMeta";
 
-const HIDDEN_GAME_OPTION_KINDS = new Set(["fateSymbol"]);
+const HIDDEN_GAME_OPTION_KINDS = new Set<string>();
 
 export function GMSettings() {
   const { data, upsertCatalogItem, importCatalogItems, deleteCatalogItem, upsertHint } = useGameStore();

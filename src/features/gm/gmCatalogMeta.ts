@@ -182,6 +182,8 @@ function defaultWeapon(): WeaponData {
     damageDieId: "",
     damageTypeId: "",
     attackBonus: 0,
+    damageBonusFlat: 0,
+    damageBonusDice: [],
     damageDie: "",
     damageBonusAttributes: [],
     masteryBonus: 0

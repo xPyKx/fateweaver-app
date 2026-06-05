@@ -1,8 +1,8 @@
 import {
   armorForCharacter,
   dieForLevel,
-  difficulty,
   dodge,
+  effectiveDifficulty,
   effectiveTrainingBonus,
   heavyDamageThreshold,
   hitPoints,
@@ -42,8 +42,8 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
   const choices = character.choices ?? {};
   const baseAttributes = applyLevelUpAttributes(normalizeAttributes(character.attributes), levelUpAttributeBonus(character));
   const attributeMarkers = levelUpAttributeMarkers(character);
-  const armorData = armorForCharacter(character, catalog);
   const armorItem = findItem(catalog, choices.selectedArmorId, "armor");
+  const armorData = armorItem && requirementsMet(armorItem, baseAttributes) ? armorForCharacter(character, catalog) : undefined;
   const weapons = (choices.selectedWeapons ?? [])
     .map((id) => findWeaponItem(catalog, id))
     .filter(Boolean);
@@ -51,8 +51,8 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
   const sideFate = findItem(catalog, choices.sideFateId, "fate");
   const folk = findItem(catalog, choices.folkId, "folk");
   const society = findItem(catalog, choices.societyId, "society");
-  const activeItems = [...weapons, armorItem].filter(Boolean);
-  const activeEffects = [...collectPropertyEffects(activeItems, catalog), ...collectOriginEffects([folk, society]), ...collectActiveFateEffects(character, catalog)];
+  const activeItems = [...weapons, armorItem].filter((item) => item && requirementsMet(item, baseAttributes));
+  const activeEffects = [...collectPropertyEffects(activeItems, catalog), ...collectOriginEffects([folk, society]), ...collectActiveFateEffects(character, catalog), ...collectActiveItemEffects(character, catalog, baseAttributes)];
   const attributes = applyAttributeEffects(baseAttributes, activeEffects);
   const level = character.level ?? 1;
   const training = effectiveTrainingBonus(character);
@@ -62,14 +62,14 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
     tier: tierForLevel(level),
     die: dieForLevel(level),
     training,
-    difficulty: 10 + training,
-    dodge: dodge(attributes, character.dodgeBonuses ?? [], armorData) + sumEffects(activeEffects, "dodge") + levelUpEvasionBonus(character),
-    armorValue: (armorData?.armorValue ?? 0) + sumEffects(activeEffects, "armorValue"),
-    armorSlots: Math.max(0, Math.min(12, (armorData?.armorValue ?? 0) + sumEffects(activeEffects, "armorValue"))),
-    hpMax: Math.max(1, hitPoints(attributes, (character.hpBonus ?? 0) + levelUpHpBonus(character) + sumEffects(activeEffects, "hpBonus"))),
-    stressMax: Math.max(1, stress(attributes, (character.stressBonus ?? 0) + levelUpStressBonus(character) + sumEffects(activeEffects, "stressBonus"))),
-    lightThreshold: lightDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "lightThreshold"),
-    heavyThreshold: heavyDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "heavyThreshold"),
+    difficulty: effectiveDifficulty(attributes, character),
+    dodge: dodge(attributes, character.dodgeBonuses ?? [], armorData) + sumEffects(activeEffects, "dodge", attributes) + levelUpEvasionBonus(character),
+    armorValue: (armorData?.armorValue ?? 0) + sumEffects(activeEffects, "armorValue", attributes),
+    armorSlots: Math.max(0, Math.min(12, (armorData?.armorValue ?? 0) + sumEffects(activeEffects, "armorValue", attributes))),
+    hpMax: Math.max(1, hitPoints(attributes, (character.hpBonus ?? 0) + levelUpHpBonus(character) + sumEffects(activeEffects, "hpBonus", attributes))),
+    stressMax: Math.max(1, stress(attributes, (character.stressBonus ?? 0) + levelUpStressBonus(character) + sumEffects(activeEffects, "stressBonus", attributes))),
+    lightThreshold: lightDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "lightThreshold", attributes),
+    heavyThreshold: heavyDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "heavyThreshold", attributes),
     attributes: attributeTemplates.map((item) => {
       const attributeKey = layoutAttributeMap[item.key];
       return {
@@ -87,7 +87,7 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
     societyName: society?.name ?? "",
     attunementIconUrl: optionIcon(catalog.find((entry) => entry.type === "gameOption" && entry.gameOption?.kind === "attunementIcon")),
     weapons: normalizeWeapons(weapons, catalog, attributes, training, choices.weaponAttributeSelections ?? {}),
-    armor: normalizeArmor(armorItem, armorData, catalog)
+    armor: normalizeArmor(armorItem, armorData, catalog, attributes)
   };
 }
 
@@ -133,7 +133,7 @@ function normalizeWeapons(weapons, catalog, attributes, training, weaponAttribut
       id: item.id,
       name: item.name,
       meta: `${item.weapon?.hand === "twoHand" ? "Zweihändig" : "Einhändig"} · ${rangeText || "Reichweite offen"} · ${item.description}`,
-      attackBonus: (item.weapon?.attackBonus ?? item.weapon?.masteryBonus ?? 0) + (attributes.geschick ?? 0) + sumEffects(resolveEffects(item, catalog), "attackBonus"),
+      attackBonus: (item.weapon?.attackBonus ?? item.weapon?.masteryBonus ?? 0) + (attributes.geschick ?? 0) + sumEffects(resolveEffects(item, catalog), "attackBonus", attributes),
       damage: formatDamage(item.weapon, attributes, training, resolveEffects(item, catalog), weaponAttributeSelections[item.id]),
       damageDieText: resolveOption(item.weapon?.damageDieId, catalog).text || item.weapon?.damageDie || "",
       damageDieIconUrl: resolveOption(item.weapon?.damageDieId, catalog).iconUrl || item.weapon?.damageDieIconUrl,
@@ -153,6 +153,11 @@ function normalizeWeapons(weapons, catalog, attributes, training, weaponAttribut
       versatileOptions: getVersatileOptions(item, catalog),
       selectedVersatileAttribute: weaponAttributeSelections[item.id],
       rawDescription: item.description
+      ,
+      requirements: item.requirements ?? [],
+      requirementsMet: requirementsMet(item, attributes),
+      usage: item.usage,
+      usageItemId: item.id
     };
   });
   const primary = mapped.find((item) => item.slot === "primary") ?? fallback[0];
@@ -162,7 +167,7 @@ function normalizeWeapons(weapons, catalog, attributes, training, weaponAttribut
   return [primary, mapped.find((item) => item.slot === "secondary") ?? fallback[1]];
 }
 
-function normalizeArmor(item, armorData, catalog) {
+function normalizeArmor(item, armorData, catalog, attributes) {
   return {
     type: "Rüstung",
     name: item?.name ?? "Keine Rüstung",
@@ -174,7 +179,11 @@ function normalizeArmor(item, armorData, catalog) {
     attunementRequired: item?.attunementRequired ?? false,
     rarity: item?.rarity,
     imageUrl: item?.imageUrl,
-    rawDescription: item?.description ?? ""
+    rawDescription: item?.description ?? "",
+    requirements: item?.requirements ?? [],
+    requirementsMet: item ? requirementsMet(item, attributes) : true,
+    usage: item?.usage,
+    usageItemId: item?.id
   };
 }
 
@@ -236,12 +245,13 @@ function resolveProperties(item, catalog) {
 
 function formatDamage(weapon, attributes, training, effects, selectedVersatileAttribute) {
   const die = weapon?.damageDie ?? normalizeLegacyDamageDie(weapon?.damage) ?? "-";
-  const multiplier = Math.max(1, sumEffects(effects, "damageDiceMultiplier") || 1);
-  const diceCount = Math.max(1, (training + sumEffects(effects, "damageDice")) * multiplier);
+  const multiplier = Math.max(1, sumEffects(effects, "damageDiceMultiplier", attributes) || 1);
+  const diceCount = Math.max(1, (training + sumEffects(effects, "damageDice", attributes)) * multiplier);
   const selectedVersatileBonus = selectedVersatileAttribute ? attributes[selectedVersatileAttribute] ?? 0 : 0;
   const regularAttributes = selectedVersatileAttribute ? [] : (weapon?.damageBonusAttributes ?? []);
-  const bonus = regularAttributes.reduce((sum, key) => sum + (attributes[key] ?? 0), 0) + selectedVersatileBonus + sumEffects(effects, "damageBonus");
-  return `${diceCount}${die} ${bonus >= 0 ? "+" : "-"} ${Math.abs(bonus)}`;
+  const bonus = regularAttributes.reduce((sum, key) => sum + (attributes[key] ?? 0), 0) + selectedVersatileBonus + Number(weapon?.damageBonusFlat ?? 0) + sumEffects(effects, "damageBonus", attributes);
+  const bonusDice = [...(weapon?.damageBonusDice ?? []), ...diceEffects(effects, "damageBonus")].filter(Boolean);
+  return `${diceCount}${die}${bonusDice.length ? ` + ${bonusDice.join(" + ")}` : ""} ${bonus >= 0 ? "+" : "-"} ${Math.abs(bonus)}`;
 }
 
 function normalizeLegacyDamageDie(damage) {
@@ -270,6 +280,23 @@ function collectActiveFateEffects(character, catalog) {
     .flatMap((item) => item.fateAbility?.usage?.activationEffects ?? []);
 }
 
+function collectActiveItemEffects(character, catalog, attributes) {
+  const states = character.choices?.fateCardStates ?? {};
+  const choices = character.choices ?? {};
+  const ids = Array.from(new Set([
+    ...(choices.selectedWeapons ?? []),
+    choices.selectedArmorId,
+    choices.selectedPotionId,
+    ...(choices.selectedMagicItemIds ?? []),
+    ...(choices.selectedEquipmentIds ?? []),
+    ...(choices.selectedMaterialIds ?? [])
+  ].filter(Boolean)));
+  return ids
+    .map((id) => catalog.find((item) => item.id === id && item.usage?.enabled && states[id]?.active))
+    .filter((item) => item && requirementsMet(item, attributes))
+    .flatMap((item) => item.usage?.activationEffects ?? []);
+}
+
 function resolveEffects(item, catalog) {
   return (item.propertyIds ?? [])
     .map((id) => catalog.find((entry) => entry.id === id && entry.type === "property"))
@@ -280,13 +307,27 @@ function resolveEffects(item, catalog) {
 function applyAttributeEffects(attributes, effects) {
   const next = { ...attributes };
   Object.keys(next).forEach((key) => {
-    next[key] += sumEffects(effects, key);
+    next[key] += sumEffects(effects, key, attributes);
   });
   return next;
 }
 
-function sumEffects(effects, target) {
-  return effects.filter((effect) => effect.target === target).reduce((sum, effect) => sum + (effect.value ?? 0), 0);
+function sumEffects(effects, target, attributes = {}) {
+  return effects
+    .filter((effect) => effect.target === target)
+    .reduce((sum, effect) => sum + effectValue(effect, attributes), 0);
+}
+
+function effectValue(effect, attributes = {}) {
+  return effect.attributeKey ? Number(attributes[effect.attributeKey] ?? 0) : Number(effect.value ?? 0);
+}
+
+function diceEffects(effects, target) {
+  return effects.filter((effect) => effect.target === target && effect.condition?.trim()).map((effect) => effect.condition.trim());
+}
+
+function requirementsMet(item, attributes) {
+  return (item?.requirements ?? []).every((requirement) => (attributes?.[requirement.attribute] ?? 0) >= Number(requirement.minimum ?? 0));
 }
 
 function getVersatileOptions(item, catalog) {

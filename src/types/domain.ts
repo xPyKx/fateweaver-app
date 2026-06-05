@@ -62,6 +62,7 @@ export interface PropertyEffect {
   target: PropertyEffectTarget;
   value: number;
   condition?: string;
+  attributeKey?: AttributeKey | "";
   attributeOptions?: AttributeKey[];
 }
 
@@ -100,11 +101,19 @@ export interface WeaponData {
   damageType?: string;
   damageTypeIconUrl?: string;
   attackBonus?: number;
+  damageBonusFlat?: number;
+  damageBonusDice?: string[];
   damageDie?: string;
   damageBonusAttributes?: AttributeKey[];
   versatileAttributeOptions?: AttributeKey[];
   damage?: string;
   masteryBonus: number;
+}
+
+export interface ItemRequirement {
+  id: string;
+  attribute: AttributeKey;
+  minimum: number;
 }
 
 export interface ArmorData {
@@ -278,6 +287,8 @@ export interface CatalogItem {
   propertyText?: string;
   propertyEffects?: PropertyEffect[];
   attunementRequired?: boolean;
+  requirements?: ItemRequirement[];
+  usage?: FateAbilityUsageData;
   weapon?: WeaponData;
   armor?: ArmorData;
   fate?: FateData;

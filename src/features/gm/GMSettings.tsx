@@ -325,7 +325,7 @@ export function GMSettings() {
               </div>
               <button onClick={() => setSelectedId(undefined)} className="grid h-10 w-10 place-items-center border border-[#a8752a]/45 text-[#cfc2aa]"><X className="h-4 w-4" /></button>
             </div>
-            <Editor item={selected} catalog={data.catalog} characters={data.characters} properties={properties} gameOptions={gameOptions} savePatch={savePatch} onSaved={() => showNotice(`"${selected.name}" gespeichert.`)} />
+            <Editor item={selected} catalog={data.catalog} characters={data.characters} properties={properties} gameOptions={gameOptions} savePatch={savePatch} onSaved={() => { showNotice(`"${selected.name}" gespeichert.`); setSelectedId(undefined); }} />
           </section>
         </div>
       )}

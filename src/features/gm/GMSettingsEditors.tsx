@@ -2,7 +2,7 @@ import { CircleDot, Info, Save, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Field } from "../../components/Field";
-import type { AttributeKey, BackgroundQuestionKind, CatalogItem, CatalogType, Character, FateAbilityCategoryData, FateAbilityCategoryMode, FateAbilityCategoryTrigger, FateAbilityKind, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget } from "../../types/domain";
+import type { AttributeKey, BackgroundQuestionKind, CatalogItem, CatalogType, Character, FateAbilityCategoryData, FateAbilityCategoryMode, FateAbilityCategoryTrigger, FateAbilityKind, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget, FateAbilityUsageData } from "../../types/domain";
 import { ImageInput, MagicItemKindField, RarityField, Select, SignedNumberField } from "./GMControls";
 import {
   attributes,
@@ -73,6 +73,8 @@ export function Editor({ item, catalog, characters = [], properties, gameOptions
         <>
           <PropertyPicker item={item} properties={properties} savePatch={savePatch} />
           <TextArea label="Eigenschaft Freitext" value={item.propertyText ?? ""} onChange={(propertyText) => savePatch({ propertyText })} />
+          {supportsRequirements(item) && <RequirementEditor item={item} savePatch={savePatch} />}
+          {supportsItemUsage(item) && <FateUsageFields usage={item.usage} save={(usage) => savePatch({ usage })} label="Nutzungen, Counter oder aktive Effekte fuer diesen Gegenstand" />}
           <label className="flex items-center gap-3 border border-[#a8752a]/35 bg-black/25 p-3 text-[#cfc2aa]">
             <input type="checkbox" checked={item.attunementRequired ?? false} onChange={(event) => savePatch({ attunementRequired: event.target.checked })} />
             <CircleDot className="h-4 w-4 text-[#f2ca75]" />
@@ -82,7 +84,7 @@ export function Editor({ item, catalog, characters = [], properties, gameOptions
       )}
 
       <button type="button" onClick={onSaved} className="inline-flex h-11 items-center justify-center gap-2 border border-[#a8752a]/35 bg-black/30 px-4 text-sm font-bold uppercase tracking-wide text-[#cfc2aa]">
-        <Save size={18} /> Automatisch gespeichert
+        <Save size={18} /> Speichern & schliessen
       </button>
     </div>
   );
@@ -120,7 +122,7 @@ function PropertyEffectEditor({ item, savePatch }: SpecificEditorProps) {
               options={effectTargets.map((target) => [target.key, target.label])}
             />
             <SignedNumberField label="Wert" value={effect.value} onChange={(value) => updateEffect({ ...effect, value })} />
-            <Field label="Notiz optional" value={effect.condition ?? ""} onChange={(condition) => updateEffect({ ...effect, condition })} />
+            <Select label="Wert-Attribut" value={effect.attributeKey ?? ""} onChange={(attributeKey) => updateEffect({ ...effect, attributeKey: attributeKey as AttributeKey | "" })} options={[["", "Fester Wert"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
             <button
               type="button"
               onClick={() => savePatch({ propertyEffects: effects.filter((entry) => entry.id !== effect.id) })}
@@ -146,6 +148,7 @@ function PropertyEffectEditor({ item, savePatch }: SpecificEditorProps) {
               ))}
             </div>
           )}
+          <Field label="Notiz optional" value={effect.condition ?? ""} onChange={(condition) => updateEffect({ ...effect, condition })} />
         </div>
       ))}
       {!effects.length && <div className="text-sm text-[#8c8170]">Keine Werteffekte. Die Beschreibung bleibt trotzdem als Regeltext nutzbar.</div>}
@@ -278,6 +281,8 @@ function WeaponFields({ item, gameOptions, properties, savePatch }: SpecificEdit
       <Select label="Reichweite" value={weapon.rangeId ?? ""} onChange={selectRange} options={[["", "Reichweite waehlen"], ...ranges.map((range) => [range.id, range.name] as [string, string])]} />
       <Select label="Weitere Reichweite" value={weapon.secondaryRangeId ?? ""} onChange={selectSecondaryRange} options={[["", "Keine zweite Reichweite"], ...ranges.map((range) => [range.id, range.name] as [string, string])]} />
       <Field label="Angriffsbonus optional" type="number" value={weapon.attackBonus ?? 0} onChange={(value) => savePatch({ weapon: { ...weapon, attackBonus: Number(value) } })} />
+      <Field label="Schadensbonus fest" type="number" value={weapon.damageBonusFlat ?? 0} onChange={(value) => savePatch({ weapon: { ...weapon, damageBonusFlat: Number(value) } })} />
+      <DamageBonusDiceSelect selected={weapon.damageBonusDice ?? []} onChange={(damageBonusDice) => savePatch({ weapon: { ...weapon, damageBonusDice } })} />
       <Field label="Schadenswuerfel" value={weapon.damageDie ?? weapon.damage ?? ""} onChange={(damageDie) => savePatch({ weapon: { ...weapon, damageDie } })} />
       <Select label="Schadenswuerfel Icon" value={weapon.damageDieId ?? ""} onChange={selectDamageDie} options={[["", "Wuerfel waehlen"], ...damageDice.map(optionPair)]} />
       <Select label="Schadensart" value={weapon.damageTypeId ?? ""} onChange={selectDamageType} options={[["", "Schadensart waehlen"], ...damageTypes.map(optionPair)]} />
@@ -318,6 +323,57 @@ function ArmorFields({ item, savePatch }: SpecificEditorProps) {
       </div>
     </div>
   );
+}
+
+function DamageBonusDiceSelect({ selected, onChange }: { selected: string[]; onChange: (value: string[]) => void }) {
+  const dice = ["W4", "W6", "W8", "W10", "W12", "W20"];
+  return (
+    <div className="grid gap-2">
+      <Select label="Schadensbonus Wuerfel" value="" onChange={(die) => die && onChange([...selected, die])} options={[["", "Bonuswuerfel waehlen"], ...dice.map((die) => [die, die] as [string, string])]} />
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {selected.map((die, index) => (
+            <button key={`${die}-${index}`} type="button" onClick={() => onChange(selected.filter((_, entryIndex) => entryIndex !== index))} className="border border-[#a8752a]/40 bg-black/30 px-2 py-1 text-sm text-[#ffd88c]">
+              {die} x
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RequirementEditor({ item, savePatch }: SpecificEditorProps) {
+  const requirements = item.requirements ?? [];
+  function update(id: string, patch: Partial<(typeof requirements)[number]>) {
+    savePatch({ requirements: requirements.map((entry) => entry.id === id ? { ...entry, ...patch } : entry) });
+  }
+  return (
+    <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-black uppercase tracking-[0.16em] text-[#f2ca75]">Mindestanforderungen</div>
+        <button type="button" onClick={() => savePatch({ requirements: [...requirements, { id: crypto.randomUUID(), attribute: "kraft", minimum: 0 }] })} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Anforderung +</button>
+      </div>
+      {requirements.map((requirement) => (
+        <div key={requirement.id} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_120px_auto]">
+          <Select label="Attribut" value={requirement.attribute} onChange={(attribute) => update(requirement.id, { attribute: attribute as AttributeKey })} options={attributes.map((attribute) => [attribute.key, attribute.label])} />
+          <Field label="Minimum" type="number" value={requirement.minimum} onChange={(minimum) => update(requirement.id, { minimum: Number(minimum) })} />
+          <button type="button" onClick={() => savePatch({ requirements: requirements.filter((entry) => entry.id !== requirement.id) })} className="self-end border border-red-400/45 px-3 py-3 text-red-200">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+      {!requirements.length && <div className="text-sm text-[#8c8170]">Keine Anforderungen hinterlegt.</div>}
+    </div>
+  );
+}
+
+function supportsRequirements(item: CatalogItem) {
+  return item.type === "weapon" || item.type === "armor" || (item.type === "magicItem" && ["weapon", "armor", "item"].includes(item.magicItemKind ?? "item"));
+}
+
+function supportsItemUsage(item: CatalogItem) {
+  return item.type === "equipment" || item.type === "material" || item.type === "magicItem";
 }
 
 function RangeFields({ item, savePatch }: SpecificEditorProps) {
@@ -510,13 +566,13 @@ function FateAbilityFields({ item, catalog, savePatch }: SpecificEditorProps & {
         Überschrift im Inventar anzeigen
       </label>
       <ImageInput label="Kartenbild" value={ability.cardImageUrl ?? ""} onChange={(cardImageUrl) => savePatch({ fateAbility: { ...ability, cardImageUrl } })} />
-      <FateUsageFields ability={ability} save={(usage) => savePatch({ fateAbility: { ...ability, usage } })} />
+      <FateUsageFields usage={ability.usage} save={(usage) => savePatch({ fateAbility: { ...ability, usage } })} label="Nutzungen, Counter oder aktive Effekte fuer diese Karte" />
     </div>
   );
 }
 
-function FateUsageFields({ ability, save }: { ability: NonNullable<CatalogItem["fateAbility"]>; save: (usage: NonNullable<CatalogItem["fateAbility"]>["usage"]) => void }) {
-  const usage = ability.usage ?? {};
+function FateUsageFields({ usage: savedUsage, save, label }: { usage?: FateAbilityUsageData; save: (usage: FateAbilityUsageData) => void; label: string }) {
+  const usage = savedUsage ?? {};
   const enabled = Boolean(usage.enabled);
   const effects = usage.activationEffects ?? [];
   const patch = (patchUsage: Partial<NonNullable<typeof usage>>) => save({ ...usage, ...patchUsage });
@@ -542,7 +598,7 @@ function FateUsageFields({ ability, save }: { ability: NonNullable<CatalogItem["
     <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3 md:col-span-2">
       <label className="flex min-h-11 items-center gap-2 border border-[#a8752a]/30 bg-black/25 px-3 text-sm text-[#cfc2aa]">
         <input type="checkbox" checked={enabled} onChange={(event) => patch({ enabled: event.target.checked })} />
-        Nutzungen, Counter oder aktive Effekte fuer diese Karte
+        {label}
       </label>
       {enabled && (
         <div className="grid gap-4">
@@ -584,11 +640,14 @@ function FateUsageFields({ ability, save }: { ability: NonNullable<CatalogItem["
               <div key={effect.id} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_130px_minmax(0,1fr)_auto]">
                 <Select label="Ziel" value={effect.target} onChange={(target) => updateEffect({ ...effect, target: target as PropertyEffectTarget })} options={effectTargets.map((target) => [target.key, target.label])} />
                 <SignedNumberField label="Wert" value={effect.value} onChange={(value) => updateEffect({ ...effect, value })} />
-                <Field label="Notiz optional" value={effect.condition ?? ""} onChange={(condition) => updateEffect({ ...effect, condition })} />
+                <Select label="Wert-Attribut" value={effect.attributeKey ?? ""} onChange={(attributeKey) => updateEffect({ ...effect, attributeKey: attributeKey as AttributeKey | "" })} options={[["", "Fester Wert"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
                 <button type="button" onClick={() => patch({ activationEffects: effects.filter((entry) => entry.id !== effect.id) })} className="self-end border border-red-400/45 px-3 py-3 text-red-200">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
+            ))}
+            {effects.map((effect) => (
+              <Field key={`${effect.id}-condition`} label="Notiz optional" value={effect.condition ?? ""} onChange={(condition) => updateEffect({ ...effect, condition })} />
             ))}
           </div>
         </div>

@@ -180,8 +180,8 @@ function StartPanel({ draft, patchCharacter, onStart }: { draft: Character; patc
   function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    setOffsetX(clamp(drag.offsetX + event.clientX - drag.startX, -120, 120));
-    setOffsetY(clamp(drag.offsetY + event.clientY - drag.startY, -120, 120));
+    setOffsetX(drag.offsetX + event.clientX - drag.startX);
+    setOffsetY(drag.offsetY + event.clientY - drag.startY);
   }
 
   function stopDrag(event: React.PointerEvent<HTMLDivElement>) {
@@ -215,8 +215,6 @@ function StartPanel({ draft, patchCharacter, onStart }: { draft: Character; patc
             <div className="pointer-events-none absolute inset-3 rounded-full border-2 border-dashed border-[#ffd88c]" />
           </div>
           <label className="grid gap-1 text-sm text-[#cfc2aa]">Zoom<input type="range" min="1" max="3" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} /></label>
-          <label className="grid gap-1 text-sm text-[#cfc2aa]">Horizontal<input type="range" min="-120" max="120" step="1" value={offsetX} onChange={(event) => setOffsetX(Number(event.target.value))} /></label>
-          <label className="grid gap-1 text-sm text-[#cfc2aa]">Vertikal<input type="range" min="-120" max="120" step="1" value={offsetY} onChange={(event) => setOffsetY(Number(event.target.value))} /></label>
           {portraitMessage && <div className="text-sm text-amber-200">{portraitMessage}</div>}
           <button type="button" disabled={portraitBusy} onClick={applyPortraitCrop} className="min-h-11 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 py-2 font-bold text-[#ffd88c] disabled:cursor-not-allowed disabled:opacity-55">
             {portraitBusy ? "Portrait wird gespeichert..." : "Portrait übernehmen"}

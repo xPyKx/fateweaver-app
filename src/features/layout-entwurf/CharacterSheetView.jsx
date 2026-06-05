@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowLeft,
+  Maximize2,
+  Minimize2,
   Settings,
   Store,
   Moon,
@@ -284,8 +286,9 @@ function ItemRow({ item, onClick, attunementIconUrl, attuned, onToggleAttunement
   ].filter(Boolean).join(", ");
   const isArmor = item.type === "Rüstung";
   const itemTitle = item.name || (isArmor ? "Keine Rüstung" : "Keine Waffe");
+  const unmet = item.requirementsMet === false;
   return (
-    <button onClick={onClick} disabled={item.disabled} className={`relative min-h-36 w-full overflow-hidden border border-[#a8752a]/45 bg-black/28 p-3 text-left transition hover:border-[#e6b866] disabled:cursor-not-allowed disabled:opacity-55 ${item.disabled ? "grayscale" : ""}`}>
+    <button onClick={onClick} disabled={item.disabled} className={`relative min-h-36 w-full overflow-hidden border border-[#a8752a]/45 bg-black/28 p-3 text-left transition hover:border-[#e6b866] disabled:cursor-not-allowed disabled:opacity-55 ${item.disabled || unmet ? "grayscale opacity-60" : ""}`}>
       <div className="absolute left-2 top-2 h-4 w-4 border-l border-t border-[#e6b866]/55" />
       <div className="absolute right-2 top-2 h-4 w-4 border-r border-t border-[#e6b866]/55" />
       <div className="pointer-events-none absolute inset-0 grid place-items-center text-[#d79a39] opacity-[0.1]">{item.imageUrl ? <img src={item.imageUrl} alt="" className="h-full w-full object-contain" /> : item.icon}</div>
@@ -299,6 +302,7 @@ function ItemRow({ item, onClick, attunementIconUrl, attuned, onToggleAttunement
             <div className={`${isArmor ? "text-2xl" : "text-2xl"} line-clamp-2 font-light leading-tight text-white`}>{itemTitle}</div>
             {item.rawDescription && <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-[#cfc2aa]">{item.rawDescription}</p>}
             {propertyLabel && <div className="mt-2 line-clamp-1 text-xs font-bold uppercase tracking-[0.12em] text-[#ffd88c]">Eigenschaft: {propertyLabel}</div>}
+            {unmet && <div className="mt-2 text-xs font-bold uppercase tracking-[0.12em] text-red-200">Anforderung nicht erfüllt</div>}
           </div>
           {!isArmor && (
             <div className="flex items-center justify-end gap-2">
@@ -701,7 +705,7 @@ function CatalogCardPanel({ items, mode = "grid", fallback = [], orderKey, chara
   if (!items.length) return <div className="border border-[#a8752a]/30 bg-black/25 p-6 text-[#8c8170]">Noch nichts gewählt.</div>;
   return (
     <>
-    <div className={mode === "grid" ? "grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(190px,240px))]" : "grid gap-3"}>
+    <div className={mode === "grid" ? "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" : "grid gap-3"}>
       {orderedItems.map((item, index) => {
         const imageUrl = item.fateAbility?.cardImageUrl || item.imageUrl;
         const showTitle = !item.fateAbility || item.fateAbility.showTitleOnSheet;
@@ -741,7 +745,7 @@ function CatalogCardPanel({ items, mode = "grid", fallback = [], orderKey, chara
 }
 
 function FateCardUsageControls({ item, character, upsertCharacter }) {
-  const usage = item.fateAbility?.usage ?? {};
+  const usage = item.fateAbility?.usage ?? item.usage ?? {};
   const states = character.choices.fateCardStates ?? {};
   const state = states[item.id] ?? {};
   const used = Number(state.used ?? 0);
@@ -822,7 +826,7 @@ function FateCardUsageControls({ item, character, upsertCharacter }) {
 }
 
 function fateCardDisabled(item, state) {
-  const usage = item.fateAbility?.usage;
+  const usage = item.fateAbility?.usage ?? item.usage;
   if (!usage?.enabled) return false;
   const maxUses = Number(usage.maxUses ?? 0);
   const activationMax = Number(usage.activationMax ?? 0);
@@ -893,6 +897,8 @@ function MagicItemPanel({ character, catalog, upsertCharacter, mode, onReturn })
         <InventoryItemCard
           key={item.id}
           item={item}
+          character={character}
+          upsertCharacter={upsertCharacter}
           onRemove={() => removeItem(item.id)}
           onReturn={() => onReturn(item, "magicItem", { selectedMagicItemIds: selectedIds.filter((entry) => entry !== item.id) })}
         />
@@ -902,15 +908,18 @@ function MagicItemPanel({ character, catalog, upsertCharacter, mode, onReturn })
   );
 }
 
-function InventoryItemCard({ item, onRemove, onReturn, count = 0, onCount, onToggleCounter }) {
+function InventoryItemCard({ item, character, upsertCharacter, onRemove, onReturn, count = 0, onCount, onToggleCounter }) {
   const [open, setOpen] = useState(false);
+  const disabledByRequirement = !requirementsMet(item, character?.attributes);
   return (
-    <div className="flex items-start gap-3 border border-[#a8752a]/35 bg-black/25 p-3">
+    <div className={`flex items-start gap-3 border border-[#a8752a]/35 bg-black/25 p-3 ${disabledByRequirement ? "opacity-55 grayscale" : ""}`}>
       {item.imageUrl && <img src={item.imageUrl} alt="" className="h-16 w-16 object-contain" />}
       <div className="min-w-0 flex-1">
         <div className="text-xl font-light text-white">{item.name}</div>
+        {disabledByRequirement && <div className="text-xs font-bold uppercase tracking-[0.12em] text-red-200">Anforderung nicht erfüllt</div>}
         {count > 0 && <CounterControls count={count} onChange={onCount} />}
         {item.description && <p className="text-sm leading-relaxed text-[#cfc2aa]">{item.description}</p>}
+        {(item.usage?.enabled || item.fateAbility?.usage?.enabled) && character && upsertCharacter && !disabledByRequirement && <FateCardUsageControls item={item} character={character} upsertCharacter={upsertCharacter} />}
       </div>
       <div className="relative">
         <button onClick={() => setOpen(!open)} className="grid h-9 w-9 place-items-center border border-[#a8752a]/35 bg-black/25 text-[#cfc2aa]" title="Optionen"><MoreHorizontal className="h-4 w-4" /></button>
@@ -944,9 +953,10 @@ function WeaponInventoryPanel({ character, catalog, upsertCharacter, mode, sourc
   const ownedIds = Array.from(new Set([...activeIds, ...storedIds]));
   const ownedCount = ownedIds.length;
   const magicOwnedIds = ownedIds.filter((id) => catalog.find((entry) => entry.id === id)?.type === "magicItem");
+  const overflowActiveIds = inactiveSelectedWeaponIds(activeIds, catalog);
   const items = source === "magic"
     ? selectedByIds(catalog, magicOwnedIds)
-    : selectedByIds(catalog, storedIds).filter((item) => item.type !== "magicItem");
+    : selectedByIds(catalog, Array.from(new Set([...storedIds, ...overflowActiveIds]))).filter((item) => item.type !== "magicItem");
 
   function patchWeapons(selectedWeapons, storedWeaponIds) {
     upsertCharacter({
@@ -962,6 +972,7 @@ function WeaponInventoryPanel({ character, catalog, upsertCharacter, mode, sourc
 
   function activateWeapon(item) {
     if (!item?.weapon) return;
+    if (!requirementsMet(item, character.attributes)) return;
     const isOwned = ownedIds.includes(item.id);
     if (!isOwned && ownedCount >= MAX_OWNED_WEAPONS) return;
     const displaced = [];
@@ -1005,7 +1016,8 @@ function WeaponInventoryPanel({ character, catalog, upsertCharacter, mode, sourc
         {items.map((item) => {
           const active = activeIds.includes(item.id);
           const stored = storedIds.includes(item.id);
-          const blocked = !active && !stored && ownedCount >= MAX_OWNED_WEAPONS;
+          const unmet = !requirementsMet(item, character.attributes);
+          const blocked = unmet || (!active && !stored && ownedCount >= MAX_OWNED_WEAPONS);
           return (
             <div key={item.id} className={`relative grid gap-3 border p-3 ${blocked ? "border-[#a8752a]/20 bg-black/15 opacity-55" : "border-[#a8752a]/35 bg-black/25"}`}>
               <div className="absolute right-3 top-3 z-10">
@@ -1031,6 +1043,7 @@ function WeaponInventoryPanel({ character, catalog, upsertCharacter, mode, sourc
                 <div className="min-w-0 flex-1">
                   <div className="text-xl font-light text-white">{item.name}</div>
                   <div className="text-xs font-bold uppercase tracking-[0.12em] text-[#ffd88c]">{item.weapon?.hand === "twoHand" ? "Zweihändig" : item.weapon?.slot === "secondary" ? "Sekundärwaffe" : "Primärwaffe"}</div>
+                  {unmet && <div className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-red-200">Anforderung nicht erfüllt</div>}
                   {item.description && <p className="mt-1 text-sm leading-relaxed text-[#cfc2aa]">{item.description}</p>}
                 </div>
               </div>
@@ -1222,6 +1235,19 @@ function selectedByIds(catalog, ids) {
   return ids.map((id) => catalog.find((item) => item.id === id)).filter(Boolean);
 }
 
+function requirementsMet(item, attributes = {}) {
+  return (item?.requirements ?? []).every((requirement) => Number(attributes[requirement.attribute] ?? 0) >= Number(requirement.minimum ?? 0));
+}
+
+function inactiveSelectedWeaponIds(activeIds, catalog) {
+  const selected = selectedByIds(catalog, activeIds);
+  const primary = selected.find((item) => item.weapon?.slot !== "secondary");
+  const twoHand = primary?.weapon?.hand === "twoHand" ? primary : selected.find((item) => item.weapon?.hand === "twoHand");
+  if (twoHand) return selected.filter((item) => item.id !== twoHand.id).map((item) => item.id);
+  const secondary = selected.find((item) => item.weapon?.slot === "secondary");
+  return selected.filter((item) => item.id !== primary?.id && item.id !== secondary?.id).map((item) => item.id);
+}
+
 function originAdjustedExperiences(character, catalog) {
   const bonus = [character.choices?.folkId, character.choices?.societyId]
     .map((id) => catalog.find((item) => item.id === id))
@@ -1256,7 +1282,7 @@ function PotionPanel({ character, catalog, upsertCharacter, mode, onReturn }) {
   }
   return (
     <div className={mode === "grid" ? "grid gap-3 md:grid-cols-2 xl:grid-cols-3" : "grid gap-3"}>
-      <InventoryItemCard item={item} count={count} onCount={patchCounts} onToggleCounter={() => patchCounts(count > 0 ? 0 : 1)} onReturn={() => onReturn(item, "potion", { selectedPotionId: undefined })} />
+      <InventoryItemCard item={item} character={character} upsertCharacter={upsertCharacter} count={count} onCount={patchCounts} onToggleCounter={() => patchCounts(count > 0 ? 0 : 1)} onReturn={() => onReturn(item, "potion", { selectedPotionId: undefined })} />
     </div>
   );
 }
@@ -1286,7 +1312,7 @@ function MaterialPanel({ character, catalog, upsertCharacter, mode, onReturn }) 
   return (
     <div className="grid gap-4">
       <div className={mode === "grid" ? "grid gap-3 md:grid-cols-2 xl:grid-cols-3" : "grid gap-3"}>
-        {selectedItems.map((item) => <InventoryItemCard key={item.id} item={item} count={counts[item.id] ?? 0} onCount={(value) => setCount(item.id, value)} onToggleCounter={() => setCount(item.id, counts[item.id] > 0 ? 0 : 1)} onRemove={() => patch({ selectedMaterialIds: selectedIds.filter((id) => id !== item.id), selectedMaterialCounts: Object.fromEntries(Object.entries(counts).filter(([id]) => id !== item.id)) })} onReturn={() => onReturn(item, "material", { selectedMaterialIds: selectedIds.filter((id) => id !== item.id), selectedMaterialCounts: Object.fromEntries(Object.entries(counts).filter(([id]) => id !== item.id)) })} />)}
+        {selectedItems.map((item) => <InventoryItemCard key={item.id} item={item} character={character} upsertCharacter={upsertCharacter} count={counts[item.id] ?? 0} onCount={(value) => setCount(item.id, value)} onToggleCounter={() => setCount(item.id, counts[item.id] > 0 ? 0 : 1)} onRemove={() => patch({ selectedMaterialIds: selectedIds.filter((id) => id !== item.id), selectedMaterialCounts: Object.fromEntries(Object.entries(counts).filter(([id]) => id !== item.id)) })} onReturn={() => onReturn(item, "material", { selectedMaterialIds: selectedIds.filter((id) => id !== item.id), selectedMaterialCounts: Object.fromEntries(Object.entries(counts).filter(([id]) => id !== item.id)) })} />)}
         {!selectedItems.length && <div className="border border-[#a8752a]/30 bg-black/25 p-6 text-[#8c8170]">Keine Materialien im Inventar.</div>}
       </div>
       <select className="min-h-11 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" value="" onChange={(event) => addMaterial(event.target.value)}>
@@ -1674,6 +1700,12 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
   const [messageOpen, setMessageOpen] = useState(false);
   const [dismissedMessageId, setDismissedMessageId] = useState(null);
   const [activeGmMessage, setActiveGmMessage] = useState(null);
+  const [fullscreen, setFullscreen] = useState(() => typeof document !== "undefined" && Boolean(document.fullscreenElement));
+  useEffect(() => {
+    const updateFullscreen = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", updateFullscreen);
+    return () => document.removeEventListener("fullscreenchange", updateFullscreen);
+  }, []);
   useEffect(() => {
     if (!character) return;
     const nextUnread = (data.messages ?? [])
@@ -1743,6 +1775,14 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
     setShopOpen(true);
   }
 
+  async function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen?.();
+    } else {
+      await document.documentElement.requestFullscreen?.();
+    }
+  }
+
   return (
     <Shell>
       <div className="space-y-4">
@@ -1750,6 +1790,7 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
           <div className="flex flex-wrap items-center gap-3 border-b border-[#a8752a]/35 bg-black/20 px-4 py-3">
             <button onClick={onBack} className="grid h-10 w-10 place-items-center border border-[#a8752a]/40 bg-black/35 text-[#cfc2aa] hover:text-[#f2ca75]"><ArrowLeft className="h-5 w-5" /></button>
             <div className="mr-auto text-sm font-black uppercase tracking-[0.18em] text-[#cfc2aa]">Charakterbogen</div>
+            <ActionButton icon={fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />} onClick={toggleFullscreen}>{fullscreen ? "Vollbild aus" : "Vollbild"}</ActionButton>
             {activeShop && (
               <div className="relative">
                 <ActionButton icon={<Store className="h-4 w-4" />} onClick={openShop}>Shop</ActionButton>

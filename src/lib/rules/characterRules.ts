@@ -118,7 +118,11 @@ export function effectiveExperiences(character: Character): ExperienceEntry[] {
 }
 
 export function difficulty(attributes: Attributes, level: number) {
-  return 10 + trainingBonusForLevel(level) + Math.max(attributes.intelligenz, attributes.willenskraft);
+  return 10 + trainingBonusForLevel(level) + Math.max(attributes.kraft, attributes.agilitaet, attributes.intelligenz, attributes.willenskraft);
+}
+
+export function effectiveDifficulty(attributes: Attributes, character: Character) {
+  return 10 + effectiveTrainingBonus(character) + Math.max(attributes.kraft, attributes.agilitaet, attributes.intelligenz, attributes.willenskraft);
 }
 
 export function sumBonuses(bonuses: BonusSource[]) {

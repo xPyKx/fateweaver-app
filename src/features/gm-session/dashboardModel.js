@@ -1,4 +1,4 @@
-export const GIVE_TYPES = [["magicItem", "Magische Gegenstaende"], ["equipment", "Ausruestung"], ["weapon", "Waffen"], ["armor", "Ruestung"], ["potion", "Traenke"]];
+export const GIVE_TYPES = [["magicItem", "Magische Gegenstaende"], ["equipment", "Ausruestung"], ["weapon", "Waffen"], ["armor", "Ruestung"], ["potion", "Traenke"], ["material", "Materialien"]];
 
 export const DEFAULT_SESSION = { shops: [], shopGroups: [], shopRequests: [], inventoryHistory: [], attunementLimit: 3 };
 

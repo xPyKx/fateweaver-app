@@ -206,7 +206,7 @@ function ShopModule({ data, gmSession, saveSession }) {
   const [step, setStep] = useState(1);
   const [releaseOpen, setReleaseOpen] = useState(false);
   const activeShop = gmSession.shops.find((shop) => shop.id === activeShopId);
-  const shopItems = data.catalog.filter((item) => ["magicItem", "weapon", "armor", "equipment", "potion"].includes(item.type));
+  const shopItems = data.catalog.filter((item) => ["magicItem", "weapon", "armor", "equipment", "potion", "material"].includes(item.type));
   const groups = gmSession.shopGroups ?? [];
 
   function updateShop(patch) {
@@ -571,6 +571,12 @@ function addItemToCharacter(character, item) {
   if (item.type === "weapon") return addWeapon(character, item.id);
   if (item.type === "armor") return { ...character, choices: { ...choices, selectedArmorId: item.id }, updatedAt: now };
   if (item.type === "potion") return { ...character, choices: { ...choices, selectedPotionId: item.id }, updatedAt: now };
+  if (item.type === "material") {
+    const alreadyOwned = (choices.selectedMaterialIds ?? []).includes(item.id);
+    const counts = { ...(choices.selectedMaterialCounts ?? {}) };
+    if (alreadyOwned) counts[item.id] = Math.max(1, counts[item.id] ?? 1) + 1;
+    return { ...character, choices: { ...choices, selectedMaterialIds: unique([...(choices.selectedMaterialIds ?? []), item.id]), selectedMaterialCounts: counts }, updatedAt: now };
+  }
   const alreadyOwned = (choices.selectedEquipmentIds ?? []).includes(item.id);
   const counts = { ...(choices.selectedEquipmentCounts ?? {}) };
   if (alreadyOwned) counts[item.id] = Math.max(1, counts[item.id] ?? 1) + 1;

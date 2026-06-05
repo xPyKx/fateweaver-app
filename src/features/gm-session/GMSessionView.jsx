@@ -486,6 +486,15 @@ function ReleaseCenterModule({ data, onSave }) {
     patchPage(handout, page.id, { releasedToCharacterIds: unique(characterIds) });
   }
 
+  function lockAllPages(handout) {
+    patchHandout(handout, {
+      handoutPages: (handout.handoutPages ?? []).map((page) => ({
+        ...page,
+        releasedToCharacterIds: []
+      }))
+    });
+  }
+
   return (
     <section className="grid gap-4 xl:grid-cols-[300px_minmax(280px,0.75fr)_minmax(420px,1.2fr)]">
       <div className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
@@ -537,6 +546,7 @@ function ReleaseCenterModule({ data, onSave }) {
                 <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Seitenfreigabe</div>
                 <h2 className="text-2xl font-light text-white">{selectedHandout.name}</h2>
               </div>
+              <button onClick={() => lockAllPages(selectedHandout)} className="border border-red-300/35 px-3 py-2 text-sm text-red-200">Alle Seiten sperren</button>
               <button onClick={() => addPage(selectedHandout)} className="border border-[#a8752a]/40 px-3 py-2 text-sm text-[#ffd88c]">Seite +</button>
             </div>
             <div className="grid gap-3">

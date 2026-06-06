@@ -47,6 +47,7 @@ export interface GameStore {
   restoreData: (data: AppData) => void;
   deleteCatalogItem: (id: string) => void;
   upsertHint: (hint: InfoHint) => void;
+  deleteHint: (id: string) => void;
   updateSession: (state: SessionState) => void;
   updateGmSession: (session: GmSessionData) => void;
   upsertCampaign: (campaign: Campaign) => void;

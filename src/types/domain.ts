@@ -600,9 +600,23 @@ export interface SessionState {
 export interface InfoHint {
   id: string;
   workspaceId?: string;
+  scope?: "catalog" | "characterSheet";
   target: string;
+  targetLabel?: string;
   title: string;
   body: string;
+  enabled?: boolean;
+  playerVisible?: boolean;
+  iconSize?: number;
+  position?: {
+    x: number;
+    y: number;
+  };
+  panelPosition?: {
+    x: number;
+    y: number;
+  };
+  panelPlacement?: "free" | "attached";
   createdAt?: string;
   updatedAt?: string;
 }

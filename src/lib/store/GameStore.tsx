@@ -362,6 +362,11 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
               : [...current.infoHints, nextHint]
           };
         }),
+      deleteHint: (id) =>
+        setData((current) => ({
+          ...current,
+          infoHints: current.infoHints.filter((hint) => hint.id !== id)
+        })),
       updateSession: (state) =>
         setData((current) => ({
           ...current,
@@ -602,7 +607,33 @@ function normalizeCatalogItems(items: CatalogItem[]) {
 function normalizeInfoHints(items: InfoHint[]) {
   return items.map((item) => {
     const timestamp = item.updatedAt ?? item.createdAt ?? new Date().toISOString();
-    return { ...item, createdAt: item.createdAt ?? timestamp, updatedAt: item.updatedAt ?? timestamp };
+    const isSheetHint = item.scope === "characterSheet" || item.target.startsWith("sheet:");
+    const x = Number(item.position?.x);
+    const y = Number(item.position?.y);
+    const panelX = Number(item.panelPosition?.x);
+    const panelY = Number(item.panelPosition?.y);
+    return {
+      ...item,
+      scope: item.scope ?? "catalog",
+      enabled: item.enabled ?? true,
+      playerVisible: item.playerVisible ?? true,
+      iconSize: isSheetHint ? Math.max(16, Number(item.iconSize ?? 40) || 40) : item.iconSize,
+      panelPlacement: isSheetHint ? item.panelPlacement ?? "free" : item.panelPlacement,
+      position: isSheetHint
+        ? {
+            x: Number.isFinite(x) ? Math.max(0, Math.min(100, x)) : 50,
+            y: Number.isFinite(y) ? Math.max(0, Math.min(100, y)) : 50
+          }
+        : item.position,
+      panelPosition: isSheetHint
+        ? {
+            x: Number.isFinite(panelX) ? Math.max(0, Math.min(100, panelX)) : Math.max(0, Math.min(100, (Number.isFinite(x) ? x : 50) + 3)),
+            y: Number.isFinite(panelY) ? Math.max(0, Math.min(100, panelY)) : Math.max(0, Math.min(100, (Number.isFinite(y) ? y : 50) + 3))
+          }
+        : item.panelPosition,
+      createdAt: item.createdAt ?? timestamp,
+      updatedAt: item.updatedAt ?? timestamp
+    };
   });
 }
 

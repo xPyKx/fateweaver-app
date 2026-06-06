@@ -21,13 +21,16 @@ export function GoldPanel({ children, className = "" }) {
   );
 }
 
-export function ActionButton({ children, icon, active, onClick }) {
+export function ActionButton({ children, icon, active, activeTone = "gold", onClick }) {
+  const activeClass = activeTone === "blue"
+    ? "border-sky-300/80 bg-sky-600/25 text-sky-100 shadow-[0_0_18px_rgba(14,165,233,.22)]"
+    : "border-[#e5b764] bg-[#d09a3b]/15 text-[#ffd88c]";
   return (
     <button
       onClick={onClick}
       className={`flex h-11 items-center gap-2 border px-4 text-sm font-bold uppercase tracking-wide transition ${
         active
-          ? "border-[#e5b764] bg-[#d09a3b]/15 text-[#ffd88c]"
+          ? activeClass
           : "border-[#a8752a]/45 bg-black/35 text-[#e9dec6] hover:border-[#e5b764] hover:text-[#ffd88c]"
       }`}
     >

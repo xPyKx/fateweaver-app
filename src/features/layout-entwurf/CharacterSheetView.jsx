@@ -13,6 +13,7 @@ import {
   Sword,
   Sparkles,
   Eye,
+  Info,
   BookOpen,
   Feather,
   X,
@@ -1760,7 +1761,150 @@ function formatMessageDate(value) {
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("de-DE");
 }
 
-export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter, onLevelUp, onRest }) {
+function SheetInfoOverlay({ active, hints, activeId, onSelect, onMove, showPanels = true, onPanelMove }) {
+  if (!active || !hints.length) return null;
+  function startDrag(event, hint) {
+    if (!onMove) return;
+    const area = event.currentTarget.closest("[data-info-area]")?.getBoundingClientRect();
+    if (!area) return;
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    onSelect(hint.id);
+    function move(moveEvent) {
+      const x = ((moveEvent.clientX - area.left) / area.width) * 100;
+      const y = ((moveEvent.clientY - area.top) / area.height) * 100;
+      onMove(hint, clampHintPosition({ x, y }));
+    }
+    function stop() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+  }
+  function startResize(event, hint) {
+    if (!onMove) return;
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startSize = Math.max(16, Number(hint.iconSize ?? 40) || 40);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    onSelect(hint.id);
+    function move(moveEvent) {
+      const delta = Math.max(moveEvent.clientX - startX, moveEvent.clientY - startY);
+      const iconSize = Math.max(16, Math.round(startSize + delta));
+      onMove({ ...hint, iconSize }, clampHintPosition(hint.position));
+    }
+    function stop() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+  }
+  function startPanelDrag(event, hint) {
+    if (!onPanelMove) return;
+    const area = event.currentTarget.closest("[data-info-area]")?.getBoundingClientRect();
+    if (!area) return;
+    event.stopPropagation();
+    const current = clampHintPosition(hint.panelPosition ?? {
+      x: clampHintPosition(hint.position).x + 3,
+      y: clampHintPosition(hint.position).y + 3
+    });
+    const startX = event.clientX;
+    const startY = event.clientY;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    onSelect(hint.id);
+    function move(moveEvent) {
+      const x = current.x + ((moveEvent.clientX - startX) / area.width) * 100;
+      const y = current.y + ((moveEvent.clientY - startY) / area.height) * 100;
+      onPanelMove(hint, clampHintPosition({ x, y }));
+    }
+    function stop() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+  }
+  return (
+    <div data-info-area className="pointer-events-none absolute inset-0 z-[90]">
+      {hints.map((hint) => {
+        const position = clampHintPosition(hint.position);
+        const open = activeId === hint.id;
+        const iconSize = Math.max(16, Number(hint.iconSize ?? 40) || 40);
+        return (
+          <div
+            key={hint.id}
+            className={`pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 ${onMove ? "cursor-move" : ""}`}
+            style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${iconSize}px`, height: `${iconSize}px` }}
+          >
+            {onMove && open && <div className="pointer-events-none absolute inset-[-6px] border-2 border-sky-200/90" />}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelect(open ? null : hint.id);
+              }}
+              onPointerDown={(event) => startDrag(event, hint)}
+              className="grid h-full w-full place-items-center rounded-full border border-sky-200 bg-sky-600 font-black text-white shadow-[0_0_22px_rgba(14,165,233,.55)] transition hover:bg-sky-500"
+              style={{ fontSize: `${Math.max(12, Math.round(iconSize * 0.38))}px` }}
+              title={hint.targetLabel || hint.title}
+            >
+              i
+            </button>
+            {onMove && open && (
+              <button
+                type="button"
+                onPointerDown={(event) => startResize(event, hint)}
+                onClick={(event) => event.stopPropagation()}
+                className="absolute -bottom-4 -right-4 z-10 h-8 w-8 cursor-nwse-resize border-2 border-sky-100 bg-sky-500 shadow-lg shadow-black/50"
+                title="Groesse ziehen"
+              >
+                <span className="absolute bottom-1 right-1 h-3 w-3 border-b-2 border-r-2 border-white" />
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {hints.map((hint) => {
+        const position = clampHintPosition(hint.position);
+        const attached = hint.panelPlacement === "attached";
+        const panelPosition = attached
+          ? position
+          : clampHintPosition(hint.panelPosition ?? { x: position.x + 3, y: position.y + 3 });
+        const open = activeId === hint.id;
+        if (!open || !showPanels) return null;
+        return (
+          <div
+            key={`panel-${hint.id}`}
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => {
+              if (!attached) startPanelDrag(event, hint);
+            }}
+            className={`pointer-events-auto absolute w-[min(22rem,calc(100vw-2rem))] border border-sky-300/70 bg-[#07111d]/95 p-4 text-sm text-[#dbeafe] shadow-2xl shadow-black/70 ${onPanelMove && !attached ? "cursor-move" : ""}`}
+            style={{ left: `${panelPosition.x}%`, top: `${panelPosition.y}%`, transform: attached ? "translate(1rem, 1rem)" : "none" }}
+          >
+            <div className="mb-1 text-xs font-black uppercase tracking-[0.16em] text-sky-200">{hint.targetLabel || "Info"}</div>
+            <div className="text-lg font-semibold text-white">{hint.title}</div>
+            {hint.body && <p className="mt-3 whitespace-pre-wrap leading-relaxed text-[#d8e8f8]">{hint.body}</p>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function clampHintPosition(position) {
+  const x = Number(position?.x);
+  const y = Number(position?.y);
+  return {
+    x: Number.isFinite(x) ? Math.max(2, Math.min(98, x)) : 50,
+    y: Number.isFinite(y) ? Math.max(2, Math.min(98, y)) : 50
+  };
+}
+
+export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter, onLevelUp, onRest, placementMode = false, placementHints, activePlacementId, showPlacementInfo = false, onPlacementSelect, onPlacementMove, onPlacementPanelMove }) {
   const { data, activeCharacter, upsertCharacter, updateGmSession, sendMessage, markMessageRead } = useGameStore();
   const character = data.characters.find((entry) => entry.id === selectedCharacter) ?? activeCharacter;
   const [inspiration, setInspirationState] = useState(character?.resources?.inspiration ?? 2);
@@ -1768,6 +1912,8 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
   const [shopOpen, setShopOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
   const [handoutOpen, setHandoutOpen] = useState(false);
+  const [infoMode, setInfoMode] = useState(false);
+  const [activeInfoId, setActiveInfoId] = useState(null);
   const [dismissedMessageId, setDismissedMessageId] = useState(null);
   const [activeGmMessage, setActiveGmMessage] = useState(null);
   const [fullscreen, setFullscreen] = useState(() => typeof document !== "undefined" && Boolean(document.fullscreenElement));
@@ -1812,6 +1958,10 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
     .sort((left, right) => Date.parse(right.createdAt ?? "") - Date.parse(left.createdAt ?? ""));
   const unreadGmMessage = characterMessages.find((message) => message.fromRole === "gm" && message.status === "unread" && message.id !== dismissedMessageId);
   const visibleHandouts = playerHandouts(data.customGmModules ?? [], character.id);
+  const sheetInfoHints = (placementMode ? placementHints ?? [] : data.infoHints ?? [])
+    .filter((hint) => hint.scope === "characterSheet")
+    .filter((hint) => placementMode || (hint.enabled !== false && hint.playerVisible !== false))
+    .filter((hint) => placementMode || hint.title?.trim() || hint.body?.trim());
   function patchResources(patch) {
     upsertCharacter({ ...character, resources: { ...(character.resources ?? {}), ...patch }, updatedAt: new Date().toISOString() });
   }
@@ -1854,13 +2004,21 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
     }
   }
 
+  function toggleInfoMode() {
+    setInfoMode((current) => {
+      if (current) setActiveInfoId(null);
+      return !current;
+    });
+  }
+
   return (
     <Shell>
-      <div className="space-y-4">
+      <div className="relative space-y-4" onClick={() => placementMode ? onPlacementSelect?.(null) : setActiveInfoId(null)}>
         <GoldPanel className="overflow-hidden">
           <div className="flex flex-wrap items-center gap-3 border-b border-[#a8752a]/35 bg-black/20 px-4 py-3">
             <button onClick={onBack} className="grid h-10 w-10 place-items-center border border-[#a8752a]/40 bg-black/35 text-[#cfc2aa] hover:text-[#f2ca75]"><ArrowLeft className="h-5 w-5" /></button>
             <div className="mr-auto text-sm font-black uppercase tracking-[0.18em] text-[#cfc2aa]">Charakterbogen</div>
+            {!placementMode && <ActionButton icon={<Info className="h-4 w-4" />} active={infoMode} activeTone="blue" onClick={(event) => { event.stopPropagation(); toggleInfoMode(); }}>Info</ActionButton>}
             <ActionButton icon={fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />} onClick={toggleFullscreen}>{fullscreen ? "Vollbild aus" : "Vollbild"}</ActionButton>
             {activeShop && (
               <div className="relative">
@@ -1952,6 +2110,15 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
         </div>
 
         <BottomPanel />
+        <SheetInfoOverlay
+          active={placementMode || infoMode}
+          hints={sheetInfoHints}
+          activeId={placementMode ? activePlacementId : activeInfoId}
+          onSelect={placementMode ? onPlacementSelect : setActiveInfoId}
+          onMove={placementMode ? onPlacementMove : undefined}
+          showPanels={placementMode ? showPlacementInfo : true}
+          onPanelMove={placementMode ? onPlacementPanelMove : undefined}
+        />
         {activeShop && hasNewShop && !shopOpen && (
           <button onClick={openShop} className="fixed bottom-4 right-4 z-50 border border-red-300/55 bg-red-950/85 px-4 py-3 font-bold uppercase tracking-wide text-red-100 shadow-xl shadow-black/60">
             Besuche den Shop!

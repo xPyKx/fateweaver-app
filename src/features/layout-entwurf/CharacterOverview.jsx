@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Edit3, Plus, ScrollText, Settings, Sparkles, Trash2 } from "lucide-react";
+import { Edit3, LayoutGrid, Plus, ScrollText, Settings, Sparkles, Trash2 } from "lucide-react";
 import { DeleteCharacterDialog } from "./DeleteCharacterDialog";
 import { SupabaseStatus } from "./SupabaseStatus";
 import { ActionButton, GoldPanel, Shell } from "./layoutPrimitives";
@@ -67,7 +67,7 @@ function CharacterCard({ character, mainFate, sideFate, catalog, onOpen, onDelet
   );
 }
 
-export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, onCreateCharacter }) {
+export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMPreparation, onOpenGMSession, onCreateCharacter }) {
   const { data, ready, authLoading, profile, currentUserId, acceptWorkspaceInvite, attachCharacterToCampaign, deleteCharacter, setActiveCharacter, upsertCharacter } = useGameStore();
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [confirmation, setConfirmation] = useState("");
@@ -115,7 +115,8 @@ export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMSession, 
             {currentUserId && profile?.isGm && (
               <div className="flex flex-wrap gap-3">
                 <ActionButton onClick={onOpenGMSession} icon={<ScrollText className="h-4 w-4" />}>GM Dashboard</ActionButton>
-                <ActionButton onClick={onOpenGM} icon={<Settings className="h-4 w-4" />}>GM-Verwaltung</ActionButton>
+                <ActionButton onClick={onOpenGMPreparation} icon={<LayoutGrid className="h-4 w-4" />}>GM Vorbereitung</ActionButton>
+                <ActionButton onClick={onOpenGM} icon={<Settings className="h-4 w-4" />}>GM Verwaltung</ActionButton>
               </div>
             )}
           </div>

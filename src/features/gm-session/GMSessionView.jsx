@@ -5,9 +5,64 @@ import { fileToPersistentImageUrl } from "../../lib/images/persistentImage";
 import { useGameStore } from "../../lib/store/GameStore";
 import { ATTRIBUTES } from "../layout-entwurf/layoutConstants";
 import { buildSheetModel } from "../layout-entwurf/sheetModel";
-import { BUILDER_STATUS, BUILDER_TYPES, BUILDER_VISIBILITY, DEFAULT_SESSION, GIVE_TYPES, buildTimelineEvents, selectWorkspaceData } from "./dashboardModel";
+import { GMSettings } from "../gm/GMSettings";
+import { BUILDER_STATUS, BUILDER_TYPES, BUILDER_VISIBILITY, DEFAULT_SESSION, GIVE_TYPES, STATBLOCK_LAYOUTS, STATBLOCK_TEMPLATES, buildTimelineEvents, selectWorkspaceData } from "./dashboardModel";
 import { TimelineList } from "./HistoryTimeline";
 import { ModuleButton } from "./ModuleButton";
+
+export function GMPreparationView({ onBack }) {
+  const { data, activeWorkspace, updateGmSession, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule } = useGameStore();
+  const workspaceId = activeWorkspace?.id ?? data.activeWorkspaceId;
+  const workspaceData = selectWorkspaceData(data, workspaceId);
+  const gmSession = normalizeDashboardSession(data.gmSession);
+  const [module, setModule] = useState("overview");
+  const preparationModules = [
+    { key: "overview", label: "Uebersicht", description: "Was vorbereitet ist und was live genutzt wird", icon: <BookOpen className="h-4 w-4" />, count: preparationCount(workspaceData, gmSession) },
+    { key: "system", label: "Baukaesten", description: "Regeln, Kataloge und Charakterbogen", icon: <LayoutGrid className="h-4 w-4" />, count: workspaceData.catalog.length },
+    { key: "campaigns", label: "Kampagne", description: "Kampagnen, Sessions und Zuordnungen", icon: <CalendarDays className="h-4 w-4" />, count: (workspaceData.campaigns ?? []).length },
+    { key: "shops", label: "Shops", description: "Haendler, Inventar, Gruppen und Freigaben", icon: <Store className="h-4 w-4" />, count: gmSession.shops.length },
+    { key: "handouts", label: "Handouts", description: "Orte, Buecher, Seiten und Freigaben vorbereiten", icon: <BookOpen className="h-4 w-4" />, count: handoutPageCount(workspaceData.customGmModules ?? []) },
+    { key: "enemies", label: "Gegner", description: "Modulare Statblocks und Anzeige-Layouts", icon: <AlertTriangle className="h-4 w-4" />, count: enemyModules(workspaceData.customGmModules ?? []).length },
+    { key: "builder", label: "Baukasten", description: "NSC, Orte, Fraktionen, Quests und Notizen", icon: <LayoutGrid className="h-4 w-4" />, count: (workspaceData.customGmModules ?? []).length }
+  ];
+  const activeModule = preparationModules.find((entry) => entry.key === module) ?? preparationModules[0];
+  function saveSession(patch) {
+    updateGmSession({ ...gmSession, ...patch });
+  }
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 border border-[#a8752a]/35 bg-black/20 p-4 xl:grid-cols-[280px_1fr]">
+        <div className="flex items-start gap-3">
+          <button onClick={onBack} className="grid h-10 w-10 shrink-0 place-items-center border border-[#a8752a]/40 bg-black/35 text-[#cfc2aa] hover:text-[#f2ca75]"><ArrowLeft className="h-5 w-5" /></button>
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.22em] text-[#f2ca75]">GM-Vorbereitung</div>
+            <h1 className="text-4xl font-light text-white">Werkbank</h1>
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {preparationModules.map((entry) => <ModuleButton key={entry.key} module={entry} active={module === entry.key} onClick={() => setModule(entry.key)} />)}
+        </div>
+      </div>
+      <section className="border border-[#a8752a]/30 bg-black/15 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center border border-[#a8752a]/45 bg-black/35 text-[#ffd88c]">{activeModule.icon}</div>
+          <div className="mr-auto">
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">{activeModule.label}</div>
+            <div className="text-sm text-[#8c8170]">{activeModule.description}</div>
+          </div>
+          <span className="border border-[#a8752a]/35 px-3 py-2 text-sm text-[#cfc2aa]">{activeModule.count}</span>
+        </div>
+      </section>
+      {module === "overview" && <PreparationOverview data={workspaceData} gmSession={gmSession} />}
+      {module === "system" && <GMSettings />}
+      {module === "campaigns" && <CampaignModule data={workspaceData} gmSession={gmSession} onSaveCampaign={upsertCampaign} onDeleteCampaign={deleteCampaign} onSaveSession={upsertCampaignSession} onDeleteSession={deleteCampaignSession} />}
+      {module === "shops" && <ShopModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} />}
+      {module === "handouts" && <ReleaseCenterModule data={workspaceData} onSave={upsertCustomGmModule} />}
+      {module === "enemies" && <EnemyPreparationModule data={workspaceData} onSave={upsertCustomGmModule} onDelete={deleteCustomGmModule} />}
+      {module === "builder" && <CustomModulesModule data={workspaceData} onSave={upsertCustomGmModule} onDelete={deleteCustomGmModule} />}
+    </div>
+  );
+}
 
 export function GMDashboardView({ onBack }) {
   const { data, activeWorkspace, upsertCharacter, updateGmSession, sendMessage, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule } = useGameStore();
@@ -56,11 +111,10 @@ export function GMDashboardView({ onBack }) {
   const unreadMessages = (workspaceData.messages ?? []).filter((message) => message.fromRole === "player" && message.status === "unread").length;
   const dashboardModules = [
     { key: "players", label: "Spieler", description: "Charaktere, Inventar und Kurzwerte", icon: <Gift className="h-4 w-4" />, count: workspaceData.characters.length },
-    { key: "campaigns", label: "Kampagnen", description: "Kampagnen, Sessions und Zuordnungen", icon: <CalendarDays className="h-4 w-4" />, count: (workspaceData.campaigns ?? []).length },
-    { key: "shops", label: "Shops", description: "Shops, Gruppen und Freigaben", icon: <Store className="h-4 w-4" />, count: gmSession.shops.length },
+    { key: "enemies", label: "Gegner", description: "Vorbereitete Statblocks fuer die aktive Szene", icon: <AlertTriangle className="h-4 w-4" />, count: enemyModules(workspaceData.customGmModules ?? []).length },
+    { key: "shops", label: "Shops", description: "Aktive Shops und Freigaben", icon: <Store className="h-4 w-4" />, count: gmSession.shops.filter((shop) => shop.active).length || gmSession.shops.length },
     { key: "releases", label: "Freigaben", description: "Orte, Bibliotheken und Handout-Seiten", icon: <BookOpen className="h-4 w-4" />, count: handoutPageCount(workspaceData.customGmModules ?? []) },
     { key: "messages", label: "Nachrichten", description: "GM- und Spieler-Kommunikation", icon: <MessageSquare className="h-4 w-4" />, count: unreadMessages || (workspaceData.messages ?? []).length },
-    { key: "customModules", label: "GM-Baukasten", description: "NSC, Orte, Fraktionen und eigene Bausteine", icon: <LayoutGrid className="h-4 w-4" />, count: (workspaceData.customGmModules ?? []).length },
     { key: "history", label: "History", description: "Timeline aller Ereignisse", icon: <PackagePlus className="h-4 w-4" />, count: historyEvents.length }
   ];
   const activeModule = dashboardModules.find((entry) => entry.key === module) ?? dashboardModules[0];
@@ -94,11 +148,10 @@ export function GMDashboardView({ onBack }) {
       {pending.length > 0 && <section className="grid gap-3 border border-[#a8752a]/45 bg-black/25 p-4"><div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Offene Shop-Anfragen</div>{pending.map((request) => <RequestRow key={request.id} request={request} data={data} onConfirm={() => confirmRequest(request.id)} onDecline={() => declineRequest(request.id)} />)}</section>}
       <div>
         {module === "players" && <PlayerModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} onGive={giveItem} onMessage={sendMessage} history={historyEvents} />}
-        {module === "campaigns" && <CampaignModule data={workspaceData} gmSession={gmSession} onSaveCampaign={upsertCampaign} onDeleteCampaign={deleteCampaign} onSaveSession={upsertCampaignSession} onDeleteSession={deleteCampaignSession} />}
+        {module === "enemies" && <EnemyDashboardModule data={workspaceData} />}
         {module === "shops" && <ShopModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} />}
         {module === "releases" && <ReleaseCenterModule data={workspaceData} onSave={upsertCustomGmModule} />}
         {module === "messages" && <MessageModule data={workspaceData} onMessage={sendMessage} />}
-        {module === "customModules" && <CustomModulesModule data={workspaceData} onSave={upsertCustomGmModule} onDelete={deleteCustomGmModule} />}
         {module === "history" && <HistoryModule data={workspaceData} history={historyEvents} />}
       </div>
     </div>
@@ -106,6 +159,161 @@ export function GMDashboardView({ onBack }) {
 }
 
 export const GMSessionView = GMDashboardView;
+
+function PreparationOverview({ data, gmSession }) {
+  const modules = data.customGmModules ?? [];
+  const cards = [
+    ["Kampagnen", (data.campaigns ?? []).length, "Kampagnen und geplante Sessions"],
+    ["Shops", gmSession.shops.length, "Haendler, Angebote und Shopgruppen"],
+    ["Gegner", enemyModules(modules).length, "Modulare Statblocks fuer Begegnungen"],
+    ["Handouts", handoutPageCount(modules), "Vorbereitete Seiten und Spielerfreigaben"],
+    ["Baukasten", modules.length, "NSC, Orte, Fraktionen, Quests und Notizen"],
+    ["Regel-Katalog", data.catalog.length, "Systembausteine und Charakterbogen"]
+  ];
+  return (
+    <section className="grid gap-4 lg:grid-cols-3">
+      {cards.map(([label, value, description]) => (
+        <div key={label} className="border border-[#a8752a]/35 bg-black/25 p-4">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">{label}</div>
+          <div className="mt-3 text-4xl font-light text-white">{value}</div>
+          <div className="mt-2 text-sm text-[#8c8170]">{description}</div>
+        </div>
+      ))}
+      <div className="border border-[#a8752a]/35 bg-black/25 p-4 lg:col-span-3">
+        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Arbeitslogik</div>
+        <div className="mt-3 grid gap-3 text-sm text-[#cfc2aa] md:grid-cols-3">
+          <div className="border border-[#a8752a]/25 bg-black/20 p-3"><strong className="text-white">Vorbereiten</strong><p className="mt-2">Kampagnen, Shops, Handouts, Gegner und Regeln werden hier gebaut und gepflegt.</p></div>
+          <div className="border border-[#a8752a]/25 bg-black/20 p-3"><strong className="text-white">Aktivieren</strong><p className="mt-2">Status, Sichtbarkeit und Freigaben bestimmen, was spaeter in der Session nutzbar ist.</p></div>
+          <div className="border border-[#a8752a]/25 bg-black/20 p-3"><strong className="text-white">Live nutzen</strong><p className="mt-2">Das GM Dashboard zeigt vorbereitete Inhalte kompakt fuer Entscheidungen am Spieltisch.</p></div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EnemyPreparationModule({ data, onSave, onDelete }) {
+  const enemyItems = enemyModules(data.customGmModules ?? []);
+  const templates = enemyItems.filter((module) => module.isTemplate);
+  const enemies = enemyItems.filter((module) => !module.isTemplate);
+  const [activeId, setActiveId] = useState(enemies[0]?.id ?? templates[0]?.id ?? "");
+  const active = enemyItems.find((module) => module.id === activeId) ?? enemies[0] ?? templates[0];
+
+  function createEnemy(template = "standard") {
+    const now = new Date().toISOString();
+    const module = {
+      id: crypto.randomUUID(),
+      name: template === "boss" ? "Neuer Boss" : "Neuer Gegner",
+      itemType: "enemy",
+      status: "draft",
+      visibility: "gm",
+      scope: "global",
+      tags: [],
+      summary: "",
+      gmNotes: "",
+      playerText: "",
+      fields: [],
+      statBlock: defaultStatBlock(template),
+      createdAt: now,
+      updatedAt: now
+    };
+    onSave(module);
+    setActiveId(module.id);
+  }
+
+  function useTemplate(template) {
+    const copy = cloneModuleFromTemplate(template);
+    onSave(copy);
+    setActiveId(copy.id);
+  }
+
+  return (
+    <section className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
+        <div>
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Gegner-Vorlagen</div>
+          <div className="mt-1 text-sm text-[#8c8170]">Erstelle unterschiedlich tiefe Statblocks fuer Minions, Standardgegner, Elite und Bosskaempfe.</div>
+        </div>
+        {STATBLOCK_TEMPLATES.map(([template, label]) => (
+          <button key={template} onClick={() => createEnemy(template)} className="border border-[#d6a14d]/45 bg-[#d6a14d]/10 px-3 py-2 text-left text-sm font-bold uppercase text-[#ffd88c]">{label} erstellen</button>
+        ))}
+        <div className="mt-4 grid gap-2 border-t border-[#a8752a]/25 pt-4">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Vorlagen nutzen</div>
+          {templates.map((template) => (
+            <div key={template.id} className={`grid gap-2 border p-3 ${active?.id === template.id ? "border-sky-200 bg-sky-600/15" : "border-sky-300/35 bg-sky-600/10"}`}>
+              <button onClick={() => setActiveId(template.id)} className="grid gap-1 text-left text-sm text-sky-100">
+                <span className="font-bold">{template.name}</span>
+                <span className="text-xs text-sky-200/75">{optionLabel(STATBLOCK_TEMPLATES, template.statBlock?.template ?? "standard")} · Vorlage bearbeiten</span>
+              </button>
+              <button onClick={() => useTemplate(template)} className="border border-sky-200/45 px-2 py-1 text-xs font-bold uppercase text-sky-100">Als neuen Gegner nutzen</button>
+            </div>
+          ))}
+          {!templates.length && <div className="border border-dashed border-[#a8752a]/35 p-3 text-sm text-[#8c8170]">Noch keine Gegner-Vorlagen gespeichert.</div>}
+        </div>
+        <div className="mt-4 grid gap-2 border-t border-[#a8752a]/25 pt-4">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Vorbereitete Gegner</div>
+          {enemies.map((enemy) => (
+            <button key={enemy.id} onClick={() => setActiveId(enemy.id)} className={`grid gap-1 border p-3 text-left ${active?.id === enemy.id ? "border-[#ffd88c] bg-[#d6a14d]/12" : "border-[#a8752a]/30 bg-black/25"}`}>
+              <span className="text-sm font-bold text-white">{enemy.name}</span>
+              <span className="text-xs text-[#8c8170]">{optionLabel(STATBLOCK_TEMPLATES, enemy.statBlock?.template ?? "standard")} · {optionLabel(BUILDER_STATUS, enemy.status ?? "draft")}</span>
+            </button>
+          ))}
+          {!enemies.length && <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Noch keine Gegner vorbereitet.</div>}
+        </div>
+      </div>
+      <div className="min-w-0">
+        {active ? <CustomModuleCard module={active} data={data} onSave={onSave} onDelete={() => { onDelete(active.id); setActiveId(""); }} onDuplicate={(copy) => setActiveId(copy.id)} /> : <div className="border border-[#a8752a]/25 bg-black/20 p-4 text-[#8c8170]">Erstelle oder waehle einen Gegner.</div>}
+      </div>
+    </section>
+  );
+}
+
+function EnemyDashboardModule({ data }) {
+  const enemies = enemyModules(data.customGmModules ?? []).filter((module) => !module.isTemplate && (module.status ?? "draft") !== "archived");
+  const activeEnemies = enemies.filter((module) => (module.status ?? "draft") === "active");
+  const visibleEnemies = activeEnemies.length ? activeEnemies : enemies;
+  return (
+    <section className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="border border-[#a8752a]/35 bg-black/25 p-4">
+        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Aktive Szene</div>
+        <div className="mt-2 text-sm text-[#8c8170]">Gegner mit Status Aktiv werden bevorzugt angezeigt. Entwuerfe bleiben als Reserve sichtbar, wenn nichts aktiv ist.</div>
+        <div className="mt-4 grid gap-2">
+          <Metric label="Aktiv" value={activeEnemies.length} />
+          <Metric label="Vorbereitet" value={enemies.length} />
+        </div>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {visibleEnemies.map((enemy) => <EnemyStatCard key={enemy.id} module={enemy} />)}
+        {!visibleEnemies.length && <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Keine vorbereiteten Gegner. Lege sie in der GM-Vorbereitung unter Gegner an.</div>}
+      </div>
+    </section>
+  );
+}
+
+function EnemyStatCard({ module }) {
+  const stat = module.statBlock ?? defaultStatBlock("standard");
+  const boss = stat.layout === "boss" || stat.template === "boss";
+  return (
+    <article className={`grid gap-3 border bg-black/25 p-4 ${boss ? "border-red-300/45" : "border-[#a8752a]/35"}`}>
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="mr-auto">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">{stat.role || optionLabel(STATBLOCK_TEMPLATES, stat.template ?? "standard")}</div>
+          <h3 className="text-2xl font-light text-white">{module.name}</h3>
+          {module.summary && <p className="mt-1 text-sm text-[#cfc2aa]">{module.summary}</p>}
+        </div>
+        <span className="border border-[#a8752a]/35 px-2 py-1 text-xs text-[#8c8170]">{stat.difficulty || "Schwierigkeit offen"}</span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-4">
+        <Metric label="HP" value={stat.hp ?? "-"} />
+        <Metric label="Stress" value={stat.stress ?? "-"} />
+        <Metric label="Ruestung" value={stat.armor ?? "-"} />
+        <Metric label="Verteidigung" value={stat.defense ?? "-"} />
+      </div>
+      {(stat.traits ?? []).length > 0 && <div className="flex flex-wrap gap-1">{stat.traits.map((trait) => <span key={trait} className="border border-[#a8752a]/25 px-2 py-1 text-xs text-[#cfc2aa]">{trait}</span>)}</div>}
+      {(stat.attacks ?? []).slice(0, boss ? 4 : 2).map((attack) => <div key={attack.id} className="border border-[#a8752a]/25 bg-black/20 p-3 text-sm"><div className="font-bold text-white">{attack.name} <span className="text-[#8c8170]">{attack.range}</span></div><div className="text-[#ffd88c]">{attack.damage}</div>{attack.effect && <p className="mt-1 text-[#cfc2aa]">{attack.effect}</p>}</div>)}
+      {stat.tactics && <p className="border-t border-[#a8752a]/25 pt-3 text-sm text-[#cfc2aa]">{stat.tactics}</p>}
+    </article>
+  );
+}
 
 function PlayerModule({ data, gmSession, saveSession, onGive, onMessage, history }) {
   const [selectedCharacter, setSelectedCharacter] = useState(data.characters[0]?.id ?? "");
@@ -580,6 +788,7 @@ function ReleaseCenterModule({ data, onSave }) {
 
 function CustomModulesModule({ data, onSave, onDelete }) {
   const modules = data.customGmModules ?? [];
+  const templates = modules.filter((module) => module.isTemplate);
   const [name, setName] = useState("");
   const [itemType, setItemType] = useState("npc");
   const [scope, setScope] = useState("global");
@@ -603,11 +812,18 @@ function CustomModulesModule({ data, onSave, onDelete }) {
   function createModule() {
     if (!name.trim()) return;
     const now = new Date().toISOString();
-    const module = { id: crypto.randomUUID(), name: name.trim(), itemType, status: "draft", visibility: "gm", scope, campaignId: scope === "campaign" ? targetId : undefined, sessionId: scope === "session" ? targetId : undefined, characterId: scope === "character" ? targetId : undefined, tags: [], summary: "", gmNotes: "", playerText: "", fields: [], createdAt: now, updatedAt: now };
+    const module = { id: crypto.randomUUID(), name: name.trim(), itemType, status: "draft", visibility: "gm", scope, campaignId: scope === "campaign" ? targetId : undefined, sessionId: scope === "session" ? targetId : undefined, characterId: scope === "character" ? targetId : undefined, tags: [], summary: "", gmNotes: "", playerText: "", fields: [], statBlock: ["enemy", "threat", "encounter"].includes(itemType) ? defaultStatBlock(itemType === "threat" ? "hazard" : "standard") : undefined, createdAt: now, updatedAt: now };
     onSave(module);
     setActiveId(module.id);
     setName("");
     setTargetId("");
+  }
+
+  function useTemplate(template) {
+    const copy = cloneModuleFromTemplate(template);
+    onSave(copy);
+    setActiveId(copy.id);
+    setTypeFilter(template.itemType ?? "all");
   }
 
   return (
@@ -624,13 +840,23 @@ function CustomModulesModule({ data, onSave, onDelete }) {
           <Select value={typeFilter} onChange={setTypeFilter} options={[["all", "Alle Typen"], ...BUILDER_TYPES]} />
           <Select value={statusFilter} onChange={setStatusFilter} options={[["all", "Alle Status"], ...BUILDER_STATUS]} />
         </div>
+        <div className="mt-3 grid gap-2 border-t border-[#a8752a]/25 pt-3">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Vorlagen</div>
+          {templates.map((template) => (
+            <div key={template.id} className="grid gap-2 border border-sky-300/30 bg-sky-600/10 p-2">
+              <button onClick={() => setActiveId(template.id)} className="text-left text-sm font-bold text-sky-100">{template.name}</button>
+              <button onClick={() => useTemplate(template)} className="border border-sky-200/45 px-2 py-1 text-xs font-bold uppercase text-sky-100">Nutzen</button>
+            </div>
+          ))}
+          {!templates.length && <div className="text-sm text-[#8c8170]">Noch keine Vorlagen gespeichert.</div>}
+        </div>
       </div>
       <div className="grid content-start gap-3">
         {filteredModules.map((module) => <BuilderItemCard key={module.id} module={module} data={data} active={activeModule?.id === module.id} onOpen={() => setActiveId(module.id)} />)}
         {!filteredModules.length && <div className="border border-[#a8752a]/25 bg-black/20 p-4 text-[#8c8170]">Keine Bausteine fuer diesen Filter.</div>}
       </div>
       <div className="min-w-0">
-        {activeModule ? <CustomModuleCard module={activeModule} data={data} onSave={onSave} onDelete={() => { onDelete(activeModule.id); setActiveId(""); }} /> : <div className="border border-[#a8752a]/25 bg-black/20 p-4 text-[#8c8170]">Waehle einen Baustein aus.</div>}
+        {activeModule ? <CustomModuleCard module={activeModule} data={data} onSave={onSave} onDelete={() => { onDelete(activeModule.id); setActiveId(""); }} onDuplicate={(copy) => setActiveId(copy.id)} /> : <div className="border border-[#a8752a]/25 bg-black/20 p-4 text-[#8c8170]">Waehle einen Baustein aus.</div>}
       </div>
     </section>
   );
@@ -643,9 +869,19 @@ function BuilderItemCard({ module, data, active, onOpen }) {
   return <button onClick={onOpen} className={`grid gap-2 border p-3 text-left ${active ? "border-[#ffd88c] bg-[#d6a14d]/12" : "border-[#a8752a]/30 bg-black/25 hover:border-[#d6a14d]/55"}`}><div className="flex flex-wrap items-center gap-2"><span className="border border-[#a8752a]/35 px-2 py-1 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#f2ca75]">{typeLabel}</span><span className="text-xs text-[#8c8170]">{statusLabel}</span><span className="ml-auto text-xs text-[#8c8170]">{target}</span></div><div className="text-lg text-white">{module.name}</div>{module.summary && <p className="line-clamp-2 text-sm text-[#cfc2aa]">{module.summary}</p>}<div className="flex flex-wrap gap-1">{(module.tags ?? []).slice(0, 4).map((tag) => <span key={tag} className="border border-[#a8752a]/25 px-2 py-0.5 text-xs text-[#8c8170]">{tag}</span>)}</div></button>;
 }
 
-function CustomModuleCard({ module, data, onSave, onDelete }) {
+function CustomModuleCard({ module, data, onSave, onDelete, onDuplicate }) {
   function patch(patchData) {
     onSave({ ...module, ...patchData });
+  }
+  function saveAsTemplate() {
+    const template = cloneModuleAsTemplate(module);
+    onSave(template);
+    onDuplicate?.(template);
+  }
+  function useCurrentTemplate() {
+    const copy = cloneModuleFromTemplate(module);
+    onSave(copy);
+    onDuplicate?.(copy);
   }
   function addField(type) {
     patch({ fields: [...(module.fields ?? []), { id: crypto.randomUUID(), label: "Neues Feld", type, value: type === "checkbox" ? false : "" }] });
@@ -657,18 +893,22 @@ function CustomModuleCard({ module, data, onSave, onDelete }) {
     patch({ fields: (module.fields ?? []).filter((field) => field.id !== fieldId) });
   }
   const isHandout = (module.itemType ?? "note") === "handout";
+  const hasStatBlock = ["enemy", "threat", "encounter"].includes(module.itemType ?? "note");
   return (
     <div className="grid gap-4 border border-[#a8752a]/30 bg-black/25 p-4">
       <div className="flex flex-wrap gap-3">
         <input value={module.name} onChange={(event) => patch({ name: event.target.value })} className="min-w-0 flex-1 bg-transparent text-2xl font-light text-white outline-none" />
+        {module.isTemplate ? <button onClick={useCurrentTemplate} className="border border-sky-300/45 px-3 text-sm font-bold uppercase text-sky-100">Vorlage nutzen</button> : <button onClick={saveAsTemplate} className="border border-sky-300/45 px-3 text-sm font-bold uppercase text-sky-100">Als Vorlage speichern</button>}
         <button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200"><Trash2 className="h-4 w-4" /></button>
       </div>
+      {module.isTemplate && <div className="border border-sky-300/35 bg-sky-600/10 p-3 text-sm text-sky-100">Diese Vorlage ist frei bearbeitbar. Wenn du sie nutzt, entsteht ein neuer unabhaengiger Eintrag.</div>}
       <div className="grid gap-2 md:grid-cols-3">
         <Select value={module.itemType ?? "note"} onChange={(itemType) => patch({ itemType })} options={BUILDER_TYPES} />
         <Select value={module.status ?? "draft"} onChange={(status) => patch({ status })} options={BUILDER_STATUS} />
         <Select value={module.visibility ?? "gm"} onChange={(visibility) => patch({ visibility })} options={BUILDER_VISIBILITY} />
       </div>
       {isHandout && <HandoutPagesEditor module={module} characters={data.characters} onPatch={patch} />}
+      {hasStatBlock && <StatBlockEditor statBlock={module.statBlock ?? defaultStatBlock(module.itemType === "threat" ? "hazard" : "standard")} onChange={(statBlock) => patch({ statBlock })} />}
       <input value={(module.tags ?? []).join(", ")} onChange={(event) => patch({ tags: event.target.value.split(",").map((entry) => entry.trim()).filter(Boolean) })} placeholder="Tags, durch Komma getrennt" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
       <TextArea label="Kurzbeschreibung" value={module.summary ?? ""} onChange={(summary) => patch({ summary })} />
       <TextArea label="GM-Notizen" value={module.gmNotes ?? ""} onChange={(gmNotes) => patch({ gmNotes })} />
@@ -689,6 +929,91 @@ function CustomModuleCard({ module, data, onSave, onDelete }) {
             <button onClick={() => deleteField(field.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function StatBlockEditor({ statBlock, onChange }) {
+  const stat = { ...defaultStatBlock(statBlock.template ?? "standard"), ...statBlock, attacks: statBlock.attacks ?? [], abilities: statBlock.abilities ?? [] };
+  function patch(patchData) {
+    onChange({ ...stat, ...patchData });
+  }
+  function patchNumber(key, value) {
+    patch({ [key]: value === "" ? undefined : Math.max(0, Number(value) || 0) });
+  }
+  function addAttack() {
+    patch({ attacks: [...(stat.attacks ?? []), { id: crypto.randomUUID(), name: "Neuer Angriff", range: "", damage: "", effect: "" }] });
+  }
+  function patchAttack(id, patchData) {
+    patch({ attacks: (stat.attacks ?? []).map((attack) => attack.id === id ? { ...attack, ...patchData } : attack) });
+  }
+  function removeAttack(id) {
+    patch({ attacks: (stat.attacks ?? []).filter((attack) => attack.id !== id) });
+  }
+  function addAbility() {
+    patch({ abilities: [...(stat.abilities ?? []), { id: crypto.randomUUID(), name: "Neue Faehigkeit", kind: "active", text: "" }] });
+  }
+  function patchAbility(id, patchData) {
+    patch({ abilities: (stat.abilities ?? []).map((ability) => ability.id === id ? { ...ability, ...patchData } : ability) });
+  }
+  function removeAbility(id) {
+    patch({ abilities: (stat.abilities ?? []).filter((ability) => ability.id !== id) });
+  }
+  return (
+    <div className="grid gap-4 border border-[#a8752a]/25 bg-black/20 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Modularer Statblock</div>
+        <Select value={stat.template ?? "standard"} onChange={(template) => patch({ ...defaultStatBlock(template), template, layout: stat.layout ?? defaultStatBlock(template).layout })} options={STATBLOCK_TEMPLATES} />
+        <Select value={stat.layout ?? "compact"} onChange={(layout) => patch({ layout })} options={STATBLOCK_LAYOUTS} />
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        <Field label="Rolle" value={stat.role ?? ""} onChange={(role) => patch({ role })} />
+        <Field label="Schwierigkeit" value={stat.difficulty ?? ""} onChange={(difficulty) => patch({ difficulty })} />
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <NumberField label="HP" value={stat.hp ?? ""} onChange={(value) => patchNumber("hp", value)} />
+        <NumberField label="Stress" value={stat.stress ?? ""} onChange={(value) => patchNumber("stress", value)} />
+        <NumberField label="Ruestung" value={stat.armor ?? ""} onChange={(value) => patchNumber("armor", value)} />
+        <NumberField label="Verteidigung" value={stat.defense ?? ""} onChange={(value) => patchNumber("defense", value)} />
+      </div>
+      <Field label="Traits, durch Komma getrennt" value={(stat.traits ?? []).join(", ")} onChange={(value) => patch({ traits: value.split(",").map((entry) => entry.trim()).filter(Boolean) })} />
+      <div className="grid gap-2 border-t border-[#a8752a]/25 pt-3">
+        <div className="flex items-center gap-2">
+          <div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Angriffe</div>
+          <button onClick={addAttack} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Angriff +</button>
+        </div>
+        {(stat.attacks ?? []).map((attack) => (
+          <div key={attack.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-3">
+            <div className="grid gap-2 md:grid-cols-[1fr_140px_140px_auto]">
+              <input value={attack.name ?? ""} onChange={(event) => patchAttack(attack.id, { name: event.target.value })} placeholder="Name" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+              <input value={attack.range ?? ""} onChange={(event) => patchAttack(attack.id, { range: event.target.value })} placeholder="Reichweite" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+              <input value={attack.damage ?? ""} onChange={(event) => patchAttack(attack.id, { damage: event.target.value })} placeholder="Schaden" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+              <button onClick={() => removeAttack(attack.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+            </div>
+            <textarea value={attack.effect ?? ""} onChange={(event) => patchAttack(attack.id, { effect: event.target.value })} placeholder="Effekt, Besonderheit oder Trigger" className="min-h-16 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-2 border-t border-[#a8752a]/25 pt-3">
+        <div className="flex items-center gap-2">
+          <div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Faehigkeiten</div>
+          <button onClick={addAbility} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Faehigkeit +</button>
+        </div>
+        {(stat.abilities ?? []).map((ability) => (
+          <div key={ability.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-3">
+            <div className="grid gap-2 md:grid-cols-[1fr_160px_auto]">
+              <input value={ability.name ?? ""} onChange={(event) => patchAbility(ability.id, { name: event.target.value })} placeholder="Name" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+              <Select value={ability.kind ?? "active"} onChange={(kind) => patchAbility(ability.id, { kind })} options={[["passive", "Passiv"], ["active", "Aktiv"], ["reaction", "Reaktion"], ["boss", "Boss-Aktion"]]} />
+              <button onClick={() => removeAbility(ability.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+            </div>
+            <textarea value={ability.text ?? ""} onChange={(event) => patchAbility(ability.id, { text: event.target.value })} placeholder="Regeltext oder Ausloeser" className="min-h-16 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        <TextArea label="Taktik / Verhalten" value={stat.tactics ?? ""} onChange={(tactics) => patch({ tactics })} />
+        <TextArea label="Beute / Konsequenzen" value={stat.loot ?? ""} onChange={(loot) => patch({ loot })} />
       </div>
     </div>
   );
@@ -754,6 +1079,9 @@ function moduleTargetLabel(module, data) {
 
 function Field({ label, value, onChange }) {
   return <label className="grid gap-1 text-sm text-[#cfc2aa]"><span className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">{label}</span><input value={value} onChange={(event) => onChange(event.target.value)} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /></label>;
+}
+function NumberField({ label, value, onChange }) {
+  return <label className="grid gap-1 text-sm text-[#cfc2aa]"><span className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">{label}</span><input type="number" min="0" value={value} onChange={(event) => onChange(event.target.value)} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /></label>;
 }
 function TextArea({ label, value, onChange }) {
   return <label className="grid gap-1 text-sm text-[#cfc2aa]"><span className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} className="min-h-28 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none" /></label>;
@@ -821,6 +1149,77 @@ function byName(a, b) {
 }
 function byUpdated(a, b) {
   return Date.parse(b.updatedAt ?? "") - Date.parse(a.updatedAt ?? "") || byName(a, b);
+}
+function enemyModules(modules) {
+  return modules
+    .filter((module) => ["enemy", "threat", "encounter"].includes(module.itemType ?? "note") && (module.status ?? "draft") !== "archived")
+    .sort(byUpdated);
+}
+function preparationCount(data, gmSession) {
+  return (data.campaigns ?? []).length + gmSession.shops.length + (data.customGmModules ?? []).length + data.catalog.length;
+}
+function defaultStatBlock(template = "standard") {
+  const base = {
+    template,
+    role: "",
+    difficulty: "",
+    layout: template === "boss" ? "boss" : "compact",
+    hp: 6,
+    stress: 0,
+    armor: 0,
+    defense: 0,
+    traits: [],
+    attacks: [{ id: crypto.randomUUID(), name: "Standardangriff", range: "Nah", damage: "1", effect: "" }],
+    abilities: [],
+    tactics: "",
+    loot: ""
+  };
+  if (template === "minion") return { ...base, hp: 1, attacks: [{ id: crypto.randomUUID(), name: "Schwaecher Angriff", range: "Nah", damage: "1", effect: "" }] };
+  if (template === "elite") return { ...base, hp: 12, stress: 4, armor: 1, defense: 1, role: "Elite" };
+  if (template === "boss") return { ...base, hp: 24, stress: 8, armor: 2, defense: 2, role: "Boss", layout: "boss", abilities: [{ id: crypto.randomUUID(), name: "Boss-Aktion", kind: "boss", text: "" }] };
+  if (template === "social") return { ...base, hp: 0, stress: 6, role: "Sozialer Gegner", attacks: [] };
+  if (template === "hazard") return { ...base, hp: 0, stress: 0, role: "Gefahr", attacks: [{ id: crypto.randomUUID(), name: "Ausloeser", range: "Zone", damage: "", effect: "" }] };
+  return base;
+}
+function cloneModuleAsTemplate(module) {
+  const now = new Date().toISOString();
+  return cloneModule(module, {
+    name: `${module.name} Vorlage`,
+    status: "draft",
+    isTemplate: true,
+    templateSourceId: module.id,
+    createdAt: now,
+    updatedAt: now
+  });
+}
+function cloneModuleFromTemplate(module) {
+  const now = new Date().toISOString();
+  return cloneModule(module, {
+    name: module.name.replace(/\s*Vorlage$/i, "") || "Neuer Eintrag",
+    status: "draft",
+    isTemplate: false,
+    templateSourceId: module.id,
+    createdAt: now,
+    updatedAt: now
+  });
+}
+function cloneModule(module, overrides) {
+  return {
+    ...module,
+    ...overrides,
+    id: crypto.randomUUID(),
+    tags: [...(module.tags ?? [])],
+    fields: (module.fields ?? []).map((field) => ({ ...field, id: crypto.randomUUID() })),
+    handoutPages: (module.handoutPages ?? []).map((page) => ({ ...page, id: crypto.randomUUID(), releasedToCharacterIds: [...(page.releasedToCharacterIds ?? [])] })),
+    statBlock: module.statBlock
+      ? {
+          ...module.statBlock,
+          traits: [...(module.statBlock.traits ?? [])],
+          attacks: (module.statBlock.attacks ?? []).map((attack) => ({ ...attack, id: crypto.randomUUID() })),
+          abilities: (module.statBlock.abilities ?? []).map((ability) => ({ ...ability, id: crypto.randomUUID() }))
+        }
+      : undefined
+  };
 }
 function handoutPageCount(modules) {
   return modules

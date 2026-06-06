@@ -1,5 +1,5 @@
 import { CreationWizard } from "../creation-wizard/CreationWizard";
-import { GMDashboardView } from "../gm-session/GMSessionView";
+import { GMDashboardView, GMPreparationView } from "../gm-session/GMSessionView";
 import { GMSettings } from "../gm/GMSettings";
 import { LevelUpView } from "../level-up/LevelUpView";
 
@@ -46,6 +46,16 @@ export function GMPage({ onBack }) {
           <GMSettings />
         </GoldPanel>
       </div>
+    </Shell>
+  );
+}
+
+export function GMPreparationPage({ onBack }) {
+  return (
+    <Shell>
+      <GoldPanel className="p-5">
+        <GMPreparationView onBack={onBack} />
+      </GoldPanel>
     </Shell>
   );
 }

@@ -524,7 +524,7 @@ export interface CampaignSession {
 
 export type CustomModuleScope = "global" | "campaign" | "session" | "character";
 export type CustomModuleFieldType = "text" | "textarea" | "number" | "checkbox";
-export type GmBuilderItemType = "npc" | "location" | "faction" | "quest" | "note" | "handout" | "encounter" | "threat" | "riddle" | "rule";
+export type GmBuilderItemType = "npc" | "enemy" | "location" | "faction" | "quest" | "note" | "handout" | "encounter" | "threat" | "riddle" | "rule";
 export type GmBuilderItemStatus = "draft" | "active" | "done" | "archived";
 export type GmBuilderVisibility = "gm" | "players";
 
@@ -540,6 +540,33 @@ export interface CustomModuleHandoutPage {
   title: string;
   body: string;
   releasedToCharacterIds?: string[];
+}
+
+export interface CustomModuleStatBlock {
+  template?: "minion" | "standard" | "elite" | "boss" | "social" | "hazard";
+  role?: string;
+  difficulty?: string;
+  layout?: "compact" | "full" | "boss";
+  hp?: number;
+  stress?: number;
+  armor?: number;
+  defense?: number;
+  traits?: string[];
+  attacks?: Array<{
+    id: string;
+    name: string;
+    range?: string;
+    damage?: string;
+    effect?: string;
+  }>;
+  abilities?: Array<{
+    id: string;
+    name: string;
+    kind?: "passive" | "active" | "reaction" | "boss";
+    text?: string;
+  }>;
+  tactics?: string;
+  loot?: string;
 }
 
 export interface CustomGmModule {
@@ -559,6 +586,9 @@ export interface CustomGmModule {
   gmNotes?: string;
   playerText?: string;
   handoutPages?: CustomModuleHandoutPage[];
+  statBlock?: CustomModuleStatBlock;
+  isTemplate?: boolean;
+  templateSourceId?: string;
   fields: CustomModuleField[];
   createdAt: string;
   updatedAt: string;
@@ -681,4 +711,4 @@ export interface UserProfile {
   updatedAt: string;
 }
 
-export type ViewKey = "sheet" | "create" | "level" | "rest" | "gm" | "gmDashboard";
+export type ViewKey = "sheet" | "create" | "level" | "rest" | "gm" | "gmPreparation" | "gmDashboard";

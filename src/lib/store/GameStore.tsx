@@ -1145,7 +1145,9 @@ function cleanCustomGmModules(modules: CustomGmModule[] | undefined, deletedChar
       itemType: module.itemType ?? "note",
       status: module.status ?? "draft",
       visibility: module.visibility ?? "gm",
+      isTemplate: module.isTemplate ?? false,
       tags: unique(module.tags ?? []),
+      statBlock: normalizeStatBlock(module.statBlock),
       handoutPages: (module.handoutPages ?? []).map((page, index) => ({
         id: page.id ?? crypto.randomUUID(),
         title: page.title ?? `Seite ${index + 1}`,
@@ -1202,7 +1204,7 @@ function upsertCampaignSessionInData(data: AppData, session: CampaignSession, ac
 function upsertCustomGmModuleInData(data: AppData, module: CustomGmModule, actorUserId?: string): AppData {
   const now = new Date().toISOString();
   const exists = (data.customGmModules ?? []).some((entry) => entry.id === module.id);
-  const next = { ...module, itemType: module.itemType ?? "note", status: module.status ?? "draft", visibility: module.visibility ?? "gm", tags: unique(module.tags ?? []), fields: module.fields ?? [], updatedAt: now, createdAt: module.createdAt ?? now };
+  const next = { ...module, itemType: module.itemType ?? "note", status: module.status ?? "draft", visibility: module.visibility ?? "gm", isTemplate: module.isTemplate ?? false, tags: unique(module.tags ?? []), statBlock: normalizeStatBlock(module.statBlock), fields: module.fields ?? [], updatedAt: now, createdAt: module.createdAt ?? now };
   return {
     ...data,
     customGmModules: exists ? (data.customGmModules ?? []).map((entry) => entry.id === next.id ? next : entry) : [...(data.customGmModules ?? []), next],
@@ -1217,6 +1219,29 @@ function upsertCustomGmModuleInData(data: AppData, module: CustomGmModule, actor
         summary: next.name
       })
     ]
+  };
+}
+
+function normalizeStatBlock(statBlock: CustomGmModule["statBlock"]) {
+  if (!statBlock) return undefined;
+  return {
+    ...statBlock,
+    template: statBlock.template ?? "standard",
+    layout: statBlock.layout ?? "compact",
+    traits: unique(statBlock.traits ?? []),
+    attacks: (statBlock.attacks ?? []).map((attack) => ({
+      id: attack.id ?? crypto.randomUUID(),
+      name: attack.name ?? "Angriff",
+      range: attack.range ?? "",
+      damage: attack.damage ?? "",
+      effect: attack.effect ?? ""
+    })),
+    abilities: (statBlock.abilities ?? []).map((ability) => ({
+      id: ability.id ?? crypto.randomUUID(),
+      name: ability.name ?? "Faehigkeit",
+      kind: ability.kind ?? "active",
+      text: ability.text ?? ""
+    }))
   };
 }
 

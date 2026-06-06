@@ -6,6 +6,7 @@ import { useGameStore } from "../../lib/store/GameStore";
 const CharacterSheetView = lazy(() => import("./CharacterSheetView").then((module) => ({ default: module.CharacterSheetView })));
 const CreationWizard = lazy(() => import("../creation-wizard/CreationWizard").then((module) => ({ default: module.CreationWizard })));
 const GMSettings = lazy(() => import("../gm/GMSettings").then((module) => ({ default: module.GMSettings })));
+const GMPreparationView = lazy(() => import("../gm-session/GMSessionView").then((module) => ({ default: module.GMPreparationView })));
 const GMDashboardView = lazy(() => import("../gm-session/GMSessionView").then((module) => ({ default: module.GMDashboardView })));
 const LevelUpView = lazy(() => import("../level-up/LevelUpView").then((module) => ({ default: module.LevelUpView })));
 const RestView = lazy(() => import("../rest/RestView").then((module) => ({ default: module.RestView })));
@@ -29,6 +30,14 @@ export default function CharacterSheetLayout() {
     return (
       <FeaturePage onBack={() => setPage("overview")}>
         <GMSettings />
+      </FeaturePage>
+    );
+  }
+
+  if (page === "gmPreparation") {
+    return (
+      <FeaturePage>
+        <GMPreparationView onBack={() => setPage("overview")} />
       </FeaturePage>
     );
   }
@@ -72,6 +81,7 @@ export default function CharacterSheetLayout() {
         setPage("sheet");
       }}
       onOpenGM={() => setPage("gm")}
+      onOpenGMPreparation={() => setPage("gmPreparation")}
       onOpenGMSession={() => setPage("gmDashboard")}
       onCreateCharacter={(id) => {
         setCreateMode(id ? "edit" : "create");

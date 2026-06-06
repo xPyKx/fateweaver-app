@@ -4,6 +4,7 @@ export const DEFAULT_SESSION = { shops: [], shopGroups: [], shopRequests: [], in
 
 export const BUILDER_TYPES = [
   ["npc", "NSC"],
+  ["enemy", "Gegner"],
   ["location", "Ort"],
   ["faction", "Fraktion"],
   ["quest", "Quest"],
@@ -13,6 +14,21 @@ export const BUILDER_TYPES = [
   ["threat", "Bedrohung"],
   ["riddle", "Raetsel"],
   ["rule", "Regel/Hausregel"]
+];
+
+export const STATBLOCK_TEMPLATES = [
+  ["minion", "Minion"],
+  ["standard", "Standardgegner"],
+  ["elite", "Elite"],
+  ["boss", "Boss"],
+  ["social", "Sozialer Gegner"],
+  ["hazard", "Gefahr"]
+];
+
+export const STATBLOCK_LAYOUTS = [
+  ["compact", "Kompakt"],
+  ["full", "Voller Statblock"],
+  ["boss", "Boss-Karte"]
 ];
 
 export const BUILDER_STATUS = [["draft", "Entwurf"], ["active", "Aktiv"], ["done", "Erledigt"], ["archived", "Archiviert"]];

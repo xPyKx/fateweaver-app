@@ -8,10 +8,11 @@ import { buildSheetModel } from "../layout-entwurf/sheetModel";
 import { GMSettings } from "../gm/GMSettings";
 import { BUILDER_STATUS, BUILDER_TYPES, BUILDER_VISIBILITY, DEFAULT_SESSION, GIVE_TYPES, STATBLOCK_LAYOUTS, STATBLOCK_TEMPLATES, buildTimelineEvents, selectWorkspaceData } from "./dashboardModel";
 import { TimelineList } from "./HistoryTimeline";
+import { LayoutTemplateBuilder } from "./LayoutTemplateBuilder";
 import { ModuleButton } from "./ModuleButton";
 
 export function GMPreparationView({ onBack }) {
-  const { data, activeWorkspace, updateGmSession, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule } = useGameStore();
+  const { data, activeWorkspace, updateGmSession, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule, upsertLayoutTemplate, deleteLayoutTemplate } = useGameStore();
   const workspaceId = activeWorkspace?.id ?? data.activeWorkspaceId;
   const workspaceData = selectWorkspaceData(data, workspaceId);
   const gmSession = normalizeDashboardSession(data.gmSession);
@@ -22,6 +23,7 @@ export function GMPreparationView({ onBack }) {
     { key: "campaigns", label: "Kampagne", description: "Kampagnen, Sessions und Zuordnungen", icon: <CalendarDays className="h-4 w-4" />, count: (workspaceData.campaigns ?? []).length },
     { key: "shops", label: "Shops", description: "Haendler, Inventar, Gruppen und Freigaben", icon: <Store className="h-4 w-4" />, count: gmSession.shops.length },
     { key: "handouts", label: "Handouts", description: "Orte, Buecher, Seiten und Freigaben vorbereiten", icon: <BookOpen className="h-4 w-4" />, count: handoutPageCount(workspaceData.customGmModules ?? []) },
+    { key: "layouts", label: "Layouts", description: "WYSIWYG Raster-Builder fuer Charakterbogen und Gegner", icon: <LayoutGrid className="h-4 w-4" />, count: (workspaceData.layoutTemplates ?? []).length },
     { key: "enemies", label: "Gegner", description: "Modulare Statblocks und Anzeige-Layouts", icon: <AlertTriangle className="h-4 w-4" />, count: enemyModules(workspaceData.customGmModules ?? []).length },
     { key: "builder", label: "Baukasten", description: "NSC, Orte, Fraktionen, Quests und Notizen", icon: <LayoutGrid className="h-4 w-4" />, count: (workspaceData.customGmModules ?? []).length }
   ];
@@ -58,6 +60,7 @@ export function GMPreparationView({ onBack }) {
       {module === "campaigns" && <CampaignModule data={workspaceData} gmSession={gmSession} onSaveCampaign={upsertCampaign} onDeleteCampaign={deleteCampaign} onSaveSession={upsertCampaignSession} onDeleteSession={deleteCampaignSession} />}
       {module === "shops" && <ShopModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} />}
       {module === "handouts" && <ReleaseCenterModule data={workspaceData} onSave={upsertCustomGmModule} />}
+      {module === "layouts" && <LayoutTemplateBuilder data={workspaceData} workspaceId={workspaceId} onSave={upsertLayoutTemplate} onDelete={deleteLayoutTemplate} />}
       {module === "enemies" && <EnemyPreparationModule data={workspaceData} onSave={upsertCustomGmModule} onDelete={deleteCustomGmModule} />}
       {module === "builder" && <CustomModulesModule data={workspaceData} onSave={upsertCustomGmModule} onDelete={deleteCustomGmModule} />}
     </div>

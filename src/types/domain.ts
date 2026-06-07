@@ -679,6 +679,43 @@ export interface StatBlockLayoutData {
   h?: number;
 }
 
+export type LayoutTemplateTarget = "character" | "enemy" | "both";
+export type LayoutElementType = "text" | "value" | "input" | "section" | "table" | "resource" | "conditions" | "image";
+
+export interface LayoutElementData {
+  id: string;
+  type: LayoutElementType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  title?: string;
+  text?: string;
+  valueKey?: string;
+  editable?: boolean;
+  columns?: string[];
+  rows?: string[][];
+  imageUrl?: string;
+  style?: {
+    tone?: "default" | "accent" | "danger" | "quiet";
+    align?: "left" | "center" | "right";
+  };
+}
+
+export interface LayoutTemplate {
+  id: string;
+  workspaceId?: string;
+  name: string;
+  target: LayoutTemplateTarget;
+  columns: number;
+  rowHeight: number;
+  rows: number;
+  showGrid?: boolean;
+  elements: LayoutElementData[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface CustomGmModule {
   id: string;
   workspaceId?: string;
@@ -805,6 +842,7 @@ export interface AppData {
   campaigns?: Campaign[];
   campaignSessions?: CampaignSession[];
   customGmModules?: CustomGmModule[];
+  layoutTemplates?: LayoutTemplate[];
   activeCharacterId?: string;
   catalog: CatalogItem[];
   infoHints: InfoHint[];

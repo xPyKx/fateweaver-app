@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import type { AppData, AppMessage, Campaign, CampaignSession, CatalogItem, Character, CustomGmModule, GmSessionData, GmShop, InfoHint, NewMessageInput, SessionState, UserProfile, Workspace, WorkspaceInvite, WorkspaceMemberRole } from "../../types/domain";
+import type { AppData, AppMessage, Campaign, CampaignSession, CatalogItem, Character, CustomGmModule, GmSessionData, GmShop, InfoHint, LayoutElementData, LayoutTemplate, NewMessageInput, SessionState, UserProfile, Workspace, WorkspaceInvite, WorkspaceMemberRole } from "../../types/domain";
 import { loadCachedData, saveCachedData } from "../cache/indexedDb";
 import { createSeedData } from "../../data/seeds";
 import { appendCharacterHistory, createHistoryEvent as historyEvent } from "./historyEvents";
@@ -403,6 +403,13 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
           ...current,
           customGmModules: (current.customGmModules ?? []).filter((module) => module.id !== id)
         })),
+      upsertLayoutTemplate: (template) =>
+        setData((current) => upsertLayoutTemplateInData(current, { ...template, workspaceId: template.workspaceId ?? currentWorkspaceId(current, currentUserId) })),
+      deleteLayoutTemplate: (id) =>
+        setData((current) => ({
+          ...current,
+          layoutTemplates: (current.layoutTemplates ?? []).filter((template) => template.id !== id)
+        })),
       sendMessage: (message) =>
         setData((current) => addMessageToData(current, { ...message, workspaceId: message.workspaceId ?? currentWorkspaceId(current, currentUserId) }, currentUserId, profile?.isGm ? "gm" : "player")),
       markMessageRead: (id) =>
@@ -519,6 +526,7 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
     campaigns: cleanCampaigns(data.campaigns, deletedCharacterSet).filter((campaign) => !campaign.workspaceId || !deletedWorkspaceSet.has(campaign.workspaceId)).map((campaign) => ({ ...campaign, workspaceId: campaign.workspaceId ?? activeWorkspaceId })),
     campaignSessions: cleanCampaignSessions(data.campaignSessions, data.campaigns).filter((session) => !session.workspaceId || !deletedWorkspaceSet.has(session.workspaceId)).map((session) => ({ ...session, workspaceId: session.workspaceId ?? activeWorkspaceId })),
     customGmModules: cleanCustomGmModules(data.customGmModules, deletedCharacterSet).filter((module) => !module.workspaceId || !deletedWorkspaceSet.has(module.workspaceId)).map((module) => ({ ...module, workspaceId: module.workspaceId ?? activeWorkspaceId })),
+    layoutTemplates: normalizeLayoutTemplates(data.layoutTemplates, activeWorkspaceId).filter((template) => !template.workspaceId || !deletedWorkspaceSet.has(template.workspaceId)),
     infoHints: normalizeInfoHints((data.infoHints ?? []).filter((hint) => !deletedCatalogItemSet.has(hint.target)).map((hint) => ({ ...hint, workspaceId: hint.workspaceId ?? activeWorkspaceId }))),
     activeCharacterId,
     characters,
@@ -539,6 +547,57 @@ function normalizeGmSession(session?: GmSessionData): GmSessionData {
     inventoryHistory: session?.inventoryHistory ?? [],
     attunementLimit: session?.attunementLimit ?? 3
   });
+}
+
+function normalizeLayoutTemplates(templates: LayoutTemplate[] | undefined, workspaceId?: string): LayoutTemplate[] {
+  return (templates ?? []).map((template) => normalizeLayoutTemplate(template, workspaceId));
+}
+
+function normalizeLayoutTemplate(template: LayoutTemplate, workspaceId?: string): LayoutTemplate {
+  const now = new Date().toISOString();
+  const columns = Math.max(4, Math.min(48, Number(template.columns ?? 24) || 24));
+  const rows = Math.max(6, Math.min(120, Number(template.rows ?? 36) || 36));
+  return {
+    ...template,
+    workspaceId: template.workspaceId ?? workspaceId,
+    name: template.name?.trim() || "Neues Layout",
+    target: template.target ?? "character",
+    columns,
+    rows,
+    rowHeight: Math.max(24, Math.min(96, Number(template.rowHeight ?? 32) || 32)),
+    showGrid: template.showGrid ?? true,
+    elements: (template.elements ?? []).map((element, index) => normalizeLayoutElement(element, columns, rows, index)),
+    createdAt: template.createdAt ?? now,
+    updatedAt: template.updatedAt ?? now
+  };
+}
+
+function normalizeLayoutElement(element: LayoutElementData, columns: number, rows: number, index = 0): LayoutElementData {
+  const w = Math.max(1, Math.min(columns, Number(element.w ?? 4) || 4));
+  const h = Math.max(1, Math.min(rows, Number(element.h ?? 2) || 2));
+  return {
+    ...element,
+    id: element.id ?? `layout-element-${crypto.randomUUID()}`,
+    type: element.type ?? "text",
+    x: Math.max(1, Math.min(columns - w + 1, Number(element.x ?? 1 + (index % 3) * 4) || 1)),
+    y: Math.max(1, Math.min(rows - h + 1, Number(element.y ?? 1 + Math.floor(index / 3) * 2) || 1)),
+    w,
+    h,
+    title: element.title ?? defaultLayoutElementTitle(element.type),
+    columns: element.type === "table" ? (element.columns?.length ? element.columns : ["Name", "Wert"]) : element.columns,
+    rows: element.type === "table" ? (element.rows?.length ? element.rows : [["", ""]]) : element.rows
+  };
+}
+
+function defaultLayoutElementTitle(type?: string) {
+  if (type === "value") return "Wert";
+  if (type === "input") return "Eingabe";
+  if (type === "section") return "Sektion";
+  if (type === "table") return "Tabelle";
+  if (type === "resource") return "Ressource";
+  if (type === "conditions") return "Zustaende";
+  if (type === "image") return "Bild";
+  return "Text";
 }
 
 function allowedFateIdsForChoices(choices: Character["choices"] | undefined, mainFateId: string | undefined, sideFateId: string | undefined, catalog: CatalogItem[]) {
@@ -735,7 +794,8 @@ function migrateWorkspaceIds(data: AppData): AppData {
     messages: (data.messages ?? []).map((message) => ({ ...message, workspaceId: remap(message.workspaceId) })),
     campaigns: (data.campaigns ?? []).map((campaign) => ({ ...campaign, workspaceId: remap(campaign.workspaceId) })),
     campaignSessions: (data.campaignSessions ?? []).map((session) => ({ ...session, workspaceId: remap(session.workspaceId) })),
-    customGmModules: (data.customGmModules ?? []).map((module) => ({ ...module, workspaceId: remap(module.workspaceId) }))
+    customGmModules: (data.customGmModules ?? []).map((module) => ({ ...module, workspaceId: remap(module.workspaceId) })),
+    layoutTemplates: (data.layoutTemplates ?? []).map((template) => ({ ...template, workspaceId: remap(template.workspaceId) }))
   };
 }
 
@@ -999,6 +1059,10 @@ export function mergeAppData(local: AppData, remote: AppData): AppData {
       cleanCustomGmModules(local.customGmModules, deletedCharacterSet),
       cleanCustomGmModules(remote.customGmModules, deletedCharacterSet)
     ).filter((module) => !module.workspaceId || !deletedWorkspaceSet.has(module.workspaceId)),
+    layoutTemplates: mergeById(
+      local.layoutTemplates ?? [],
+      remote.layoutTemplates ?? []
+    ).filter((template) => !template.workspaceId || !deletedWorkspaceSet.has(template.workspaceId)),
     characters: mergeCharacters(
       (local.characters ?? []).filter((character) => !deletedCharacterSet.has(character.id)),
       (remote.characters ?? []).filter((character) => !deletedCharacterSet.has(character.id))
@@ -1230,6 +1294,21 @@ function upsertCustomGmModuleInData(data: AppData, module: CustomGmModule, actor
         summary: next.name
       })
     ]
+  };
+}
+
+function upsertLayoutTemplateInData(data: AppData, template: LayoutTemplate): AppData {
+  const now = new Date().toISOString();
+  const existing = (data.layoutTemplates ?? []).find((entry) => entry.id === template.id);
+  const next = normalizeLayoutTemplate({
+    ...template,
+    createdAt: template.createdAt ?? existing?.createdAt ?? now,
+    updatedAt: now
+  }, template.workspaceId);
+  const exists = (data.layoutTemplates ?? []).some((entry) => entry.id === template.id);
+  return {
+    ...data,
+    layoutTemplates: exists ? (data.layoutTemplates ?? []).map((entry) => entry.id === next.id ? next : entry) : [...(data.layoutTemplates ?? []), next]
   };
 }
 

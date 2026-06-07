@@ -7,6 +7,7 @@ import type {
   CustomGmModule,
   GmSessionData,
   InfoHint,
+  LayoutTemplate,
   NewMessageInput,
   SessionState,
   UserProfile,
@@ -56,6 +57,8 @@ export interface GameStore {
   deleteCampaignSession: (id: string) => void;
   upsertCustomGmModule: (module: CustomGmModule) => void;
   deleteCustomGmModule: (id: string) => void;
+  upsertLayoutTemplate: (template: LayoutTemplate) => void;
+  deleteLayoutTemplate: (id: string) => void;
   sendMessage: (message: NewMessageInput) => void;
   markMessageRead: (id: string) => void;
 }

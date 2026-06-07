@@ -46,6 +46,7 @@ export function selectWorkspaceData(data, workspaceId) {
     campaigns: (data.campaigns ?? []).filter(inWorkspace),
     campaignSessions: (data.campaignSessions ?? []).filter(inWorkspace),
     customGmModules: (data.customGmModules ?? []).filter(inWorkspace),
+    layoutTemplates: (data.layoutTemplates ?? []).filter(inWorkspace),
     infoHints: (data.infoHints ?? []).filter(inWorkspace)
   };
 }

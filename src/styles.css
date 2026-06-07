@@ -50,6 +50,13 @@ textarea {
   background: #07111d !important;
 }
 
+.layout-builder-grid {
+  background-image:
+    linear-gradient(rgba(168, 117, 42, 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(168, 117, 42, 0.22) 1px, transparent 1px);
+  background-size: calc(100% / var(--layout-columns, 24)) var(--layout-row-height, 32px);
+}
+
 :root[data-theme="light"] main,
 :root[data-theme="light"] [class*="bg-[#05070b]"],
 :root[data-theme="light"] [class*="bg-[#070b12]"],

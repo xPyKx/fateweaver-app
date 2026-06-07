@@ -15,6 +15,7 @@ import {
   stress,
   tierForLevel
 } from "../../lib/rules/characterRules";
+import { evaluateCalculation } from "../../lib/rules/calculations";
 
 const layoutAttributeMap = {
   kraft: "kraft",
@@ -51,25 +52,47 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
   const sideFate = findItem(catalog, choices.sideFateId, "fate");
   const folk = findItem(catalog, choices.folkId, "folk");
   const society = findItem(catalog, choices.societyId, "society");
+  const activeConditions = (choices.activeConditionIds ?? [])
+    .map((id) => findItem(catalog, id, "condition"))
+    .filter(Boolean);
   const activeItems = [...weapons, armorItem].filter((item) => item && requirementsMet(item, baseAttributes));
-  const activeEffects = [...collectPropertyEffects(activeItems, catalog), ...collectOriginEffects([folk, society]), ...collectActiveFateEffects(character, catalog), ...collectActiveItemEffects(character, catalog, baseAttributes)];
+  const activeEffects = [...collectPropertyEffects(activeItems, catalog), ...collectOriginEffects([folk, society]), ...collectConditionEffects(activeConditions), ...collectActiveFateEffects(character, catalog), ...collectActiveItemEffects(character, catalog, baseAttributes)];
   const attributes = applyAttributeEffects(baseAttributes, activeEffects);
   const level = character.level ?? 1;
   const training = effectiveTrainingBonus(character);
+  const fallbackCalculations = {
+    difficulty: effectiveDifficulty(attributes, character),
+    dodge: dodge(attributes, character.dodgeBonuses ?? [], armorData) + sumEffects(activeEffects, "dodge", attributes) + levelUpEvasionBonus(character),
+    armorValue: (armorData?.armorValue ?? 0) + sumEffects(activeEffects, "armorValue", attributes),
+    hpMax: Math.max(1, hitPoints(attributes, (character.hpBonus ?? 0) + levelUpHpBonus(character) + sumEffects(activeEffects, "hpBonus", attributes))),
+    stressMax: Math.max(1, stress(attributes, (character.stressBonus ?? 0) + levelUpStressBonus(character) + sumEffects(activeEffects, "stressBonus", attributes))),
+    lightThreshold: lightDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "lightThreshold", attributes),
+    heavyThreshold: heavyDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "heavyThreshold", attributes)
+  };
+  fallbackCalculations.armorSlots = Math.max(0, Math.min(12, fallbackCalculations.armorValue));
+  const calculationContext = {
+    catalog,
+    character,
+    attributes,
+    activeEffects,
+    armorData,
+    dodgeBonuses: character.dodgeBonuses ?? [],
+    fallback: fallbackCalculations
+  };
 
   return {
     level,
     tier: tierForLevel(level),
     die: dieForLevel(level),
     training,
-    difficulty: effectiveDifficulty(attributes, character),
-    dodge: dodge(attributes, character.dodgeBonuses ?? [], armorData) + sumEffects(activeEffects, "dodge", attributes) + levelUpEvasionBonus(character),
-    armorValue: (armorData?.armorValue ?? 0) + sumEffects(activeEffects, "armorValue", attributes),
-    armorSlots: Math.max(0, Math.min(12, (armorData?.armorValue ?? 0) + sumEffects(activeEffects, "armorValue", attributes))),
-    hpMax: Math.max(1, hitPoints(attributes, (character.hpBonus ?? 0) + levelUpHpBonus(character) + sumEffects(activeEffects, "hpBonus", attributes))),
-    stressMax: Math.max(1, stress(attributes, (character.stressBonus ?? 0) + levelUpStressBonus(character) + sumEffects(activeEffects, "stressBonus", attributes))),
-    lightThreshold: lightDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "lightThreshold", attributes),
-    heavyThreshold: heavyDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "heavyThreshold", attributes),
+    difficulty: evaluateCalculation("difficulty", calculationContext),
+    dodge: evaluateCalculation("dodge", calculationContext),
+    armorValue: evaluateCalculation("armorValue", calculationContext),
+    armorSlots: evaluateCalculation("armorSlots", calculationContext),
+    hpMax: evaluateCalculation("hpMax", calculationContext),
+    stressMax: evaluateCalculation("stressMax", calculationContext),
+    lightThreshold: evaluateCalculation("lightThreshold", calculationContext),
+    heavyThreshold: evaluateCalculation("heavyThreshold", calculationContext),
     attributes: attributeTemplates.map((item) => {
       const attributeKey = layoutAttributeMap[item.key];
       return {
@@ -86,6 +109,13 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
     folkName: folk?.name ?? "Herkunft offen",
     societyName: society?.name ?? "",
     attunementIconUrl: optionIcon(catalog.find((entry) => entry.type === "gameOption" && entry.gameOption?.kind === "attunementIcon")),
+    activeConditions: activeConditions.map((condition) => ({
+      id: condition.id,
+      name: condition.name,
+      description: condition.description,
+      iconUrl: condition.condition?.iconUrl || condition.imageUrl || "",
+      durationMode: condition.condition?.durationMode ?? "manual"
+    })),
     weapons: normalizeWeapons(weapons, catalog, attributes, training, choices.weaponAttributeSelections ?? {}),
     armor: normalizeArmor(armorItem, armorData, catalog, attributes)
   };
@@ -268,6 +298,10 @@ function collectOriginEffects(items) {
     ...(item.propertyEffects ?? []),
     ...(item.originAbilities ?? []).flatMap((ability) => ability.propertyEffects ?? [])
   ]);
+}
+
+function collectConditionEffects(items) {
+  return items.filter(Boolean).flatMap((item) => item.propertyEffects ?? []);
 }
 
 function collectActiveFateEffects(character, catalog) {

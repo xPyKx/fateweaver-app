@@ -33,6 +33,7 @@ export type CatalogType =
   | "society"
   | "transmutation"
   | "levelOption"
+  | "condition"
   | "restOption";
 
 export interface BonusSource {
@@ -232,6 +233,55 @@ export interface GameOptionData {
   text: string;
 }
 
+export type CalculationSourceKind =
+  | "number"
+  | "attribute"
+  | "highestAttribute"
+  | "trainingBonus"
+  | "characterBonus"
+  | "levelUpBonus"
+  | "effectSum"
+  | "bonusSourceSum"
+  | "armorField"
+  | "levelHalfCeil"
+  | "calculation";
+
+export type CalculationClampMode = "none" | "min" | "max" | "range";
+
+export interface GameCalculationTerm {
+  id: string;
+  source: CalculationSourceKind;
+  sign?: 1 | -1;
+  value?: number;
+  attributeKey?: AttributeKey | "";
+  attributeKeys?: AttributeKey[];
+  bonusKey?: "hp" | "stress" | "evasion" | "proficiency";
+  effectTarget?: PropertyEffectTarget;
+  armorField?: "armorValue" | "baseThresholdLight" | "baseThresholdHeavy" | "baseThresholdHeavyOrLight";
+  calculationKey?: string;
+  label?: string;
+}
+
+export interface GameCalculationData {
+  key: string;
+  target?: string;
+  terms: GameCalculationTerm[];
+  clampMode?: CalculationClampMode;
+  min?: number;
+  max?: number;
+  round?: "none" | "floor" | "ceil" | "round";
+}
+
+export type ConditionDurationMode = "manual" | "rounds" | "untilRest" | "untilSave";
+
+export interface ConditionData {
+  iconUrl?: string;
+  durationMode?: ConditionDurationMode;
+  defaultDuration?: number;
+  playerSelectable?: boolean;
+  sourceTypes?: string[];
+}
+
 export interface SheetTabData {
   contentType: "freeText" | "catalogList";
   catalogType?: CatalogType;
@@ -295,6 +345,8 @@ export interface CatalogItem {
   fateAbility?: FateAbilityData;
   range?: RangeData;
   gameOption?: GameOptionData;
+  calculation?: GameCalculationData;
+  condition?: ConditionData;
   sheetTab?: SheetTabData;
   rest?: RestData;
   backgroundQuestion?: BackgroundQuestionData;
@@ -328,6 +380,7 @@ export interface CharacterChoices {
   selectedMaterialCounts?: Record<string, number>;
   selectedFateCardIds: string[];
   selectedFateCategoryEntryIds?: Record<string, string[]>;
+  activeConditionIds?: string[];
   fateCardStates?: Record<string, CharacterFateCardState>;
   attunedItemIds?: string[];
   inventoryCollapsed?: boolean;
@@ -567,6 +620,23 @@ export interface CustomModuleStatBlock {
   }>;
   tactics?: string;
   loot?: string;
+  rows?: Array<{
+    id: string;
+    label: string;
+    value?: string;
+    note?: string;
+  }>;
+  sections?: Array<{
+    id: string;
+    title: string;
+    kind: "text" | "fields" | "table";
+    text?: string;
+    columns?: string[];
+    rows?: Array<{
+      id: string;
+      cells: string[];
+    }>;
+  }>;
 }
 
 export interface CustomGmModule {

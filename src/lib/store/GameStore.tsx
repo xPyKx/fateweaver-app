@@ -426,7 +426,8 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
     : workspaces[0]?.id;
   const deletedCatalogItemIds = unique([...(data.deletedCatalogItemIds ?? []), ...DEPRECATED_SEED_CATALOG_IDS]);
   const deletedCatalogItemSet = new Set(deletedCatalogItemIds);
-  const catalog = normalizeCatalogItems(dedupeById(data.catalog ?? []).filter((item) => !deletedCatalogItemSet.has(item.id)));
+  let catalog: CatalogItem[] = normalizeCatalogItems(dedupeById(data.catalog ?? []).filter((item) => !deletedCatalogItemSet.has(item.id)));
+  catalog = withMissingSystemCalculations(catalog, deletedCatalogItemSet);
   const deletedCharacterIds = unique(data.deletedCharacterIds ?? []);
   const deletedCharacterSet = new Set(deletedCharacterIds);
   const catalogIds = new Set(catalog.map((item) => item.id));
@@ -461,6 +462,7 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
       const item = catalog.find((entry) => entry.id === id);
       return Boolean(item && fateCardBelongsToFates(item, allowedFateIds));
     });
+    const activeConditionIds = cleanIds(character.choices?.activeConditionIds, "condition");
     const selectedFateCategoryEntryIds = normalizeFateCategorySelections(character.choices?.selectedFateCategoryEntryIds, catalog, allowedFateIds);
     const selectedFateCategoryEntryFlatIds = Object.values(selectedFateCategoryEntryIds).flat();
     const fateCardStates = normalizeFateCardStates(character.choices?.fateCardStates, catalog, new Set([...selectedFateCardIds, ...selectedFateCategoryEntryFlatIds]));
@@ -488,6 +490,7 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
         selectedMaterialCounts,
         selectedFateCardIds,
         selectedFateCategoryEntryIds,
+        activeConditionIds,
         fateCardStates,
         attunedItemIds: cleanIds(character.choices?.attunedItemIds),
         dismissedShopIds: unique(character.choices?.dismissedShopIds ?? []),
@@ -602,6 +605,14 @@ function normalizeCatalogItems(items: CatalogItem[]) {
     }
     return { ...item, createdAt: item.createdAt ?? timestamp, updatedAt: item.updatedAt ?? timestamp };
   });
+}
+
+function withMissingSystemCalculations(catalog: CatalogItem[], deletedCatalogItemSet: Set<string>) {
+  const existingIds = new Set(catalog.map((item) => item.id));
+  const missingCalculations = (seedData.catalog ?? [])
+    .filter((item) => item.gameOption?.kind === "calculation" && item.calculation)
+    .filter((item) => !existingIds.has(item.id) && !deletedCatalogItemSet.has(item.id));
+  return missingCalculations.length ? [...catalog, ...missingCalculations] : catalog;
 }
 
 function normalizeInfoHints(items: InfoHint[]) {
@@ -1241,6 +1252,23 @@ function normalizeStatBlock(statBlock: CustomGmModule["statBlock"]) {
       name: ability.name ?? "Faehigkeit",
       kind: ability.kind ?? "active",
       text: ability.text ?? ""
+    })),
+    rows: (statBlock.rows ?? []).map((row) => ({
+      id: row.id ?? crypto.randomUUID(),
+      label: row.label ?? "Feld",
+      value: row.value ?? "",
+      note: row.note ?? ""
+    })),
+    sections: (statBlock.sections ?? []).map((section) => ({
+      id: section.id ?? crypto.randomUUID(),
+      title: section.title ?? "Sektion",
+      kind: section.kind ?? "text",
+      text: section.text ?? "",
+      columns: section.columns ?? ["Name", "Wert"],
+      rows: (section.rows ?? []).map((row) => ({
+        id: row.id ?? crypto.randomUUID(),
+        cells: row.cells ?? []
+      }))
     }))
   };
 }

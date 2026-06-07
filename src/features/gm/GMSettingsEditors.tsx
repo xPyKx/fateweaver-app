@@ -2,7 +2,7 @@ import { CircleDot, Info, Save, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Field } from "../../components/Field";
-import type { AttributeKey, BackgroundQuestionKind, CatalogItem, CatalogType, Character, FateAbilityCategoryData, FateAbilityCategoryMode, FateAbilityCategoryTrigger, FateAbilityKind, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget, FateAbilityUsageData } from "../../types/domain";
+import type { AttributeKey, BackgroundQuestionKind, CalculationClampMode, CalculationSourceKind, CatalogItem, CatalogType, Character, ConditionDurationMode, FateAbilityCategoryData, FateAbilityCategoryMode, FateAbilityCategoryTrigger, FateAbilityKind, GameCalculationTerm, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget, FateAbilityUsageData } from "../../types/domain";
 import { ImageInput, MagicItemKindField, RarityField, Select, SignedNumberField } from "./GMControls";
 import {
   attributes,
@@ -59,8 +59,9 @@ export function Editor({ item, catalog, characters = [], properties, gameOptions
       {(item.type === "weapon" || (item.type === "magicItem" && item.magicItemKind === "weapon")) && <WeaponFields item={item} gameOptions={gameOptions} properties={properties} savePatch={savePatch} />}
       {(item.type === "armor" || (item.type === "magicItem" && item.magicItemKind === "armor")) && <ArmorFields item={item} savePatch={savePatch} />}
       {item.type === "range" && <RangeFields item={item} savePatch={savePatch} />}
-      {item.type === "gameOption" && <GameOptionFields item={item} savePatch={savePatch} />}
+      {item.type === "gameOption" && <GameOptionFields item={item} catalog={catalog} savePatch={savePatch} />}
       {item.type === "property" && <PropertyEffectEditor item={item} savePatch={savePatch} />}
+      {item.type === "condition" && <ConditionFields item={item} savePatch={savePatch} />}
       {item.type === "sheetTab" && <SheetTabFields item={item} characters={characters} savePatch={savePatch} />}
       {item.type === "fate" && <FateFields item={item} catalog={catalog} gameOptions={gameOptions} savePatch={savePatch} />}
       {item.type === "fateAbility" && <FateAbilityFields item={item} catalog={catalog} savePatch={savePatch} />}
@@ -153,6 +154,37 @@ function PropertyEffectEditor({ item, savePatch }: SpecificEditorProps) {
       ))}
       {!effects.length && <div className="text-sm text-[#8c8170]">Keine Werteffekte. Die Beschreibung bleibt trotzdem als Regeltext nutzbar.</div>}
       <div className="text-xs leading-relaxed text-[#8c8170]">Notiz optional ist nur erklaerender Text, z. B. "nur bei Einstimmung" oder "bis zur Rast". Automatisch berechnet wird ueber Ziel und Wert.</div>
+    </div>
+  );
+}
+
+function ConditionFields({ item, savePatch }: SpecificEditorProps) {
+  const condition = item.condition ?? { durationMode: "manual" as const, playerSelectable: true, sourceTypes: [] };
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3 md:grid-cols-2">
+        <ImageInput label="Zustands-Icon" value={condition.iconUrl ?? item.imageUrl ?? ""} onChange={(iconUrl) => savePatch({ imageUrl: iconUrl, condition: { ...condition, iconUrl } })} />
+        <Select
+          label="Dauer"
+          value={condition.durationMode ?? "manual"}
+          onChange={(durationMode) => savePatch({ condition: { ...condition, durationMode: durationMode as ConditionDurationMode } })}
+          options={[
+            ["manual", "Manuell entfernen"],
+            ["rounds", "Runden"],
+            ["untilRest", "Bis zur Rast"],
+            ["untilSave", "Bis Rettung/Probe"]
+          ]}
+        />
+        {(condition.durationMode ?? "manual") === "rounds" && (
+          <Field label="Standarddauer Runden" type="number" value={condition.defaultDuration ?? 1} onChange={(defaultDuration) => savePatch({ condition: { ...condition, defaultDuration: Math.max(1, Number(defaultDuration) || 1) } })} />
+        )}
+        <label className="flex min-h-11 items-center gap-3 border border-[#a8752a]/35 bg-black/25 p-3 text-sm text-[#cfc2aa]">
+          <input type="checkbox" checked={condition.playerSelectable !== false} onChange={(event) => savePatch({ condition: { ...condition, playerSelectable: event.target.checked } })} />
+          Fuer Spieler im Charakterbogen waehlbar
+        </label>
+      </div>
+      <TextArea label="Ausloeser / Quellen" value={(condition.sourceTypes ?? []).join(", ")} onChange={(value) => savePatch({ condition: { ...condition, sourceTypes: splitList(value) } })} />
+      <PropertyEffectEditor item={item} savePatch={savePatch} />
     </div>
   );
 }
@@ -387,15 +419,190 @@ function RangeFields({ item, savePatch }: SpecificEditorProps) {
   );
 }
 
-function GameOptionFields({ item, savePatch }: SpecificEditorProps) {
+function GameOptionFields({ item, catalog, savePatch }: SpecificEditorProps & { catalog: CatalogItem[] }) {
   const option = item.gameOption ?? { kind: "range" as const, text: item.description };
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <Select label="Unterkategorie" value={option.kind} onChange={(kind) => savePatch({ gameOption: { ...option, kind: kind as GameOptionKind } })} options={Array.from(new Set([...gameOptionKinds.map((entry) => entry.key), option.kind])).map((kind) => [kind, labelForGameOptionKind(kind)])} />
       <Field label="Text" value={option.text ?? ""} onChange={(text) => savePatch({ gameOption: { ...option, text } })} />
-      <ImageInput label="Icon" value={option.iconUrl ?? item.imageUrl ?? ""} onChange={(iconUrl) => savePatch({ imageUrl: iconUrl, gameOption: { ...option, iconUrl } })} />
+      {option.kind !== "calculation" && <ImageInput label="Icon" value={option.iconUrl ?? item.imageUrl ?? ""} onChange={(iconUrl) => savePatch({ imageUrl: iconUrl, gameOption: { ...option, iconUrl } })} />}
+      {option.kind === "calculation" && <CalculationFields item={item} catalog={catalog} savePatch={savePatch} />}
     </div>
   );
+}
+
+const calculationSources: { key: CalculationSourceKind; label: string }[] = [
+  { key: "number", label: "Fester Wert" },
+  { key: "attribute", label: "Attribut" },
+  { key: "highestAttribute", label: "Hoechstes Attribut" },
+  { key: "trainingBonus", label: "Uebungsbonus" },
+  { key: "characterBonus", label: "Charakterbonus" },
+  { key: "levelUpBonus", label: "Level-up Bonus" },
+  { key: "effectSum", label: "Effektsumme" },
+  { key: "bonusSourceSum", label: "Bonusliste" },
+  { key: "armorField", label: "Ruestungsfeld" },
+  { key: "levelHalfCeil", label: "Level/2 aufgerundet" },
+  { key: "calculation", label: "Andere Berechnung" }
+];
+
+const calculationTargets = [
+  { key: "difficulty", label: "Schwierigkeit", description: "Wird auf dem Charakterbogen als Grund-SG / Schwierigkeit angezeigt." },
+  { key: "dodge", label: "Ausweichen", description: "Wird auf dem Charakterbogen beim Wert Ausweichen angezeigt." },
+  { key: "armorValue", label: "Ruestungswert", description: "Wird aus getragener Ruestung und aktiven Effekten gebildet." },
+  { key: "armorSlots", label: "Ruestungsslots", description: "Wird fuer die Anzahl nutzbarer Ruestungsfelder verwendet." },
+  { key: "hpMax", label: "HP Maximum", description: "Wird als maximales HP-Feld des Charakters verwendet." },
+  { key: "stressMax", label: "Stress Maximum", description: "Wird als maximales Stress-Feld des Charakters verwendet." },
+  { key: "lightThreshold", label: "Grenzwert leicht", description: "Wird fuer die leichte Schadensschwelle genutzt." },
+  { key: "heavyThreshold", label: "Grenzwert schwer", description: "Wird fuer die schwere Schadensschwelle genutzt." }
+];
+
+function CalculationFields({ item, catalog, savePatch }: SpecificEditorProps & { catalog: CatalogItem[] }) {
+  const calculation = item.calculation ?? { key: slugCalculationKey(item.name), terms: [] };
+  const terms = calculation.terms ?? [];
+  const calculations = catalog.filter((entry) => entry.type === "gameOption" && entry.gameOption?.kind === "calculation" && entry.id !== item.id);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const selectedTarget = calculationTargets.find((target) => target.key === calculation.key);
+
+  function saveTerm(term: GameCalculationTerm) {
+    savePatch({ calculation: { ...calculation, terms: terms.map((entry) => entry.id === term.id ? term : entry) } });
+  }
+
+  function addTerm() {
+    savePatch({
+      calculation: {
+        ...calculation,
+        terms: [...terms, { id: crypto.randomUUID(), source: "number", value: 0 }]
+      }
+    });
+  }
+
+  return (
+    <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3 md:col-span-2">
+      <div className="grid gap-3 md:grid-cols-4">
+        <Select
+          label="Bekannter Zielwert"
+          value={selectedTarget?.key ?? ""}
+          onChange={(key) => {
+            const target = calculationTargets.find((entry) => entry.key === key);
+            if (!target) return;
+            savePatch({
+              name: item.name === "Neuer Eintrag" || item.name === calculation.key ? target.label : item.name,
+              gameOption: { ...(item.gameOption ?? { kind: "calculation" as const, text: target.label }), kind: "calculation", text: target.label },
+              calculation: { ...calculation, key: target.key, target: target.label }
+            });
+          }}
+          options={[["", "Freier Schluessel"], ...calculationTargets.map((target) => [target.key, target.label] as [string, string])]}
+        />
+        <Field label="Berechnungsschluessel" value={calculation.key} onChange={(key) => savePatch({ calculation: { ...calculation, key } })} />
+        <Select
+          label="Begrenzung"
+          value={calculation.clampMode ?? "none"}
+          onChange={(clampMode) => savePatch({ calculation: { ...calculation, clampMode: clampMode as CalculationClampMode } })}
+          options={[["none", "Keine"], ["min", "Minimum"], ["max", "Maximum"], ["range", "Minimum und Maximum"]]}
+        />
+        <Select
+          label="Runden"
+          value={calculation.round ?? "none"}
+          onChange={(round) => savePatch({ calculation: { ...calculation, round: round as "none" | "floor" | "ceil" | "round" } })}
+          options={[["none", "Nicht runden"], ["floor", "Abrunden"], ["ceil", "Aufrunden"], ["round", "Kaufmaennisch"]]}
+        />
+      </div>
+      {selectedTarget && (
+        <div className="border border-[#a8752a]/25 bg-black/25 p-3 text-sm text-[#cfc2aa]">
+          <span className="font-semibold text-[#f4ead7]">{selectedTarget.label}</span>
+          <span className="text-[#8c8170]"> ist im Code unter </span>
+          <code className="text-[#ffd88c]">{selectedTarget.key}</code>
+          <span className="text-[#8c8170]"> hinterlegt. {selectedTarget.description}</span>
+        </div>
+      )}
+      {(calculation.clampMode === "min" || calculation.clampMode === "range") && <Field label="Minimum" type="number" value={calculation.min ?? 0} onChange={(min) => savePatch({ calculation: { ...calculation, min: Number(min) } })} />}
+      {(calculation.clampMode === "max" || calculation.clampMode === "range") && <Field label="Maximum" type="number" value={calculation.max ?? 0} onChange={(max) => savePatch({ calculation: { ...calculation, max: Number(max) } })} />}
+
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-black uppercase tracking-[0.16em] text-[#f2ca75]">Formelbausteine</div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setLegendOpen((open) => !open)} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#cfc2aa]">Legende</button>
+          <button type="button" onClick={addTerm} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Baustein +</button>
+        </div>
+      </div>
+      {legendOpen && <CalculationLegend />}
+
+      {terms.map((term, index) => (
+        <div key={term.id} className="grid gap-2 border border-[#a8752a]/25 bg-black/25 p-3">
+          <div className="grid gap-2 md:grid-cols-[80px_minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <Select label={index === 0 ? "Vorzeichen" : "+/-"} value={String(term.sign ?? 1)} onChange={(sign) => saveTerm({ ...term, sign: sign === "-1" ? -1 : 1 })} options={[["1", "+"], ["-1", "-"]]} />
+            <Select label="Quelle" value={term.source} onChange={(source) => saveTerm(defaultTermForSource({ ...term, source: source as CalculationSourceKind }))} options={calculationSources.map((source) => [source.key, source.label])} />
+            <CalculationTermInput term={term} calculations={calculations} saveTerm={saveTerm} />
+            <button type="button" onClick={() => savePatch({ calculation: { ...calculation, terms: terms.filter((entry) => entry.id !== term.id) } })} className="self-end border border-red-400/45 px-3 py-3 text-red-200">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      ))}
+      {!terms.length && <div className="text-sm text-[#8c8170]">Noch keine Bausteine. Ohne Formel nutzt der Charakterbogen den Code-Fallback.</div>}
+    </div>
+  );
+}
+
+function CalculationLegend() {
+  const entries = [
+    ["Fester Wert", "Eine selbst eingetragene Zahl, z. B. 10 oder -2."],
+    ["Attribut", "Der aktuelle Wert eines einzelnen Attributs."],
+    ["Hoechstes Attribut", "Der hoechste Wert aus einer hinterlegten Attributliste."],
+    ["Uebungsbonus", "Der effektive Uebungsbonus des Charakters inklusive Level-up."],
+    ["Charakterbonus", "Direkt am Charakter gespeicherte Zusatzwerte, aktuell HP oder Stress."],
+    ["Level-up Bonus", "Zaehlt passende gewaehlte Level-up-Optionen, z. B. HP, Stress oder Ausweichen."],
+    ["Effektsumme", "Addiert aktive Effekte aus Eigenschaften, Zustaenden, Fatekarten und Gegenstaenden fuer ein Ziel."],
+    ["Bonusliste", "Addiert manuelle Bonusquellen des Charakters, aktuell fuer Ausweichen."],
+    ["Ruestungsfeld", "Liest Werte der getragenen Ruestung, z. B. Ruestungswert oder Grenzwerte."],
+    ["Level/2 aufgerundet", "Nimmt die Charakterstufe, halbiert sie und rundet auf."],
+    ["Andere Berechnung", "Verwendet das Ergebnis einer anderen Berechnung als Baustein."]
+  ];
+  return (
+    <div className="grid gap-2 border border-[#a8752a]/25 bg-black/30 p-3 text-sm text-[#cfc2aa]">
+      <div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Legende der Quellen</div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {entries.map(([label, description]) => (
+          <div key={label} className="border border-[#a8752a]/20 bg-black/20 p-2">
+            <div className="font-semibold text-[#f4ead7]">{label}</div>
+            <div className="text-xs leading-relaxed text-[#8c8170]">{description}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CalculationTermInput({ term, calculations, saveTerm }: { term: GameCalculationTerm; calculations: CatalogItem[]; saveTerm: (term: GameCalculationTerm) => void }) {
+  if (term.source === "number") return <Field label="Wert" type="number" value={term.value ?? 0} onChange={(value) => saveTerm({ ...term, value: Number(value) })} />;
+  if (term.source === "attribute") return <Select label="Attribut" value={term.attributeKey ?? ""} onChange={(attributeKey) => saveTerm({ ...term, attributeKey: attributeKey as AttributeKey })} options={attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])} />;
+  if (term.source === "highestAttribute") return <Field label="Attribute kommasepariert" value={(term.attributeKeys ?? []).join(", ")} onChange={(value) => saveTerm({ ...term, attributeKeys: splitList(value) as AttributeKey[] })} />;
+  if (term.source === "characterBonus" || term.source === "levelUpBonus") {
+    return <Select label="Bonus" value={term.bonusKey ?? "hp"} onChange={(bonusKey) => saveTerm({ ...term, bonusKey: bonusKey as GameCalculationTerm["bonusKey"] })} options={[["hp", "HP"], ["stress", "Stress"], ["evasion", "Ausweichen"], ["proficiency", "Uebungsbonus"]]} />;
+  }
+  if (term.source === "effectSum") return <Select label="Effektziel" value={term.effectTarget ?? "dodge"} onChange={(effectTarget) => saveTerm({ ...term, effectTarget: effectTarget as PropertyEffectTarget })} options={effectTargets.map((target) => [target.key, target.label])} />;
+  if (term.source === "armorField") {
+    return <Select label="Ruestungsfeld" value={term.armorField ?? "armorValue"} onChange={(armorField) => saveTerm({ ...term, armorField: armorField as GameCalculationTerm["armorField"] })} options={[["armorValue", "Ruestungswert"], ["baseThresholdLight", "Grenzwert leicht"], ["baseThresholdHeavy", "Grenzwert schwer"], ["baseThresholdHeavyOrLight", "Schwer sonst leicht"]]} />;
+  }
+  if (term.source === "calculation") {
+    return <Select label="Berechnung" value={term.calculationKey ?? ""} onChange={(calculationKey) => saveTerm({ ...term, calculationKey })} options={[["", "Berechnung waehlen"], ...calculations.map((entry) => [entry.calculation?.key ?? entry.id, entry.name] as [string, string])]} />;
+  }
+  return <Field label="Quelle" value={calculationSources.find((source) => source.key === term.source)?.label ?? term.source} onChange={() => undefined} />;
+}
+
+function defaultTermForSource(term: GameCalculationTerm): GameCalculationTerm {
+  if (term.source === "number") return { id: term.id, source: term.source, sign: term.sign, value: 0 };
+  if (term.source === "attribute") return { id: term.id, source: term.source, sign: term.sign, attributeKey: "kraft" };
+  if (term.source === "highestAttribute") return { id: term.id, source: term.source, sign: term.sign, attributeKeys: ["kraft", "agilitaet", "intelligenz", "willenskraft"] };
+  if (term.source === "characterBonus" || term.source === "levelUpBonus") return { id: term.id, source: term.source, sign: term.sign, bonusKey: "hp" };
+  if (term.source === "effectSum") return { id: term.id, source: term.source, sign: term.sign, effectTarget: "dodge" };
+  if (term.source === "armorField") return { id: term.id, source: term.source, sign: term.sign, armorField: "armorValue" };
+  if (term.source === "calculation") return { id: term.id, source: term.source, sign: term.sign, calculationKey: "" };
+  return { id: term.id, source: term.source, sign: term.sign };
+}
+
+function slugCalculationKey(name: string) {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "neue-berechnung";
 }
 
 function SheetTabFields({ item, characters = [], savePatch }: SpecificEditorProps & { characters?: Character[] }) {

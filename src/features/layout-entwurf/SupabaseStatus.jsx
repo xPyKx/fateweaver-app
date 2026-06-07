@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Cloud, CloudOff, KeyRound, LogIn, LogOut, Menu, RefreshCw, RotateCcw, Users } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Cloud, CloudOff, KeyRound, LogIn, LogOut, Menu, Moon, RefreshCw, RotateCcw, Sun, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   isSupabaseConfigured,
@@ -15,6 +15,8 @@ import { useGameStore } from "../../lib/store/GameStore";
 import { BackupMenuItems } from "./BackupPanel";
 import { WorkspaceManager } from "./WorkspaceManager";
 
+const THEME_STORAGE_KEY = "fateweaver-theme";
+
 export function SupabaseStatus() {
   const { data, syncStatus, syncState, lastRemoteSyncAt, syncNow, authLoading, currentUserId, profile } = useGameStore();
   const [email, setEmail] = useState("");
@@ -30,6 +32,7 @@ export function SupabaseStatus() {
   const [expandedUserId, setExpandedUserId] = useState("");
   const [profilePasswords, setProfilePasswords] = useState({});
   const [busyAction, setBusyAction] = useState("");
+  const [theme, setTheme] = useState(() => window.localStorage.getItem(THEME_STORAGE_KEY) || "dark");
   const menuRef = useRef(null);
   const canManageUsers = Boolean(profile?.isAdmin);
   const canManageWorkspaces = Boolean(profile?.isGm || profile?.isAdmin);
@@ -38,6 +41,11 @@ export function SupabaseStatus() {
     if (currentUserId && message === "Ausgeloggt.") setMessage("");
     if (syncState === "synced" && message.includes("Supabase-Projekt nicht erreichbar")) setMessage("");
   }, [currentUserId, message, syncState]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -202,6 +210,10 @@ export function SupabaseStatus() {
                   </button>
                 )}
                 {profile?.isAdmin && <BackupMenuItems />}
+                <button onClick={() => setTheme(theme === "light" ? "dark" : "light")} className="flex h-10 items-center gap-2 border border-[#a8752a]/45 bg-black/35 px-3 font-bold uppercase tracking-wide text-[#f2ca75]">
+                  {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                  {theme === "light" ? "Dunkles Design" : "Helles Design"}
+                </button>
                 <button disabled={Boolean(busyAction)} onClick={runManualSync} className="flex h-10 items-center gap-2 border border-[#a8752a]/45 bg-black/35 px-3 font-bold uppercase tracking-wide text-[#f2ca75] disabled:cursor-not-allowed disabled:opacity-55">
                   <RefreshCw className="h-4 w-4" /> {busyAction === "sync" ? "Synchronisiert" : "Jetzt synchronisieren"}
                 </button>

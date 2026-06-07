@@ -84,6 +84,22 @@ export function GMDashboardView({ onBack }) {
     saveSession({ inventoryHistory: [...gmSession.inventoryHistory, historyEntry(characterId, item, "given")] });
   }
 
+  function toggleCharacterCondition(characterId, conditionId) {
+    const character = data.characters.find((entry) => entry.id === characterId);
+    if (!character || !conditionId) return;
+    const activeConditionIds = character.choices?.activeConditionIds ?? [];
+    upsertCharacter({
+      ...character,
+      choices: {
+        ...character.choices,
+        activeConditionIds: activeConditionIds.includes(conditionId)
+          ? activeConditionIds.filter((id) => id !== conditionId)
+          : [...activeConditionIds, conditionId]
+      },
+      updatedAt: new Date().toISOString()
+    });
+  }
+
   function confirmRequest(requestId) {
     const request = gmSession.shopRequests.find((entry) => entry.id === requestId);
     const item = data.catalog.find((entry) => entry.id === request?.itemId);
@@ -147,7 +163,7 @@ export function GMDashboardView({ onBack }) {
       </section>
       {pending.length > 0 && <section className="grid gap-3 border border-[#a8752a]/45 bg-black/25 p-4"><div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Offene Shop-Anfragen</div>{pending.map((request) => <RequestRow key={request.id} request={request} data={data} onConfirm={() => confirmRequest(request.id)} onDecline={() => declineRequest(request.id)} />)}</section>}
       <div>
-        {module === "players" && <PlayerModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} onGive={giveItem} onMessage={sendMessage} history={historyEvents} />}
+        {module === "players" && <PlayerModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} onGive={giveItem} onCondition={toggleCharacterCondition} onMessage={sendMessage} history={historyEvents} />}
         {module === "enemies" && <EnemyDashboardModule data={workspaceData} />}
         {module === "shops" && <ShopModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} />}
         {module === "releases" && <ReleaseCenterModule data={workspaceData} onSave={upsertCustomGmModule} />}
@@ -311,20 +327,23 @@ function EnemyStatCard({ module }) {
       {(stat.traits ?? []).length > 0 && <div className="flex flex-wrap gap-1">{stat.traits.map((trait) => <span key={trait} className="border border-[#a8752a]/25 px-2 py-1 text-xs text-[#cfc2aa]">{trait}</span>)}</div>}
       {(stat.attacks ?? []).slice(0, boss ? 4 : 2).map((attack) => <div key={attack.id} className="border border-[#a8752a]/25 bg-black/20 p-3 text-sm"><div className="font-bold text-white">{attack.name} <span className="text-[#8c8170]">{attack.range}</span></div><div className="text-[#ffd88c]">{attack.damage}</div>{attack.effect && <p className="mt-1 text-[#cfc2aa]">{attack.effect}</p>}</div>)}
       {stat.tactics && <p className="border-t border-[#a8752a]/25 pt-3 text-sm text-[#cfc2aa]">{stat.tactics}</p>}
+      <StatBlockSectionsPreview stat={stat} compact />
     </article>
   );
 }
 
-function PlayerModule({ data, gmSession, saveSession, onGive, onMessage, history }) {
+function PlayerModule({ data, gmSession, saveSession, onGive, onCondition, onMessage, history }) {
   const [selectedCharacter, setSelectedCharacter] = useState(data.characters[0]?.id ?? "");
   const [selectedType, setSelectedType] = useState("magicItem");
   const [selectedItem, setSelectedItem] = useState("");
+  const [selectedCondition, setSelectedCondition] = useState("");
   const [openCharacter, setOpenCharacter] = useState(null);
   const [metricMenu, setMetricMenu] = useState(null);
   const [hiddenStats, setHiddenStats] = useState({});
   const [dismissedWarnings, setDismissedWarnings] = useState({});
   const [messageTarget, setMessageTarget] = useState(null);
   const items = data.catalog.filter((item) => selectedType === "magicItem" ? item.type === "magicItem" : item.type === selectedType).sort(byName);
+  const conditions = data.catalog.filter((item) => item.type === "condition").sort(byName);
   const attunementLimit = gmSession.attunementLimit ?? 3;
 
   function toggleStat(characterId, key) {
@@ -339,6 +358,11 @@ function PlayerModule({ data, gmSession, saveSession, onGive, onMessage, history
         <Select value={selectedType} onChange={setSelectedType} options={GIVE_TYPES} />
         <Select value={selectedItem} onChange={setSelectedItem} options={[["", "Gegenstand waehlen"], ...items.map((item) => [item.id, item.name])]} />
         <button onClick={() => onGive(selectedCharacter, selectedItem)} disabled={!selectedCharacter || !selectedItem} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-3 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Ins Inventar legen</button>
+        <div className="mt-4 grid gap-2 border-t border-[#a8752a]/25 pt-4">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Zustand geben</div>
+          <Select value={selectedCondition} onChange={setSelectedCondition} options={[["", "Zustand waehlen"], ...conditions.map((item) => [item.id, item.name])]} />
+          <button onClick={() => onCondition(selectedCharacter, selectedCondition)} disabled={!selectedCharacter || !selectedCondition} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-3 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Zustand umschalten</button>
+        </div>
         <label className="grid gap-1 text-sm text-[#cfc2aa]">
           <span className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Einstimmungen pro Charakter</span>
           <input type="number" min="0" value={attunementLimit} onChange={(event) => saveSession({ attunementLimit: Math.max(0, Number(event.target.value) || 0) })} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
@@ -355,6 +379,7 @@ function PlayerModule({ data, gmSession, saveSession, onGive, onMessage, history
           const showWeaponWarning = weapons.length > 5 && !dismissedWarnings[character.id];
           const attunedCount = (choices.attunedItemIds ?? []).length;
           const showAttunementWarning = attunementLimit > 0 && attunedCount > attunementLimit;
+          const activeConditions = (sheet.activeConditions ?? []);
           return (
             <div key={character.id} className="border border-[#a8752a]/35 bg-black/25 p-4">
               <div className="flex items-start gap-3">
@@ -362,6 +387,7 @@ function PlayerModule({ data, gmSession, saveSession, onGive, onMessage, history
                   <div className="text-xl font-light text-white">{character.name}</div>
                   <div className="mt-1 text-sm text-[#cfc2aa]">Level {character.level}</div>
                   <div className="mt-3 grid gap-2 text-sm text-[#cfc2aa] md:grid-cols-3">{visible.hp !== false && <span>HP 0/{sheet.hpMax}</span>}{visible.stress !== false && <span>Stress 0/{sheet.stressMax}</span>}{visible.dodge !== false && <span>Ausweichen {sheet.dodge}</span>}</div>
+                  {activeConditions.length > 0 && <div className="mt-3 flex flex-wrap gap-1">{activeConditions.map((condition) => <span key={condition.id} className="border border-[#ffd88c]/45 bg-[#d6a14d]/10 px-2 py-1 text-xs font-bold text-[#ffd88c]">{condition.name}</span>)}</div>}
                 </button>
                 <button onClick={() => setMessageTarget(character)} className="grid h-9 w-9 place-items-center border border-[#a8752a]/35 bg-black/25 text-[#ffd88c]" title="Nachricht senden"><MessageSquare className="h-4 w-4" /></button>
                 <div className="relative"><button onClick={() => setMetricMenu(metricMenu === character.id ? null : character.id)} className="grid h-9 w-9 place-items-center border border-[#a8752a]/35 bg-black/25 text-[#cfc2aa]" title="Anzeige einstellen"><MoreHorizontal className="h-4 w-4" /></button>{metricMenu === character.id && <CharacterQuickStats sheet={sheet} visible={visible} onToggle={(key) => toggleStat(character.id, key)} />}</div>
@@ -935,7 +961,7 @@ function CustomModuleCard({ module, data, onSave, onDelete, onDuplicate }) {
 }
 
 function StatBlockEditor({ statBlock, onChange }) {
-  const stat = { ...defaultStatBlock(statBlock.template ?? "standard"), ...statBlock, attacks: statBlock.attacks ?? [], abilities: statBlock.abilities ?? [] };
+  const stat = { ...defaultStatBlock(statBlock.template ?? "standard"), ...statBlock, attacks: statBlock.attacks ?? [], abilities: statBlock.abilities ?? [], rows: statBlock.rows ?? [], sections: statBlock.sections ?? [] };
   function patch(patchData) {
     onChange({ ...stat, ...patchData });
   }
@@ -960,6 +986,24 @@ function StatBlockEditor({ statBlock, onChange }) {
   function removeAbility(id) {
     patch({ abilities: (stat.abilities ?? []).filter((ability) => ability.id !== id) });
   }
+  function addRow() {
+    patch({ rows: [...(stat.rows ?? []), { id: crypto.randomUUID(), label: "Neues Feld", value: "", note: "" }] });
+  }
+  function patchRow(id, patchData) {
+    patch({ rows: (stat.rows ?? []).map((row) => row.id === id ? { ...row, ...patchData } : row) });
+  }
+  function removeRow(id) {
+    patch({ rows: (stat.rows ?? []).filter((row) => row.id !== id) });
+  }
+  function addSection(kind) {
+    patch({ sections: [...(stat.sections ?? []), { id: crypto.randomUUID(), title: kind === "table" ? "Neue Tabelle" : "Neue Sektion", kind, text: "", columns: kind === "table" ? ["Name", "Wert"] : ["Feld", "Wert"], rows: [] }] });
+  }
+  function patchSection(id, patchData) {
+    patch({ sections: (stat.sections ?? []).map((section) => section.id === id ? { ...section, ...patchData } : section) });
+  }
+  function removeSection(id) {
+    patch({ sections: (stat.sections ?? []).filter((section) => section.id !== id) });
+  }
   return (
     <div className="grid gap-4 border border-[#a8752a]/25 bg-black/20 p-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -978,6 +1022,20 @@ function StatBlockEditor({ statBlock, onChange }) {
         <NumberField label="Verteidigung" value={stat.defense ?? ""} onChange={(value) => patchNumber("defense", value)} />
       </div>
       <Field label="Traits, durch Komma getrennt" value={(stat.traits ?? []).join(", ")} onChange={(value) => patch({ traits: value.split(",").map((entry) => entry.trim()).filter(Boolean) })} />
+      <div className="grid gap-2 border-t border-[#a8752a]/25 pt-3">
+        <div className="flex items-center gap-2">
+          <div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Freie Wertezeilen</div>
+          <button onClick={addRow} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Zeile +</button>
+        </div>
+        {(stat.rows ?? []).map((row) => (
+          <div key={row.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-2 md:grid-cols-[170px_1fr_1fr_auto]">
+            <input value={row.label ?? ""} onChange={(event) => patchRow(row.id, { label: event.target.value })} placeholder="Label" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+            <input value={row.value ?? ""} onChange={(event) => patchRow(row.id, { value: event.target.value })} placeholder="Wert" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+            <input value={row.note ?? ""} onChange={(event) => patchRow(row.id, { note: event.target.value })} placeholder="Notiz" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+            <button onClick={() => removeRow(row.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+          </div>
+        ))}
+      </div>
       <div className="grid gap-2 border-t border-[#a8752a]/25 pt-3">
         <div className="flex items-center gap-2">
           <div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Angriffe</div>
@@ -1015,6 +1073,81 @@ function StatBlockEditor({ statBlock, onChange }) {
         <TextArea label="Taktik / Verhalten" value={stat.tactics ?? ""} onChange={(tactics) => patch({ tactics })} />
         <TextArea label="Beute / Konsequenzen" value={stat.loot ?? ""} onChange={(loot) => patch({ loot })} />
       </div>
+      <div className="grid gap-3 border-t border-[#a8752a]/25 pt-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Freie Sektionen</div>
+          <button onClick={() => addSection("text")} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Text +</button>
+          <button onClick={() => addSection("fields")} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Felder +</button>
+          <button onClick={() => addSection("table")} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Tabelle +</button>
+        </div>
+        {(stat.sections ?? []).map((section) => <StatBlockSectionEditor key={section.id} section={section} onPatch={(patchData) => patchSection(section.id, patchData)} onDelete={() => removeSection(section.id)} />)}
+      </div>
+    </div>
+  );
+}
+
+function StatBlockSectionEditor({ section, onPatch, onDelete }) {
+  const columns = section.columns ?? ["Feld", "Wert"];
+  function setColumns(value) {
+    onPatch({ columns: value.split(",").map((entry) => entry.trim()).filter(Boolean) });
+  }
+  function addTableRow() {
+    onPatch({ rows: [...(section.rows ?? []), { id: crypto.randomUUID(), cells: columns.map(() => "") }] });
+  }
+  function patchTableCell(rowId, index, value) {
+    onPatch({ rows: (section.rows ?? []).map((row) => row.id === rowId ? { ...row, cells: columns.map((_, columnIndex) => columnIndex === index ? value : row.cells?.[columnIndex] ?? "") } : row) });
+  }
+  function removeTableRow(rowId) {
+    onPatch({ rows: (section.rows ?? []).filter((row) => row.id !== rowId) });
+  }
+  return (
+    <div className="grid gap-3 border border-[#a8752a]/20 bg-black/20 p-3">
+      <div className="grid gap-2 md:grid-cols-[1fr_160px_auto]">
+        <input value={section.title ?? ""} onChange={(event) => onPatch({ title: event.target.value })} placeholder="Titel" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+        <Select value={section.kind ?? "text"} onChange={(kind) => onPatch({ kind })} options={[["text", "Text"], ["fields", "Felder"], ["table", "Tabelle"]]} />
+        <button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+      </div>
+      {section.kind === "text" ? (
+        <textarea value={section.text ?? ""} onChange={(event) => onPatch({ text: event.target.value })} placeholder="Freier Text" className="min-h-24 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" />
+      ) : (
+        <div className="grid gap-2">
+          <input value={columns.join(", ")} onChange={(event) => setColumns(event.target.value)} placeholder="Spalten, durch Komma getrennt" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+          <button onClick={addTableRow} className="justify-self-start border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Zeile +</button>
+          {(section.rows ?? []).map((row) => (
+            <div key={row.id} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, columns.length)}, minmax(0, 1fr)) auto` }}>
+              {columns.map((column, index) => <input key={`${row.id}-${column}-${index}`} value={row.cells?.[index] ?? ""} onChange={(event) => patchTableCell(row.id, index, event.target.value)} placeholder={column} className="min-h-9 min-w-0 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />)}
+              <button onClick={() => removeTableRow(row.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatBlockSectionsPreview({ stat, compact = false }) {
+  const rows = stat.rows ?? [];
+  const sections = stat.sections ?? [];
+  if (!rows.length && !sections.length) return null;
+  return (
+    <div className="grid gap-3 border-t border-[#a8752a]/25 pt-3">
+      {rows.length > 0 && <div className="grid gap-1 text-sm">{rows.map((row) => <div key={row.id} className="grid grid-cols-[minmax(120px,0.4fr)_1fr] border border-[#a8752a]/20 bg-black/15"><div className="px-2 py-1 font-bold text-[#f2ca75]">{row.label}</div><div className="px-2 py-1 text-[#cfc2aa]">{row.value}{row.note ? <span className="text-[#8c8170]"> · {row.note}</span> : null}</div></div>)}</div>}
+      {sections.slice(0, compact ? 3 : undefined).map((section) => <StatBlockSectionPreview key={section.id} section={section} />)}
+    </div>
+  );
+}
+
+function StatBlockSectionPreview({ section }) {
+  const columns = section.columns ?? [];
+  return (
+    <div className="grid gap-2 text-sm">
+      <div className="font-black uppercase tracking-[0.14em] text-[#f2ca75]">{section.title}</div>
+      {section.kind === "text" ? <p className="whitespace-pre-wrap text-[#cfc2aa]">{section.text}</p> : (
+        <div className="overflow-hidden border border-[#a8752a]/25">
+          {columns.length > 0 && <div className="grid bg-black/35 font-bold text-[#f2ca75]" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>{columns.map((column, index) => <div key={`${section.id}-head-${index}`} className="border-r border-[#a8752a]/20 px-2 py-1 last:border-r-0">{column}</div>)}</div>}
+          {(section.rows ?? []).map((row) => <div key={row.id} className="grid border-t border-[#a8752a]/20 text-[#cfc2aa]" style={{ gridTemplateColumns: `repeat(${Math.max(1, columns.length)}, minmax(0, 1fr))` }}>{(columns.length ? columns : [""]).map((_, index) => <div key={`${row.id}-${index}`} className="border-r border-[#a8752a]/20 px-2 py-1 last:border-r-0">{row.cells?.[index] ?? ""}</div>)}</div>)}
+        </div>
+      )}
     </div>
   );
 }
@@ -1216,7 +1349,14 @@ function cloneModule(module, overrides) {
           ...module.statBlock,
           traits: [...(module.statBlock.traits ?? [])],
           attacks: (module.statBlock.attacks ?? []).map((attack) => ({ ...attack, id: crypto.randomUUID() })),
-          abilities: (module.statBlock.abilities ?? []).map((ability) => ({ ...ability, id: crypto.randomUUID() }))
+          abilities: (module.statBlock.abilities ?? []).map((ability) => ({ ...ability, id: crypto.randomUUID() })),
+          rows: (module.statBlock.rows ?? []).map((row) => ({ ...row, id: crypto.randomUUID() })),
+          sections: (module.statBlock.sections ?? []).map((section) => ({
+            ...section,
+            id: crypto.randomUUID(),
+            columns: [...(section.columns ?? [])],
+            rows: (section.rows ?? []).map((row) => ({ ...row, id: crypto.randomUUID(), cells: [...(row.cells ?? [])] }))
+          }))
         }
       : undefined
   };

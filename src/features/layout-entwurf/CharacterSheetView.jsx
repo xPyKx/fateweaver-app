@@ -507,6 +507,68 @@ function FateCard({ name, text }) {
   );
 }
 
+function ConditionControl({ conditions, activeIds, activeConditions, open, onToggleOpen, onToggleCondition }) {
+  const hasActiveConditions = activeConditions.length > 0;
+  return (
+    <div className="relative grid justify-items-end gap-2">
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleOpen();
+        }}
+        className={hasActiveConditions ? "condition-badge min-h-24 min-w-36 max-w-56 p-[1px] text-center shadow-[0_0_28px_rgba(214,161,77,.16)]" : "grid h-24 min-w-28 place-items-center border border-[#d6a14d]/60 bg-black/35 px-3 text-center text-[#cfc2aa] shadow-[0_0_25px_rgba(214,161,77,.10)]"}
+      >
+        {hasActiveConditions ? (
+          <span className="condition-badge-inner grid min-h-24 content-center gap-2 px-3 py-3">
+            <span className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-white">Zustaende</span>
+            <span className="grid gap-1">
+              {activeConditions.slice(0, 3).map((condition) => (
+                <span key={condition.id} className="truncate text-xs font-black uppercase italic tracking-wide text-cyan-200">
+                  {condition.name}
+                </span>
+              ))}
+              {activeConditions.length > 3 && <span className="text-[0.62rem] font-bold uppercase tracking-wide text-[#ffd88c]">+{activeConditions.length - 3} weitere</span>}
+            </span>
+          </span>
+        ) : (
+          <span>
+            <span className="block text-[0.65rem] font-black uppercase tracking-[0.18em] text-[#f2ca75]">Zustand</span>
+            <span className="mt-1 block text-3xl font-light text-white">{activeIds.length}</span>
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-28 z-40 grid w-80 gap-2 border border-[#a8752a]/55 bg-[#0c111b] p-3 text-left shadow-2xl shadow-black/70" onClick={(event) => event.stopPropagation()}>
+          <div className="flex items-center justify-between border-b border-[#a8752a]/25 pb-2">
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Zustand waehlen</div>
+            <button type="button" onClick={onToggleOpen} className="grid h-7 w-7 place-items-center border border-[#a8752a]/35 text-[#cfc2aa]"><X className="h-3.5 w-3.5" /></button>
+          </div>
+          {conditions.map((condition) => {
+            const active = activeIds.includes(condition.id);
+            return (
+              <button
+                key={condition.id}
+                type="button"
+                onClick={() => onToggleCondition(condition.id)}
+                className={`grid gap-1 border p-2 text-left ${active ? "border-[#ffd88c] bg-[#d6a14d]/12" : "border-[#a8752a]/30 bg-black/25"}`}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  {condition.condition?.iconUrl || condition.imageUrl ? <img src={condition.condition?.iconUrl || condition.imageUrl} alt="" className="h-7 w-7 object-contain" /> : <CircleDot className="h-4 w-4 text-[#ffd88c]" />}
+                  <span className="truncate font-bold text-white">{condition.name}</span>
+                  {active && <span className="ml-auto text-xs text-[#ffd88c]">Aktiv</span>}
+                </span>
+                {condition.description && <span className="line-clamp-2 text-xs leading-relaxed text-[#8c8170]">{condition.description}</span>}
+              </button>
+            );
+          })}
+          {!conditions.length && <div className="border border-dashed border-[#a8752a]/35 p-3 text-sm text-[#8c8170]">Noch keine fuer Spieler waehlbaren Zustaende angelegt.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BottomPanel() {
   const { data, activeCharacter, upsertCharacter, updateGmSession } = useGameStore();
   const inventoryCollapsed = Boolean(activeCharacter?.choices?.inventoryCollapsed);
@@ -1910,6 +1972,7 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
   const [inspiration, setInspirationState] = useState(character?.resources?.inspiration ?? 2);
   const [detailItem, setDetailItem] = useState(null);
   const [shopOpen, setShopOpen] = useState(false);
+  const [conditionOpen, setConditionOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
   const [handoutOpen, setHandoutOpen] = useState(false);
   const [infoMode, setInfoMode] = useState(false);
@@ -1946,6 +2009,11 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
     );
   }
   const sheet = buildSheetModel(character, data.catalog, ATTRIBUTES);
+  const conditionOptions = data.catalog
+    .filter((item) => item.type === "condition")
+    .filter((item) => item.condition?.playerSelectable !== false)
+    .sort((a, b) => a.name.localeCompare(b.name, "de", { sensitivity: "base" }));
+  const activeConditionIds = character.choices?.activeConditionIds ?? [];
   const weapon1 = { ...sheet.weapons[0], icon: <Sword className="h-14 w-14" /> };
   const weapon2 = { ...sheet.weapons[1], icon: <Sword className="h-14 w-14" /> };
   const armor = { ...sheet.armor, icon: <Shield className="h-14 w-14" /> };
@@ -1979,6 +2047,20 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
         attunedItemIds: attunedItemIds.includes(itemId)
           ? attunedItemIds.filter((id) => id !== itemId)
           : [...attunedItemIds, itemId]
+      },
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  function toggleCondition(conditionId) {
+    const current = character.choices?.activeConditionIds ?? [];
+    upsertCharacter({
+      ...character,
+      choices: {
+        ...character.choices,
+        activeConditionIds: current.includes(conditionId)
+          ? current.filter((id) => id !== conditionId)
+          : [...current, conditionId]
       },
       updatedAt: new Date().toISOString()
     });
@@ -2054,7 +2136,17 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
                     <FateSymbolBadge name={sheet.sideFateName} symbolUrl={sheet.sideFateSymbolUrl} />
                   </div>
                 </div>
-                <LevelBadge level={sheet.level} />
+                <div className="flex items-start gap-3">
+                  <ConditionControl
+                    conditions={conditionOptions}
+                    activeIds={activeConditionIds}
+                    activeConditions={sheet.activeConditions ?? []}
+                    open={conditionOpen}
+                    onToggleOpen={() => setConditionOpen((current) => !current)}
+                    onToggleCondition={toggleCondition}
+                  />
+                  <LevelBadge level={sheet.level} />
+                </div>
               </div>
             </div>
           </div>

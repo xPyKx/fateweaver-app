@@ -1,5 +1,4 @@
 import type { AppData, CatalogItem, InfoHint } from "../types/domain";
-import { createCharacter } from "../lib/rules/characterRules";
 
 export const seedCatalog: CatalogItem[] = [
   {
@@ -67,6 +66,136 @@ export const seedCatalog: CatalogItem[] = [
     description: "Fernkampfreichweite.",
     range: { text: "Fernkampfreichweite" },
     gameOption: { kind: "range", text: "Fernkampfreichweite" }
+  },
+  {
+    id: "calc-difficulty",
+    type: "gameOption",
+    name: "Schwierigkeit",
+    description: "10 + Uebungsbonus + hoechstes Kernattribut.",
+    gameOption: { kind: "calculation", text: "Schwierigkeit" },
+    calculation: {
+      key: "difficulty",
+      terms: [
+        { id: "calc-difficulty-base", source: "number", value: 10 },
+        { id: "calc-difficulty-training", source: "trainingBonus" },
+        { id: "calc-difficulty-highest", source: "highestAttribute", attributeKeys: ["kraft", "agilitaet", "intelligenz", "willenskraft"] }
+      ]
+    }
+  },
+  {
+    id: "calc-dodge",
+    type: "gameOption",
+    name: "Ausweichen",
+    description: "10 + Agilitaet + Ausweichboni + Effekte + Level-up.",
+    gameOption: { kind: "calculation", text: "Ausweichen" },
+    calculation: {
+      key: "dodge",
+      terms: [
+        { id: "calc-dodge-base", source: "number", value: 10 },
+        { id: "calc-dodge-agility", source: "attribute", attributeKey: "agilitaet" },
+        { id: "calc-dodge-bonuses", source: "bonusSourceSum" },
+        { id: "calc-dodge-effects", source: "effectSum", effectTarget: "dodge" },
+        { id: "calc-dodge-levelup", source: "levelUpBonus", bonusKey: "evasion" }
+      ]
+    }
+  },
+  {
+    id: "calc-armor-value",
+    type: "gameOption",
+    name: "Ruestungswert",
+    description: "Ruestungswert der getragenen Ruestung + Effekte.",
+    gameOption: { kind: "calculation", text: "Ruestungswert" },
+    calculation: {
+      key: "armorValue",
+      terms: [
+        { id: "calc-armor-base", source: "armorField", armorField: "armorValue" },
+        { id: "calc-armor-effects", source: "effectSum", effectTarget: "armorValue" }
+      ]
+    }
+  },
+  {
+    id: "calc-armor-slots",
+    type: "gameOption",
+    name: "Ruestungsslots",
+    description: "Ruestungswert, begrenzt auf 0 bis 12.",
+    gameOption: { kind: "calculation", text: "Ruestungsslots" },
+    calculation: {
+      key: "armorSlots",
+      terms: [{ id: "calc-armor-slots-value", source: "calculation", calculationKey: "armorValue" }],
+      clampMode: "range",
+      min: 0,
+      max: 12
+    }
+  },
+  {
+    id: "calc-hp-max",
+    type: "gameOption",
+    name: "HP Maximum",
+    description: "5 + Konstitution + HP-Boni + Effekte.",
+    gameOption: { kind: "calculation", text: "HP Maximum" },
+    calculation: {
+      key: "hpMax",
+      terms: [
+        { id: "calc-hp-base", source: "number", value: 5 },
+        { id: "calc-hp-constitution", source: "attribute", attributeKey: "konstitution" },
+        { id: "calc-hp-character", source: "characterBonus", bonusKey: "hp" },
+        { id: "calc-hp-levelup", source: "levelUpBonus", bonusKey: "hp" },
+        { id: "calc-hp-effects", source: "effectSum", effectTarget: "hpBonus" }
+      ],
+      clampMode: "min",
+      min: 1
+    }
+  },
+  {
+    id: "calc-stress-max",
+    type: "gameOption",
+    name: "Stress Maximum",
+    description: "5 + Willenskraft + Stress-Boni + Effekte.",
+    gameOption: { kind: "calculation", text: "Stress Maximum" },
+    calculation: {
+      key: "stressMax",
+      terms: [
+        { id: "calc-stress-base", source: "number", value: 5 },
+        { id: "calc-stress-will", source: "attribute", attributeKey: "willenskraft" },
+        { id: "calc-stress-character", source: "characterBonus", bonusKey: "stress" },
+        { id: "calc-stress-levelup", source: "levelUpBonus", bonusKey: "stress" },
+        { id: "calc-stress-effects", source: "effectSum", effectTarget: "stressBonus" }
+      ],
+      clampMode: "min",
+      min: 1
+    }
+  },
+  {
+    id: "calc-light-threshold",
+    type: "gameOption",
+    name: "Grenzwert leicht",
+    description: "Leichter Ruestungs-Grenzwert + Kraft + aufgerundet Level/2 + Effekte.",
+    gameOption: { kind: "calculation", text: "Grenzwert leicht" },
+    calculation: {
+      key: "lightThreshold",
+      terms: [
+        { id: "calc-light-armor", source: "armorField", armorField: "baseThresholdLight" },
+        { id: "calc-light-strength", source: "attribute", attributeKey: "kraft" },
+        { id: "calc-light-level", source: "levelHalfCeil" },
+        { id: "calc-light-effects", source: "effectSum", effectTarget: "lightThreshold" }
+      ]
+    }
+  },
+  {
+    id: "calc-heavy-threshold",
+    type: "gameOption",
+    name: "Grenzwert schwer",
+    description: "Schwerer Ruestungs-Grenzwert + Kraft + aufgerundet Level/2 + Effekte.",
+    gameOption: { kind: "calculation", text: "Grenzwert schwer" },
+    calculation: {
+      key: "heavyThreshold",
+      terms: [
+        { id: "calc-heavy-armor", source: "armorField", armorField: "baseThresholdHeavyOrLight" },
+        { id: "calc-heavy-strength", source: "attribute", attributeKey: "kraft" },
+        { id: "calc-heavy-level", source: "levelHalfCeil" },
+        { id: "calc-heavy-effects", source: "effectSum", effectTarget: "heavyThreshold" }
+      ]
+    }
   },
   {
     id: "property-schwer",
@@ -469,21 +598,10 @@ export function missingSeedCatalogItems(current: CatalogItem[]) {
 }
 
 export function createSeedData(): AppData {
-  const character = createCharacter();
   return {
-    characters: [character],
-    activeCharacterId: character.id,
+    characters: [],
     catalog: seedCatalog,
     infoHints: seedHints,
-    session: [
-      {
-        id: crypto.randomUUID(),
-        characterId: character.id,
-        shortRestUsed: false,
-        shortRestCount: 0,
-        longRestUsed: false,
-        updatedAt: new Date().toISOString()
-      }
-    ]
+    session: []
   };
 }

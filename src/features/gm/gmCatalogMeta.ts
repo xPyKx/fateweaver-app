@@ -15,6 +15,7 @@ export const catalogTypes: CatalogType[] = [
   "society",
   "transmutation",
   "sheetTab",
+  "condition",
   "restOption",
   "levelOption"
 ];
@@ -61,6 +62,7 @@ export const backgroundQuestionKinds: { key: BackgroundQuestionKind; label: stri
 ];
 
 export const gameOptionKinds: { key: GameOptionKind; label: string }[] = [
+  { key: "calculation", label: "Berechnungen" },
   { key: "range", label: "Reichweite" },
   { key: "damageDie", label: "Schadenswuerfel" },
   { key: "damageType", label: "Schadensart" },
@@ -78,6 +80,7 @@ export function defaultsForType(type: CatalogType) {
   if (type === "fate") return { fate: { levelOneCards: [], abilityCategories: [] } };
   if (type === "fateAbility") return { fateAbility: { fateId: "", kind: "startAbility" as const } };
   if (type === "sheetTab") return { sheetTab: { contentType: "freeText" as const } };
+  if (type === "condition") return { condition: { durationMode: "manual" as const, playerSelectable: true, sourceTypes: [] }, propertyEffects: [] };
   if (type === "restOption") return { rest: { restKind: "short" as const, effect: "" } };
   if (type === "backgroundQuestion") return { backgroundQuestion: { kind: "appearance" as const, question: "" } };
   return {};
@@ -156,6 +159,7 @@ export function labelForType(type: CatalogType) {
     folk: "Volk",
     society: "Gesellschaft",
     transmutation: "Transmutation",
+    condition: "Zustaende",
     levelOption: "Level-up",
     restOption: "Rast"
   };

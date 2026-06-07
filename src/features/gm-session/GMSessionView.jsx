@@ -12,7 +12,7 @@ import { LayoutTemplateBuilder } from "./LayoutTemplateBuilder";
 import { ModuleButton } from "./ModuleButton";
 
 export function GMPreparationView({ onBack }) {
-  const { data, activeWorkspace, updateGmSession, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule, upsertLayoutTemplate, deleteLayoutTemplate } = useGameStore();
+  const { data, activeWorkspace, updateGmSession, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule, upsertLayoutTemplate, deleteLayoutTemplate, setActiveLayoutTemplate } = useGameStore();
   const workspaceId = activeWorkspace?.id ?? data.activeWorkspaceId;
   const workspaceData = selectWorkspaceData(data, workspaceId);
   const gmSession = normalizeDashboardSession(data.gmSession);
@@ -60,7 +60,7 @@ export function GMPreparationView({ onBack }) {
       {module === "campaigns" && <CampaignModule data={workspaceData} gmSession={gmSession} onSaveCampaign={upsertCampaign} onDeleteCampaign={deleteCampaign} onSaveSession={upsertCampaignSession} onDeleteSession={deleteCampaignSession} />}
       {module === "shops" && <ShopModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} />}
       {module === "handouts" && <ReleaseCenterModule data={workspaceData} onSave={upsertCustomGmModule} />}
-      {module === "layouts" && <LayoutTemplateBuilder data={workspaceData} workspaceId={workspaceId} onSave={upsertLayoutTemplate} onDelete={deleteLayoutTemplate} />}
+      {module === "layouts" && <LayoutTemplateBuilder data={workspaceData} workspaceId={workspaceId} onSave={upsertLayoutTemplate} onDelete={deleteLayoutTemplate} onSetActive={setActiveLayoutTemplate} />}
       {module === "enemies" && <EnemyPreparationModule data={workspaceData} onSave={upsertCustomGmModule} onDelete={deleteCustomGmModule} />}
       {module === "builder" && <CustomModulesModule data={workspaceData} onSave={upsertCustomGmModule} onDelete={deleteCustomGmModule} />}
     </div>

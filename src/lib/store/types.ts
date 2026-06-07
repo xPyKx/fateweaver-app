@@ -7,6 +7,7 @@ import type {
   CustomGmModule,
   GmSessionData,
   InfoHint,
+  LayoutTemplateTarget,
   LayoutTemplate,
   NewMessageInput,
   SessionState,
@@ -59,6 +60,7 @@ export interface GameStore {
   deleteCustomGmModule: (id: string) => void;
   upsertLayoutTemplate: (template: LayoutTemplate) => void;
   deleteLayoutTemplate: (id: string) => void;
+  setActiveLayoutTemplate: (templateId: string, target: LayoutTemplateTarget, active: boolean) => void;
   sendMessage: (message: NewMessageInput) => void;
   markMessageRead: (id: string) => void;
 }

@@ -843,6 +843,7 @@ export interface AppData {
   campaignSessions?: CampaignSession[];
   customGmModules?: CustomGmModule[];
   layoutTemplates?: LayoutTemplate[];
+  activeLayoutTemplateIds?: Partial<Record<LayoutTemplateTarget, string>>;
   activeCharacterId?: string;
   catalog: CatalogItem[];
   infoHints: InfoHint[];

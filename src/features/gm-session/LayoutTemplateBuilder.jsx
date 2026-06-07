@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Copy, Eye, Grid2X2, Image, MousePointer2, Plus, Save, Table2, Trash2, Type, X } from "lucide-react";
+import { Copy, Eye, Grid2X2, Image, MousePointer2, Plus, Power, Save, Table2, Trash2, Type, X } from "lucide-react";
 import { Select } from "../../components/SelectControl";
 import { fileToPersistentImageUrl } from "../../lib/images/persistentImage";
 import { CharacterSheetView } from "../layout-entwurf/CharacterSheetView";
@@ -67,7 +67,7 @@ const ENEMY_SOURCES = [
   ["custom", "Eigene Quelle", "eigene-quelle"]
 ];
 
-export function LayoutTemplateBuilder({ data, workspaceId, onSave, onDelete }) {
+export function LayoutTemplateBuilder({ data, workspaceId, onSave, onDelete, onSetActive }) {
   const systemCharacterTemplate = useMemo(() => createSystemCharacterSheetTemplate(workspaceId), [workspaceId]);
   const savedTemplates = (data.layoutTemplates ?? []).sort((left, right) => (right.updatedAt ?? "").localeCompare(left.updatedAt ?? ""));
   const templates = [systemCharacterTemplate, ...savedTemplates];
@@ -77,6 +77,8 @@ export function LayoutTemplateBuilder({ data, workspaceId, onSave, onDelete }) {
   const active = templates.find((template) => template.id === activeId) ?? templates[0];
   const selected = active?.elements?.find((element) => element.id === selectedId);
   const activeIsSystem = isSystemCharacterSheetTemplate(active);
+  const activeTemplateIds = data.activeLayoutTemplateIds ?? {};
+  const currentIsActive = isLayoutTemplateActive(active, activeTemplateIds);
   const previewCharacterId = data.characters?.[0]?.id;
 
   function createTemplate(target = "character") {
@@ -167,6 +169,11 @@ export function LayoutTemplateBuilder({ data, workspaceId, onSave, onDelete }) {
     setSelectedId(undefined);
   }
 
+  function toggleActiveTemplate(template = active) {
+    if (!template || !onSetActive) return;
+    onSetActive(template.id, template.target, !isLayoutTemplateActive(template, activeTemplateIds));
+  }
+
   return (
     <div className="grid gap-4 xl:grid-cols-[260px_minmax(520px,1fr)_320px]">
       <aside className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/24 p-4">
@@ -182,7 +189,10 @@ export function LayoutTemplateBuilder({ data, workspaceId, onSave, onDelete }) {
         <div className="grid max-h-[360px] gap-2 overflow-auto pr-1">
           {templates.map((template) => (
             <button key={template.id} type="button" onClick={() => { setActiveId(template.id); setSelectedId(template.elements?.[0]?.id); }} className={`border p-3 text-left ${active?.id === template.id ? "border-[#ffd88c] bg-[#d6a14d]/12" : "border-[#a8752a]/30 bg-black/25"}`}>
-              <div className="truncate text-sm font-bold text-white">{template.name}</div>
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1 truncate text-sm font-bold text-white">{template.name}</div>
+                {isLayoutTemplateActive(template, activeTemplateIds) && <span className="shrink-0 border border-emerald-300/45 bg-emerald-500/10 px-1.5 py-0.5 text-[0.6rem] font-black uppercase tracking-wide text-emerald-100">Aktiv</span>}
+              </div>
               <div className="text-xs text-[#8c8170]">{targetLabel(template.target)} · {template.columns} x {template.rows}</div>
             </button>
           ))}
@@ -212,6 +222,7 @@ export function LayoutTemplateBuilder({ data, workspaceId, onSave, onDelete }) {
                 <div className="text-xl font-light text-white">{active.name}</div>
               </div>
               <button type="button" onClick={() => setPreview((current) => !current)} className={`inline-flex h-10 items-center gap-2 border px-3 text-sm font-bold uppercase ${preview ? "border-sky-300/70 bg-sky-600/20 text-sky-100" : "border-[#a8752a]/40 text-[#cfc2aa]"}`}><Eye className="h-4 w-4" /> Vorschau</button>
+              <button type="button" onClick={() => toggleActiveTemplate(active)} className={`inline-flex h-10 items-center gap-2 border px-3 text-sm font-bold uppercase ${currentIsActive ? "border-emerald-300/70 bg-emerald-600/15 text-emerald-100" : "border-[#a8752a]/40 text-[#cfc2aa]"}`}><Power className="h-4 w-4" /> {currentIsActive ? "Aktiv" : "Inaktiv"}</button>
               <button type="button" onClick={() => duplicateTemplate(active)} className="inline-flex h-10 items-center gap-2 border border-[#a8752a]/40 px-3 text-sm font-bold uppercase text-[#cfc2aa]"><Copy className="h-4 w-4" /> Kopieren</button>
               {!activeIsSystem && <button type="button" onClick={() => patchTemplate({ showGrid: !active.showGrid })} className="inline-flex h-10 items-center gap-2 border border-[#a8752a]/40 px-3 text-sm font-bold uppercase text-[#cfc2aa]"><Grid2X2 className="h-4 w-4" /> Raster</button>}
               {!activeIsSystem && <button type="button" onClick={() => patchTemplate({ updatedAt: new Date().toISOString() })} className="inline-flex h-10 items-center gap-2 border border-[#d6a14d]/55 bg-[#d6a14d]/12 px-3 text-sm font-bold uppercase text-[#ffd88c]"><Save className="h-4 w-4" /> Speichern</button>}
@@ -244,6 +255,7 @@ export function LayoutTemplateBuilder({ data, workspaceId, onSave, onDelete }) {
             <div className="border border-sky-300/35 bg-sky-600/10 p-3 text-sm leading-relaxed text-sky-100">
               Diese Vorlage ist der aktuelle Charakterbogen aus dem Code. Sie kann hier nicht bearbeitet oder geloescht werden.
             </div>
+            <button type="button" onClick={() => toggleActiveTemplate(active)} className={`inline-flex min-h-10 items-center justify-center gap-2 border px-3 text-sm font-bold uppercase ${currentIsActive ? "border-emerald-300/70 bg-emerald-600/15 text-emerald-100" : "border-[#a8752a]/40 text-[#cfc2aa]"}`}><Power className="h-4 w-4" /> {currentIsActive ? "Aktiv" : "Inaktiv"}</button>
             <button type="button" onClick={() => duplicateTemplate(active)} className="inline-flex min-h-10 items-center justify-center gap-2 border border-[#d6a14d]/55 bg-[#d6a14d]/12 px-3 text-sm font-bold uppercase text-[#ffd88c]"><Copy className="h-4 w-4" /> Editierbare Kopie</button>
           </div>
         ) : active ? (
@@ -307,6 +319,17 @@ function createSystemCharacterSheetTemplate(workspaceId) {
 
 function isSystemCharacterSheetTemplate(template) {
   return template?.id === SYSTEM_CHARACTER_SHEET_TEMPLATE_ID;
+}
+
+function isLayoutTemplateActive(template, activeTemplateIds = {}) {
+  if (!template) return false;
+  return layoutActivationTargets(template.target).some((target) => activeTemplateIds[target] === template.id);
+}
+
+function layoutActivationTargets(target) {
+  if (target === "both") return ["character", "enemy"];
+  if (target === "enemy") return ["enemy"];
+  return ["character"];
 }
 
 function createEditableCharacterSheetTemplate(workspaceId) {

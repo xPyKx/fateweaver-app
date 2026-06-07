@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import type { AppData, AppMessage, Campaign, CampaignSession, CatalogItem, Character, CustomGmModule, GmSessionData, GmShop, InfoHint, LayoutElementData, LayoutTemplate, NewMessageInput, SessionState, UserProfile, Workspace, WorkspaceInvite, WorkspaceMemberRole } from "../../types/domain";
+import type { AppData, AppMessage, Campaign, CampaignSession, CatalogItem, Character, CustomGmModule, GmSessionData, GmShop, InfoHint, LayoutElementData, LayoutTemplate, LayoutTemplateTarget, NewMessageInput, SessionState, UserProfile, Workspace, WorkspaceInvite, WorkspaceMemberRole } from "../../types/domain";
 import { loadCachedData, saveCachedData } from "../cache/indexedDb";
 import { createSeedData } from "../../data/seeds";
 import { appendCharacterHistory, createHistoryEvent as historyEvent } from "./historyEvents";
@@ -10,6 +10,7 @@ const StoreContext = createContext<GameStore | undefined>(undefined);
 const seedData = createSeedData();
 const LAST_REMOTE_SYNC_KEY = "fateweaver-last-remote-sync";
 const SAVE_DEBOUNCE_MS = 1800;
+const SYSTEM_CHARACTER_SHEET_TEMPLATE_ID = "system-character-sheet-template";
 const DEPRECATED_SEED_CATALOG_IDS = [
   "fate-flamme",
   "fate-schatten",
@@ -408,7 +409,13 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
       deleteLayoutTemplate: (id) =>
         setData((current) => ({
           ...current,
-          layoutTemplates: (current.layoutTemplates ?? []).filter((template) => template.id !== id)
+          layoutTemplates: (current.layoutTemplates ?? []).filter((template) => template.id !== id),
+          activeLayoutTemplateIds: removeActiveLayoutTemplateId(current.activeLayoutTemplateIds, id)
+        })),
+      setActiveLayoutTemplate: (templateId, target, active) =>
+        setData((current) => ({
+          ...current,
+          activeLayoutTemplateIds: setActiveLayoutTemplateId(current.activeLayoutTemplateIds, templateId, target, active)
         })),
       sendMessage: (message) =>
         setData((current) => addMessageToData(current, { ...message, workspaceId: message.workspaceId ?? currentWorkspaceId(current, currentUserId) }, currentUserId, profile?.isGm ? "gm" : "player")),
@@ -527,6 +534,7 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
     campaignSessions: cleanCampaignSessions(data.campaignSessions, data.campaigns).filter((session) => !session.workspaceId || !deletedWorkspaceSet.has(session.workspaceId)).map((session) => ({ ...session, workspaceId: session.workspaceId ?? activeWorkspaceId })),
     customGmModules: cleanCustomGmModules(data.customGmModules, deletedCharacterSet).filter((module) => !module.workspaceId || !deletedWorkspaceSet.has(module.workspaceId)).map((module) => ({ ...module, workspaceId: module.workspaceId ?? activeWorkspaceId })),
     layoutTemplates: normalizeLayoutTemplates(data.layoutTemplates, activeWorkspaceId).filter((template) => !template.workspaceId || !deletedWorkspaceSet.has(template.workspaceId)),
+    activeLayoutTemplateIds: normalizeActiveLayoutTemplateIds(data.activeLayoutTemplateIds, data.layoutTemplates),
     infoHints: normalizeInfoHints((data.infoHints ?? []).filter((hint) => !deletedCatalogItemSet.has(hint.target)).map((hint) => ({ ...hint, workspaceId: hint.workspaceId ?? activeWorkspaceId }))),
     activeCharacterId,
     characters,
@@ -598,6 +606,52 @@ function defaultLayoutElementTitle(type?: string) {
   if (type === "conditions") return "Zustaende";
   if (type === "image") return "Bild";
   return "Text";
+}
+
+function normalizeActiveLayoutTemplateIds(activeIds: AppData["activeLayoutTemplateIds"], templates: LayoutTemplate[] | undefined): AppData["activeLayoutTemplateIds"] {
+  const templateById = new Map((templates ?? []).map((template) => [template.id, template]));
+  const normalized: AppData["activeLayoutTemplateIds"] = {};
+  (["character", "enemy"] as LayoutTemplateTarget[]).forEach((target) => {
+    const id = activeIds?.[target];
+    if (!id) return;
+    if (id === SYSTEM_CHARACTER_SHEET_TEMPLATE_ID && target === "character") {
+      normalized[target] = id;
+      return;
+    }
+    const template = templateById.get(id);
+    if (template && layoutTargetMatches(template.target, target)) normalized[target] = id;
+  });
+  return Object.keys(normalized).length ? normalized : undefined;
+}
+
+function setActiveLayoutTemplateId(activeIds: AppData["activeLayoutTemplateIds"], templateId: string, target: LayoutTemplateTarget, active: boolean): AppData["activeLayoutTemplateIds"] {
+  const next = { ...(activeIds ?? {}) };
+  layoutActivationTargets(target).forEach((entry) => {
+    if (active) {
+      next[entry] = templateId;
+    } else if (next[entry] === templateId) {
+      delete next[entry];
+    }
+  });
+  return Object.keys(next).length ? next : undefined;
+}
+
+function removeActiveLayoutTemplateId(activeIds: AppData["activeLayoutTemplateIds"], templateId: string): AppData["activeLayoutTemplateIds"] {
+  const next = { ...(activeIds ?? {}) };
+  (["character", "enemy"] as LayoutTemplateTarget[]).forEach((target) => {
+    if (next[target] === templateId) delete next[target];
+  });
+  return Object.keys(next).length ? next : undefined;
+}
+
+function layoutActivationTargets(target: LayoutTemplateTarget): Array<"character" | "enemy"> {
+  if (target === "both") return ["character", "enemy"];
+  if (target === "enemy") return ["enemy"];
+  return ["character"];
+}
+
+function layoutTargetMatches(templateTarget: LayoutTemplateTarget, activeTarget: LayoutTemplateTarget) {
+  return templateTarget === "both" || templateTarget === activeTarget;
 }
 
 function allowedFateIdsForChoices(choices: Character["choices"] | undefined, mainFateId: string | undefined, sideFateId: string | undefined, catalog: CatalogItem[]) {
@@ -1063,6 +1117,7 @@ export function mergeAppData(local: AppData, remote: AppData): AppData {
       local.layoutTemplates ?? [],
       remote.layoutTemplates ?? []
     ).filter((template) => !template.workspaceId || !deletedWorkspaceSet.has(template.workspaceId)),
+    activeLayoutTemplateIds: normalizeActiveLayoutTemplateIds({ ...(remote.activeLayoutTemplateIds ?? {}), ...(local.activeLayoutTemplateIds ?? {}) }, [...(local.layoutTemplates ?? []), ...(remote.layoutTemplates ?? [])]),
     characters: mergeCharacters(
       (local.characters ?? []).filter((character) => !deletedCharacterSet.has(character.id)),
       (remote.characters ?? []).filter((character) => !deletedCharacterSet.has(character.id))

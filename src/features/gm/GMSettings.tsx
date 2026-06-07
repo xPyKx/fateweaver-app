@@ -54,7 +54,9 @@ export function GMSettings() {
   const activeFateCategories = activeFate?.fate?.abilityCategories ?? [];
   const filteredFateAbilities = fateAbilities.filter((item) => item.fateAbility?.kind === activeFateAbilityKind || item.fateAbility?.categoryId === activeFateAbilityKind);
   const hasSubcategoryColumn = catalogType === "magicItem" || catalogType === "gameOption" || catalogType === "backgroundQuestion";
-  const gridColumns = type === "fate" && activeFate
+  const gridColumns = isCharacterSheetSection
+    ? "xl:grid-cols-[minmax(180px,0.36fr)_minmax(560px,1fr)]"
+    : type === "fate" && activeFate
     ? "xl:grid-cols-[minmax(170px,0.75fr)_minmax(220px,0.95fr)_minmax(190px,0.85fr)_minmax(230px,1fr)]"
     : hasSubcategoryColumn
       ? "xl:grid-cols-[minmax(170px,0.8fr)_minmax(200px,0.85fr)_minmax(250px,1fr)]"
@@ -268,33 +270,35 @@ export function GMSettings() {
           </aside>
         )}
 
-        <aside className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl font-light text-white">{sectionLabel(type)}</h2>
-            <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#8c8170]">{items.length}</span>
-          </div>
-          <div className="grid max-h-[620px] gap-2 overflow-auto pr-1">
-            {items.map((item) => (
-              <EntryRow
-                key={item.id}
-                item={item}
-                active={selectedId === item.id}
-                hint={data.infoHints.find((entry) => entry.target === item.id)}
-                onSelect={() => {
-                  if (item.type === "fate") {
-                    setActiveFateId(item.id);
-                    setSelectedId(undefined);
-                    return;
-                  }
-                  setSelectedId(item.id);
-                }}
-                onInfo={() => item.type === "fate" ? setSelectedId(item.id) : setHintTarget(item.id)}
-                onDelete={() => confirmDelete(item)}
-              />
-            ))}
-            {!items.length && !isCharacterSheetSection && <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Noch keine Eintraege in dieser Kategorie.</div>}
-          </div>
-        </aside>
+        {!isCharacterSheetSection && (
+          <aside className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-xl font-light text-white">{sectionLabel(type)}</h2>
+              <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#8c8170]">{items.length}</span>
+            </div>
+            <div className="grid max-h-[620px] gap-2 overflow-auto pr-1">
+              {items.map((item) => (
+                <EntryRow
+                  key={item.id}
+                  item={item}
+                  active={selectedId === item.id}
+                  hint={data.infoHints.find((entry) => entry.target === item.id)}
+                  onSelect={() => {
+                    if (item.type === "fate") {
+                      setActiveFateId(item.id);
+                      setSelectedId(undefined);
+                      return;
+                    }
+                    setSelectedId(item.id);
+                  }}
+                  onInfo={() => item.type === "fate" ? setSelectedId(item.id) : setHintTarget(item.id)}
+                  onDelete={() => confirmDelete(item)}
+                />
+              ))}
+              {!items.length && <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Noch keine Eintraege in dieser Kategorie.</div>}
+            </div>
+          </aside>
+        )}
 
         {isCharacterSheetSection && (
           <CharacterSheetInfoSettings
@@ -455,7 +459,7 @@ function CharacterSheetInfoSettings({ hints, character, onSave, onDelete, notice
   }
 
   return (
-    <section className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4 xl:col-span-1">
+    <section className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="mr-auto">
           <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Charakterbogen</div>

@@ -41,6 +41,8 @@ const attributeLabels = {
 
 export function buildSheetModel(character, catalog, attributeTemplates) {
   const choices = character.choices ?? {};
+  const level = character.level ?? 1;
+  const training = effectiveTrainingBonus(character);
   const baseAttributes = applyLevelUpAttributes(normalizeAttributes(character.attributes), levelUpAttributeBonus(character));
   const attributeMarkers = levelUpAttributeMarkers(character);
   const armorItem = findItem(catalog, choices.selectedArmorId, "armor");
@@ -52,24 +54,29 @@ export function buildSheetModel(character, catalog, attributeTemplates) {
   const sideFate = findItem(catalog, choices.sideFateId, "fate");
   const folk = findItem(catalog, choices.folkId, "folk");
   const society = findItem(catalog, choices.societyId, "society");
+  const effectContext = {
+    character,
+    level,
+    training,
+    spellAttribute: mainFate?.fate?.spellAttribute || sideFate?.fate?.spellAttribute
+  };
   const activeConditions = (choices.activeConditionIds ?? [])
     .map((id) => findItem(catalog, id, "condition"))
     .filter(Boolean);
   const activeItems = [...weapons, armorItem].filter((item) => item && requirementsMet(item, baseAttributes));
   const activeEffects = [...collectPropertyEffects(activeItems, catalog), ...collectOriginEffects([folk, society]), ...collectConditionEffects(activeConditions), ...collectActiveFateEffects(character, catalog), ...collectActiveItemEffects(character, catalog, baseAttributes)];
-  const attributes = applyAttributeEffects(baseAttributes, activeEffects);
-  const level = character.level ?? 1;
-  const training = effectiveTrainingBonus(character);
+  const attributes = applyAttributeEffects(baseAttributes, activeEffects, effectContext);
   const fallbackCalculations = {
-    difficulty: effectiveDifficulty(attributes, character),
-    dodge: dodge(attributes, character.dodgeBonuses ?? [], armorData) + sumEffects(activeEffects, "dodge", attributes) + levelUpEvasionBonus(character),
-    armorValue: (armorData?.armorValue ?? 0) + sumEffects(activeEffects, "armorValue", attributes),
-    hpMax: Math.max(1, hitPoints(attributes, (character.hpBonus ?? 0) + levelUpHpBonus(character) + sumEffects(activeEffects, "hpBonus", attributes))),
-    stressMax: Math.max(1, stress(attributes, (character.stressBonus ?? 0) + levelUpStressBonus(character) + sumEffects(activeEffects, "stressBonus", attributes))),
-    lightThreshold: lightDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "lightThreshold", attributes),
-    heavyThreshold: heavyDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "heavyThreshold", attributes)
+    difficulty: effectiveDifficulty(attributes, character) + sumEffects(activeEffects, "difficulty", attributes, effectContext),
+    dodge: dodge(attributes, character.dodgeBonuses ?? [], armorData) + sumEffects(activeEffects, "dodge", attributes, effectContext) + levelUpEvasionBonus(character),
+    armorValue: (armorData?.armorValue ?? 0) + sumEffects(activeEffects, "armorValue", attributes, effectContext),
+    hpMax: Math.max(1, hitPoints(attributes, (character.hpBonus ?? 0) + levelUpHpBonus(character) + sumEffects(activeEffects, "hpBonus", attributes, effectContext) + sumEffects(activeEffects, "hpMax", attributes, effectContext))),
+    stressMax: Math.max(1, stress(attributes, (character.stressBonus ?? 0) + levelUpStressBonus(character) + sumEffects(activeEffects, "stressBonus", attributes, effectContext) + sumEffects(activeEffects, "stressMax", attributes, effectContext))),
+    lightThreshold: lightDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "lightThreshold", attributes, effectContext),
+    heavyThreshold: heavyDamageThreshold(attributes, level, armorData) + sumEffects(activeEffects, "heavyThreshold", attributes, effectContext)
   };
-  fallbackCalculations.armorSlots = Math.max(0, Math.min(12, fallbackCalculations.armorValue));
+  effectContext.values = fallbackCalculations;
+  fallbackCalculations.armorSlots = Math.max(0, Math.min(12, fallbackCalculations.armorValue + sumEffects(activeEffects, "armorSlots", attributes, effectContext)));
   const calculationContext = {
     catalog,
     character,
@@ -338,22 +345,34 @@ function resolveEffects(item, catalog) {
     .flatMap((property) => property.propertyEffects ?? []);
 }
 
-function applyAttributeEffects(attributes, effects) {
+function applyAttributeEffects(attributes, effects, context = {}) {
   const next = { ...attributes };
   Object.keys(next).forEach((key) => {
-    next[key] += sumEffects(effects, key, attributes);
+    next[key] += sumEffects(effects, key, attributes, context);
   });
   return next;
 }
 
-function sumEffects(effects, target, attributes = {}) {
+function sumEffects(effects, target, attributes = {}, context = {}) {
   return effects
     .filter((effect) => effect.target === target)
-    .reduce((sum, effect) => sum + effectValue(effect, attributes), 0);
+    .reduce((sum, effect) => sum + effectValue(effect, attributes, context), 0);
 }
 
-function effectValue(effect, attributes = {}) {
-  return effect.attributeKey ? Number(attributes[effect.attributeKey] ?? 0) : Number(effect.value ?? 0);
+function effectValue(effect, attributes = {}, context = {}) {
+  const source = effect.attributeKey;
+  if (!source) return Number(effect.value ?? 0);
+  const sign = Number(effect.value ?? 0) < 0 ? -1 : 1;
+  if (Object.prototype.hasOwnProperty.call(attributes, source)) return sign * Number(attributes[source] ?? 0);
+  if (source === "spellAttribute") {
+    const spellAttribute = context.spellAttribute;
+    return spellAttribute ? sign * Number(attributes[spellAttribute] ?? 0) : 0;
+  }
+  if (source === "level") return sign * Number(context.level ?? context.character?.level ?? 0);
+  if (source === "tier") return sign * tierForLevel(Number(context.level ?? context.character?.level ?? 1));
+  if (source === "trainingBonus") return sign * Number(context.training ?? effectiveTrainingBonus(context.character ?? {}));
+  if (context.values && Object.prototype.hasOwnProperty.call(context.values, source)) return sign * Number(context.values[source] ?? 0);
+  return 0;
 }
 
 function diceEffects(effects, target) {

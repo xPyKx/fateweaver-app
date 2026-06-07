@@ -2,7 +2,7 @@ import { CircleDot, Info, Save, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Field } from "../../components/Field";
-import type { AttributeKey, BackgroundQuestionKind, CalculationClampMode, CalculationSourceKind, CatalogItem, CatalogType, Character, ConditionDurationMode, FateAbilityCategoryData, FateAbilityCategoryMode, FateAbilityCategoryTrigger, FateAbilityKind, GameCalculationTerm, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget, FateAbilityUsageData } from "../../types/domain";
+import type { AttributeKey, BackgroundQuestionKind, CalculationClampMode, CalculationSourceKind, CatalogItem, CatalogType, Character, ConditionDurationMode, FateAbilityCategoryData, FateAbilityCategoryMode, FateAbilityCategoryTrigger, FateAbilityKind, GameCalculationTerm, GameOptionKind, InfoHint, PropertyEffect, PropertyEffectTarget, PropertyEffectValueSource, FateAbilityUsageData } from "../../types/domain";
 import { ImageInput, MagicItemKindField, RarityField, Select, SignedNumberField } from "./GMControls";
 import {
   attributes,
@@ -23,7 +23,8 @@ import {
   optionText,
   splitList,
   supportsProperties,
-  supportsRarity
+  supportsRarity,
+  valueSources
 } from "./gmCatalogMeta";
 
 export function EntryRow({ item, active, hint, onSelect, onInfo, onDelete }: { item: CatalogItem; active: boolean; hint?: InfoHint; onSelect: () => void; onInfo: () => void; onDelete: () => void }) {
@@ -115,15 +116,15 @@ function PropertyEffectEditor({ item, savePatch }: SpecificEditorProps) {
       </div>
       {effects.map((effect) => (
         <div key={effect.id} className="grid gap-2">
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_130px_minmax(0,1fr)_auto]">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_minmax(0,1fr)_auto]">
             <Select
               label="Ziel"
               value={effect.target}
               onChange={(target) => updateEffect({ ...effect, target: target as PropertyEffectTarget })}
               options={effectTargets.map((target) => [target.key, target.label])}
             />
-            <SignedNumberField label="Wert" value={effect.value} onChange={(value) => updateEffect({ ...effect, value })} />
-            <Select label="Wert-Attribut" value={effect.attributeKey ?? ""} onChange={(attributeKey) => updateEffect({ ...effect, attributeKey: attributeKey as AttributeKey | "" })} options={[["", "Fester Wert"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
+            {effect.attributeKey ? <SourceSignField value={effect.value} onChange={(value) => updateEffect({ ...effect, value })} /> : <SignedNumberField label="Wert" value={effect.value} onChange={(value) => updateEffect({ ...effect, value })} />}
+            <Select label="Wert-Quelle" value={effect.attributeKey ?? ""} onChange={(attributeKey) => updateEffect({ ...effect, attributeKey: attributeKey as PropertyEffectValueSource | "", value: attributeKey && effect.value === 0 ? 1 : effect.value })} options={valueSources.map((source) => [source.key, source.label])} />
             <button
               type="button"
               onClick={() => savePatch({ propertyEffects: effects.filter((entry) => entry.id !== effect.id) })}
@@ -153,7 +154,32 @@ function PropertyEffectEditor({ item, savePatch }: SpecificEditorProps) {
         </div>
       ))}
       {!effects.length && <div className="text-sm text-[#8c8170]">Keine Werteffekte. Die Beschreibung bleibt trotzdem als Regeltext nutzbar.</div>}
-      <div className="text-xs leading-relaxed text-[#8c8170]">Notiz optional ist nur erklaerender Text, z. B. "nur bei Einstimmung" oder "bis zur Rast". Automatisch berechnet wird ueber Ziel und Wert.</div>
+      <div className="text-xs leading-relaxed text-[#8c8170]">Notiz optional ist nur erklaerender Text. Bei fester Wert-Quelle nutzt die App den eingetragenen Wert; bei einer gewaehlten Wert-Quelle bestimmt das Vorzeichen, ob die Quelle addiert oder abgezogen wird.</div>
+    </div>
+  );
+}
+
+function SourceSignField({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const isNegative = Number(value ?? 0) < 0;
+  return (
+    <div className="grid min-w-0 gap-1.5 text-sm text-[#cfc2aa]">
+      <span className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#f2ca75]">Wirkung</span>
+      <div className="grid min-h-11 grid-cols-2 overflow-hidden border border-[#a8752a]/35 bg-black/30">
+        <button
+          type="button"
+          onClick={() => onChange(1)}
+          className={`min-w-0 px-2 text-xs font-bold uppercase tracking-wide transition ${!isNegative ? "bg-[#d6a14d]/18 text-[#ffd88c]" : "text-[#8c8170] hover:text-[#f4ead7]"}`}
+        >
+          + Quelle
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(-1)}
+          className={`min-w-0 border-l border-[#a8752a]/35 px-2 text-xs font-bold uppercase tracking-wide transition ${isNegative ? "bg-red-500/18 text-red-100" : "text-[#8c8170] hover:text-[#f4ead7]"}`}
+        >
+          - Quelle
+        </button>
+      </div>
     </div>
   );
 }
@@ -848,10 +874,10 @@ function FateUsageFields({ usage: savedUsage, save, label }: { usage?: FateAbili
               <button type="button" onClick={() => patch({ activationEffects: [...effects, { id: crypto.randomUUID(), target: "dodge", value: 0 }] })} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Effekt +</button>
             </div>
             {effects.map((effect) => (
-              <div key={effect.id} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_130px_minmax(0,1fr)_auto]">
+              <div key={effect.id} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_minmax(0,1fr)_auto]">
                 <Select label="Ziel" value={effect.target} onChange={(target) => updateEffect({ ...effect, target: target as PropertyEffectTarget })} options={effectTargets.map((target) => [target.key, target.label])} />
-                <SignedNumberField label="Wert" value={effect.value} onChange={(value) => updateEffect({ ...effect, value })} />
-                <Select label="Wert-Attribut" value={effect.attributeKey ?? ""} onChange={(attributeKey) => updateEffect({ ...effect, attributeKey: attributeKey as AttributeKey | "" })} options={[["", "Fester Wert"], ...attributes.map((attribute) => [attribute.key, attribute.label] as [string, string])]} />
+                {effect.attributeKey ? <SourceSignField value={effect.value} onChange={(value) => updateEffect({ ...effect, value })} /> : <SignedNumberField label="Wert" value={effect.value} onChange={(value) => updateEffect({ ...effect, value })} />}
+                <Select label="Wert-Quelle" value={effect.attributeKey ?? ""} onChange={(attributeKey) => updateEffect({ ...effect, attributeKey: attributeKey as PropertyEffectValueSource | "", value: attributeKey && effect.value === 0 ? 1 : effect.value })} options={valueSources.map((source) => [source.key, source.label])} />
                 <button type="button" onClick={() => patch({ activationEffects: effects.filter((entry) => entry.id !== effect.id) })} className="self-end border border-red-400/45 px-3 py-3 text-red-200">
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -917,9 +943,10 @@ function OriginAbilityFields({ item, savePatch }: SpecificEditorProps) {
                 <button type="button" onClick={() => patchAbility(ability.id, { propertyEffects: [...effects, { id: crypto.randomUUID(), target: "hpBonus", value: 1 }] })} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Effekt +</button>
               </div>
               {effects.map((effect) => (
-                <div key={effect.id} className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)_auto]">
+                <div key={effect.id} className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_220px_minmax(0,1fr)_minmax(0,1fr)_auto]">
                   <Select label="Ziel" value={effect.target} onChange={(target) => patchAbility(ability.id, { propertyEffects: effects.map((entry) => entry.id === effect.id ? { ...entry, target: target as PropertyEffectTarget } : entry) })} options={effectTargets.map((target) => [target.key, target.label])} />
-                  <SignedNumberField label="Wert" value={effect.value} onChange={(value) => patchAbility(ability.id, { propertyEffects: effects.map((entry) => entry.id === effect.id ? { ...entry, value } : entry) })} />
+                  {effect.attributeKey ? <SourceSignField value={effect.value} onChange={(value) => patchAbility(ability.id, { propertyEffects: effects.map((entry) => entry.id === effect.id ? { ...entry, value } : entry) })} /> : <SignedNumberField label="Wert" value={effect.value} onChange={(value) => patchAbility(ability.id, { propertyEffects: effects.map((entry) => entry.id === effect.id ? { ...entry, value } : entry) })} />}
+                  <Select label="Wert-Quelle" value={effect.attributeKey ?? ""} onChange={(attributeKey) => patchAbility(ability.id, { propertyEffects: effects.map((entry) => entry.id === effect.id ? { ...entry, attributeKey: attributeKey as PropertyEffectValueSource | "", value: attributeKey && effect.value === 0 ? 1 : effect.value } : entry) })} options={valueSources.map((source) => [source.key, source.label])} />
                   <Field label="Notiz" value={effect.condition ?? ""} onChange={(condition) => patchAbility(ability.id, { propertyEffects: effects.map((entry) => entry.id === effect.id ? { ...entry, condition } : entry) })} />
                   <button type="button" onClick={() => patchAbility(ability.id, { propertyEffects: effects.filter((entry) => entry.id !== effect.id) })} className="self-end border border-red-400/45 px-3 py-3 text-red-200"><Trash2 className="h-4 w-4" /></button>
                 </div>

@@ -1,5 +1,5 @@
 import type { AttributeKey, Attributes, CatalogItem, Character, GameCalculationData, GameCalculationTerm, PropertyEffect, PropertyEffectTarget } from "../../types/domain";
-import { effectiveTrainingBonus, levelUpEvasionBonus, levelUpHpBonus, levelUpProficiencyBonus, levelUpStressBonus } from "./characterRules";
+import { effectiveTrainingBonus, levelUpEvasionBonus, levelUpHpBonus, levelUpProficiencyBonus, levelUpStressBonus, tierForLevel } from "./characterRules";
 
 export interface CalculationContext {
   catalog: CatalogItem[];
@@ -47,7 +47,7 @@ function termValue(term: GameCalculationTerm, context: CalculationContext, stack
   if (term.source === "trainingBonus") return effectiveTrainingBonus(context.character);
   if (term.source === "characterBonus") return characterBonus(context.character, term.bonusKey);
   if (term.source === "levelUpBonus") return levelUpBonus(context.character, term.bonusKey);
-  if (term.source === "effectSum") return sumEffects(context.activeEffects ?? [], term.effectTarget, context.attributes);
+  if (term.source === "effectSum") return sumEffects(context.activeEffects ?? [], term.effectTarget, context);
   if (term.source === "bonusSourceSum") return (context.dodgeBonuses ?? []).reduce((sum, bonus) => sum + Number(bonus.value ?? 0), 0);
   if (term.source === "armorField") return armorField(context.armorData, term.armorField);
   if (term.source === "levelHalfCeil") return Math.ceil(Number(context.character.level ?? 1) / 2);
@@ -77,11 +77,31 @@ function armorField(armorData: CalculationContext["armorData"], field?: string) 
   return 0;
 }
 
-function sumEffects(effects: PropertyEffect[], target?: PropertyEffectTarget, attributes: Attributes = {} as Attributes) {
+function sumEffects(effects: PropertyEffect[], target?: PropertyEffectTarget, context?: CalculationContext) {
   if (!target) return 0;
   return effects
     .filter((effect) => effect.target === target)
-    .reduce((sum, effect) => sum + (effect.attributeKey ? Number(attributes[effect.attributeKey] ?? 0) : Number(effect.value ?? 0)), 0);
+    .reduce((sum, effect) => sum + effectValue(effect, context), 0);
+}
+
+function effectValue(effect: PropertyEffect, context?: CalculationContext) {
+  const source = effect.attributeKey;
+  const attributes = context?.attributes ?? ({} as Attributes);
+  if (!source) return Number(effect.value ?? 0);
+  const sign = Number(effect.value ?? 0) < 0 ? -1 : 1;
+  if (Object.prototype.hasOwnProperty.call(attributes, source)) return sign * Number(attributes[source as AttributeKey] ?? 0);
+  if (source === "spellAttribute") {
+    const choices = context?.character?.choices;
+    const mainFate = context?.catalog.find((item) => item.id === choices?.mainFateId && item.type === "fate");
+    const sideFate = context?.catalog.find((item) => item.id === choices?.sideFateId && item.type === "fate");
+    const spellAttribute = mainFate?.fate?.spellAttribute || sideFate?.fate?.spellAttribute;
+    return spellAttribute ? sign * Number(attributes[spellAttribute] ?? 0) : 0;
+  }
+  if (source === "level") return sign * Number(context?.character?.level ?? 0);
+  if (source === "tier") return sign * tierForLevel(Number(context?.character?.level ?? 1));
+  if (source === "trainingBonus") return sign * effectiveTrainingBonus(context?.character ?? ({} as Character));
+  if (context?.fallback && Object.prototype.hasOwnProperty.call(context.fallback, source)) return sign * Number(context.fallback[source] ?? 0);
+  return 0;
 }
 
 function applyResultRules(value: number, calculation: GameCalculationData) {

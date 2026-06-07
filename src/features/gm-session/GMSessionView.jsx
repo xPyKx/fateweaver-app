@@ -325,7 +325,7 @@ function EnemyStatCard({ module }) {
         <Metric label="Verteidigung" value={stat.defense ?? "-"} />
       </div>
       {(stat.traits ?? []).length > 0 && <div className="flex flex-wrap gap-1">{stat.traits.map((trait) => <span key={trait} className="border border-[#a8752a]/25 px-2 py-1 text-xs text-[#cfc2aa]">{trait}</span>)}</div>}
-      {(stat.attacks ?? []).slice(0, boss ? 4 : 2).map((attack) => <div key={attack.id} className="border border-[#a8752a]/25 bg-black/20 p-3 text-sm"><div className="font-bold text-white">{attack.name} <span className="text-[#8c8170]">{attack.range}</span></div><div className="text-[#ffd88c]">{attack.damage}</div>{attack.effect && <p className="mt-1 text-[#cfc2aa]">{attack.effect}</p>}</div>)}
+      {(stat.attacks ?? []).slice(0, boss ? 4 : 2).map((attack) => <div key={attack.id} className="border border-[#a8752a]/25 bg-black/20 p-3 text-sm"><div className="font-bold text-white">{attack.name} {attack.attackBonus && <span className="text-[#ffd88c]">{formatAttackBonus(attack.attackBonus)}</span>} <span className="text-[#8c8170]">{attack.range}</span></div><div className="text-[#ffd88c]">{attack.damage}</div>{attack.effect && <p className="mt-1 text-[#cfc2aa]">{attack.effect}</p>}</div>)}
       {stat.tactics && <p className="border-t border-[#a8752a]/25 pt-3 text-sm text-[#cfc2aa]">{stat.tactics}</p>}
       <StatBlockSectionsPreview stat={stat} compact />
     </article>
@@ -961,7 +961,14 @@ function CustomModuleCard({ module, data, onSave, onDelete, onDuplicate }) {
 }
 
 function StatBlockEditor({ statBlock, onChange }) {
-  const stat = { ...defaultStatBlock(statBlock.template ?? "standard"), ...statBlock, attacks: statBlock.attacks ?? [], abilities: statBlock.abilities ?? [], rows: statBlock.rows ?? [], sections: statBlock.sections ?? [] };
+  const stat = {
+    ...defaultStatBlock(statBlock.template ?? "standard"),
+    ...statBlock,
+    attacks: statBlock.attacks ?? [],
+    abilities: statBlock.abilities ?? [],
+    rows: (statBlock.rows ?? []).map((row, index) => ({ ...row, layout: normalizeBlockLayout(row.layout, 1 + (index % 4) * 3, 1 + Math.floor(index / 4), 3, 1) })),
+    sections: (statBlock.sections ?? []).map((section, index) => ({ ...section, layout: normalizeBlockLayout(section.layout, 1 + (index % 2) * 6, 2 + Math.floor(index / 2) * 2, 6, 2) }))
+  };
   function patch(patchData) {
     onChange({ ...stat, ...patchData });
   }
@@ -969,7 +976,7 @@ function StatBlockEditor({ statBlock, onChange }) {
     patch({ [key]: value === "" ? undefined : Math.max(0, Number(value) || 0) });
   }
   function addAttack() {
-    patch({ attacks: [...(stat.attacks ?? []), { id: crypto.randomUUID(), name: "Neuer Angriff", range: "", damage: "", effect: "" }] });
+    patch({ attacks: [...(stat.attacks ?? []), { id: crypto.randomUUID(), name: "Neuer Angriff", attackBonus: "", range: "", damage: "", effect: "" }] });
   }
   function patchAttack(id, patchData) {
     patch({ attacks: (stat.attacks ?? []).map((attack) => attack.id === id ? { ...attack, ...patchData } : attack) });
@@ -987,7 +994,7 @@ function StatBlockEditor({ statBlock, onChange }) {
     patch({ abilities: (stat.abilities ?? []).filter((ability) => ability.id !== id) });
   }
   function addRow() {
-    patch({ rows: [...(stat.rows ?? []), { id: crypto.randomUUID(), label: "Neues Feld", value: "", note: "" }] });
+    patch({ rows: [...(stat.rows ?? []), { id: crypto.randomUUID(), label: "Neues Feld", value: "", note: "", layout: { x: 1, y: (stat.rows ?? []).length + 1, w: 3, h: 1 } }] });
   }
   function patchRow(id, patchData) {
     patch({ rows: (stat.rows ?? []).map((row) => row.id === id ? { ...row, ...patchData } : row) });
@@ -996,7 +1003,7 @@ function StatBlockEditor({ statBlock, onChange }) {
     patch({ rows: (stat.rows ?? []).filter((row) => row.id !== id) });
   }
   function addSection(kind) {
-    patch({ sections: [...(stat.sections ?? []), { id: crypto.randomUUID(), title: kind === "table" ? "Neue Tabelle" : "Neue Sektion", kind, text: "", columns: kind === "table" ? ["Name", "Wert"] : ["Feld", "Wert"], rows: [] }] });
+    patch({ sections: [...(stat.sections ?? []), { id: crypto.randomUUID(), title: kind === "table" ? "Neue Tabelle" : "Neue Sektion", kind, text: "", columns: kind === "table" ? ["Name", "Wert"] : ["Feld", "Wert"], rows: [], layout: { x: 1, y: (stat.sections ?? []).length * 2 + 2, w: 6, h: kind === "free" ? 3 : 2 } }] });
   }
   function patchSection(id, patchData) {
     patch({ sections: (stat.sections ?? []).map((section) => section.id === id ? { ...section, ...patchData } : section) });
@@ -1027,12 +1034,16 @@ function StatBlockEditor({ statBlock, onChange }) {
           <div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Freie Wertezeilen</div>
           <button onClick={addRow} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Zeile +</button>
         </div>
+        <div className="text-xs leading-relaxed text-[#8c8170]">Position und Groesse werden im 12-Spalten-Raster gespeichert. X/Y ordnet an, B/H zieht das Feld groesser.</div>
         {(stat.rows ?? []).map((row) => (
-          <div key={row.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-2 md:grid-cols-[170px_1fr_1fr_auto]">
-            <input value={row.label ?? ""} onChange={(event) => patchRow(row.id, { label: event.target.value })} placeholder="Label" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
-            <input value={row.value ?? ""} onChange={(event) => patchRow(row.id, { value: event.target.value })} placeholder="Wert" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
-            <input value={row.note ?? ""} onChange={(event) => patchRow(row.id, { note: event.target.value })} placeholder="Notiz" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
-            <button onClick={() => removeRow(row.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+          <div key={row.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-2">
+            <div className="grid gap-2 md:grid-cols-[170px_1fr_1fr_auto]">
+              <input value={row.label ?? ""} onChange={(event) => patchRow(row.id, { label: event.target.value })} placeholder="Label" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+              <input value={row.value ?? ""} onChange={(event) => patchRow(row.id, { value: event.target.value })} placeholder="Wert" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+              <input value={row.note ?? ""} onChange={(event) => patchRow(row.id, { note: event.target.value })} placeholder="Notiz" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+              <button onClick={() => removeRow(row.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+            </div>
+            <LayoutControls layout={row.layout} onChange={(layout) => patchRow(row.id, { layout })} />
           </div>
         ))}
       </div>
@@ -1043,8 +1054,9 @@ function StatBlockEditor({ statBlock, onChange }) {
         </div>
         {(stat.attacks ?? []).map((attack) => (
           <div key={attack.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-3">
-            <div className="grid gap-2 md:grid-cols-[1fr_140px_140px_auto]">
+            <div className="grid gap-2 md:grid-cols-[1fr_110px_140px_140px_auto]">
               <input value={attack.name ?? ""} onChange={(event) => patchAttack(attack.id, { name: event.target.value })} placeholder="Name" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+              <input value={attack.attackBonus ?? ""} onChange={(event) => patchAttack(attack.id, { attackBonus: event.target.value })} placeholder="Angriff +" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
               <input value={attack.range ?? ""} onChange={(event) => patchAttack(attack.id, { range: event.target.value })} placeholder="Reichweite" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
               <input value={attack.damage ?? ""} onChange={(event) => patchAttack(attack.id, { damage: event.target.value })} placeholder="Schaden" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
               <button onClick={() => removeAttack(attack.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
@@ -1079,6 +1091,7 @@ function StatBlockEditor({ statBlock, onChange }) {
           <button onClick={() => addSection("text")} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Text +</button>
           <button onClick={() => addSection("fields")} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Felder +</button>
           <button onClick={() => addSection("table")} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Tabelle +</button>
+          <button onClick={() => addSection("free")} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 py-1 text-sm font-bold text-[#ffd88c]">Freie Sektion +</button>
         </div>
         {(stat.sections ?? []).map((section) => <StatBlockSectionEditor key={section.id} section={section} onPatch={(patchData) => patchSection(section.id, patchData)} onDelete={() => removeSection(section.id)} />)}
       </div>
@@ -1088,32 +1101,85 @@ function StatBlockEditor({ statBlock, onChange }) {
 
 function StatBlockSectionEditor({ section, onPatch, onDelete }) {
   const columns = section.columns ?? ["Feld", "Wert"];
+  const sectionRows = section.rows ?? [];
   function setColumns(value) {
     onPatch({ columns: value.split(",").map((entry) => entry.trim()).filter(Boolean) });
   }
   function addTableRow() {
-    onPatch({ rows: [...(section.rows ?? []), { id: crypto.randomUUID(), cells: columns.map(() => "") }] });
+    onPatch({ rows: [...sectionRows, { id: crypto.randomUUID(), kind: "table", cells: columns.map(() => "") }] });
   }
   function patchTableCell(rowId, index, value) {
-    onPatch({ rows: (section.rows ?? []).map((row) => row.id === rowId ? { ...row, cells: columns.map((_, columnIndex) => columnIndex === index ? value : row.cells?.[columnIndex] ?? "") } : row) });
+    onPatch({ rows: sectionRows.map((row) => row.id === rowId ? { ...row, cells: columns.map((_, columnIndex) => columnIndex === index ? value : row.cells?.[columnIndex] ?? "") } : row) });
   }
   function removeTableRow(rowId) {
-    onPatch({ rows: (section.rows ?? []).filter((row) => row.id !== rowId) });
+    onPatch({ rows: sectionRows.filter((row) => row.id !== rowId) });
+  }
+  function addFreeRow(kind) {
+    const row = kind === "table"
+      ? { id: crypto.randomUUID(), kind, columns: ["Name", "Wert"], cells: ["", ""] }
+      : kind === "field"
+        ? { id: crypto.randomUUID(), kind, label: "Feld", value: "", cells: [] }
+        : { id: crypto.randomUUID(), kind, text: "", cells: [] };
+    onPatch({ rows: [...sectionRows, row] });
+  }
+  function patchFreeRow(rowId, patchData) {
+    onPatch({ rows: sectionRows.map((row) => row.id === rowId ? { ...row, ...patchData } : row) });
+  }
+  function patchFreeTableCell(row, index, value) {
+    const columnsForRow = row.columns ?? ["Name", "Wert"];
+    patchFreeRow(row.id, { cells: columnsForRow.map((_, columnIndex) => columnIndex === index ? value : row.cells?.[columnIndex] ?? "") });
   }
   return (
     <div className="grid gap-3 border border-[#a8752a]/20 bg-black/20 p-3">
       <div className="grid gap-2 md:grid-cols-[1fr_160px_auto]">
         <input value={section.title ?? ""} onChange={(event) => onPatch({ title: event.target.value })} placeholder="Titel" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
-        <Select value={section.kind ?? "text"} onChange={(kind) => onPatch({ kind })} options={[["text", "Text"], ["fields", "Felder"], ["table", "Tabelle"]]} />
+        <Select value={section.kind ?? "text"} onChange={(kind) => onPatch({ kind })} options={[["text", "Text"], ["fields", "Felder"], ["table", "Tabelle"], ["free", "Freie Sektion"]]} />
         <button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
       </div>
+      <LayoutControls layout={section.layout} onChange={(layout) => onPatch({ layout })} />
       {section.kind === "text" ? (
         <textarea value={section.text ?? ""} onChange={(event) => onPatch({ text: event.target.value })} placeholder="Freier Text" className="min-h-24 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" />
+      ) : section.kind === "free" ? (
+        <div className="grid gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => addFreeRow("text")} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Textzeile +</button>
+            <button onClick={() => addFreeRow("field")} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Feldzeile +</button>
+            <button onClick={() => addFreeRow("table")} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Tabellenzeile +</button>
+          </div>
+          {sectionRows.map((row) => {
+            const rowKind = row.kind ?? "table";
+            const rowColumns = row.columns ?? ["Name", "Wert"];
+            return (
+              <div key={row.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-2">
+                <div className="flex items-center gap-2">
+                  <Select value={rowKind} onChange={(kind) => patchFreeRow(row.id, { kind, cells: kind === "table" ? rowColumns.map((_, index) => row.cells?.[index] ?? "") : [] })} options={[["text", "Text"], ["field", "Feld"], ["table", "Tabelle"]]} />
+                  <button onClick={() => removeTableRow(row.id)} className="ml-auto grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+                </div>
+                {rowKind === "text" && <textarea value={row.text ?? ""} onChange={(event) => patchFreeRow(row.id, { text: event.target.value })} placeholder="Text" className="min-h-20 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" />}
+                {rowKind === "field" && (
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <input value={row.label ?? ""} onChange={(event) => patchFreeRow(row.id, { label: event.target.value })} placeholder="Label" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+                    <input value={row.value ?? ""} onChange={(event) => patchFreeRow(row.id, { value: event.target.value })} placeholder="Wert" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+                  </div>
+                )}
+                {rowKind === "table" && (
+                  <div className="grid gap-2">
+                    <input value={rowColumns.join(", ")} onChange={(event) => patchFreeRow(row.id, { columns: event.target.value.split(",").map((entry) => entry.trim()).filter(Boolean) })} placeholder="Spalten" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+                    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, rowColumns.length)}, minmax(0, 1fr))` }}>
+                      {rowColumns.map((column, index) => <input key={`${row.id}-${column}-${index}`} value={row.cells?.[index] ?? ""} onChange={(event) => patchFreeTableCell(row, index, event.target.value)} placeholder={column} className="min-h-9 min-w-0 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {!sectionRows.length && <div className="text-sm text-[#8c8170]">Fuege Text-, Feld- oder Tabellenzeilen hinzu.</div>}
+        </div>
       ) : (
         <div className="grid gap-2">
           <input value={columns.join(", ")} onChange={(event) => setColumns(event.target.value)} placeholder="Spalten, durch Komma getrennt" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
           <button onClick={addTableRow} className="justify-self-start border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Zeile +</button>
-          {(section.rows ?? []).map((row) => (
+          {sectionRows.map((row) => (
             <div key={row.id} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, columns.length)}, minmax(0, 1fr)) auto` }}>
               {columns.map((column, index) => <input key={`${row.id}-${column}-${index}`} value={row.cells?.[index] ?? ""} onChange={(event) => patchTableCell(row.id, index, event.target.value)} placeholder={column} className="min-h-9 min-w-0 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />)}
               <button onClick={() => removeTableRow(row.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
@@ -1125,7 +1191,7 @@ function StatBlockSectionEditor({ section, onPatch, onDelete }) {
   );
 }
 
-function StatBlockSectionsPreview({ stat, compact = false }) {
+function LegacyStatBlockSectionsPreview({ stat, compact = false }) {
   const rows = stat.rows ?? [];
   const sections = stat.sections ?? [];
   if (!rows.length && !sections.length) return null;
@@ -1137,7 +1203,7 @@ function StatBlockSectionsPreview({ stat, compact = false }) {
   );
 }
 
-function StatBlockSectionPreview({ section }) {
+function LegacyStatBlockSectionPreview({ section }) {
   const columns = section.columns ?? [];
   return (
     <div className="grid gap-2 text-sm">
@@ -1150,6 +1216,102 @@ function StatBlockSectionPreview({ section }) {
       )}
     </div>
   );
+}
+
+function StatBlockSectionsPreview({ stat, compact = false }) {
+  const rows = stat.rows ?? [];
+  const sections = stat.sections ?? [];
+  if (!rows.length && !sections.length) return null;
+  return (
+    <div className="grid gap-3 border-t border-[#a8752a]/25 pt-3">
+      <div className="grid auto-rows-[minmax(44px,auto)] gap-2 md:grid-cols-12">
+        {rows.map((row, index) => {
+          const layout = normalizeBlockLayout(row.layout, 1 + (index % 4) * 3, 1 + Math.floor(index / 4), 3, 1);
+          return (
+            <div key={row.id} className="grid grid-cols-[minmax(100px,0.4fr)_1fr] border border-[#a8752a]/20 bg-black/15 text-sm" style={gridPlacement(layout)}>
+              <div className="px-2 py-1 font-bold text-[#f2ca75]">{row.label}</div>
+              <div className="px-2 py-1 text-[#cfc2aa]">{row.value}{row.note ? <span className="text-[#8c8170]"> - {row.note}</span> : null}</div>
+            </div>
+          );
+        })}
+        {sections.slice(0, compact ? 3 : undefined).map((section, index) => (
+          <StatBlockSectionPreview key={section.id} section={section} fallbackLayout={{ x: 1 + (index % 2) * 6, y: 2 + Math.floor(index / 2) * 2, w: 6, h: 2 }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatBlockSectionPreview({ section, fallbackLayout }) {
+  const columns = section.columns ?? [];
+  const layout = normalizeBlockLayout(section.layout, fallbackLayout?.x ?? 1, fallbackLayout?.y ?? 1, fallbackLayout?.w ?? 6, fallbackLayout?.h ?? 2);
+  return (
+    <div className="grid content-start gap-2 border border-[#a8752a]/20 bg-black/10 p-2 text-sm" style={gridPlacement(layout)}>
+      <div className="font-black uppercase tracking-[0.14em] text-[#f2ca75]">{section.title}</div>
+      {section.kind === "text" ? <p className="whitespace-pre-wrap text-[#cfc2aa]">{section.text}</p> : section.kind === "free" ? (
+        <div className="grid gap-2">
+          {(section.rows ?? []).map((row) => <StatBlockFreeRowPreview key={row.id} row={row} />)}
+        </div>
+      ) : (
+        <div className="overflow-hidden border border-[#a8752a]/25">
+          {columns.length > 0 && <div className="grid bg-black/35 font-bold text-[#f2ca75]" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>{columns.map((column, index) => <div key={`${section.id}-head-${index}`} className="border-r border-[#a8752a]/20 px-2 py-1 last:border-r-0">{column}</div>)}</div>}
+          {(section.rows ?? []).map((row) => <div key={row.id} className="grid border-t border-[#a8752a]/20 text-[#cfc2aa]" style={{ gridTemplateColumns: `repeat(${Math.max(1, columns.length)}, minmax(0, 1fr))` }}>{(columns.length ? columns : [""]).map((_, index) => <div key={`${row.id}-${index}`} className="border-r border-[#a8752a]/20 px-2 py-1 last:border-r-0">{row.cells?.[index] ?? ""}</div>)}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatBlockFreeRowPreview({ row }) {
+  const kind = row.kind ?? "table";
+  if (kind === "text") return <p className="whitespace-pre-wrap text-[#cfc2aa]">{row.text}</p>;
+  if (kind === "field") return <div className="grid grid-cols-[minmax(100px,0.35fr)_1fr] border border-[#a8752a]/20 bg-black/15"><div className="px-2 py-1 font-bold text-[#f2ca75]">{row.label}</div><div className="px-2 py-1 text-[#cfc2aa]">{row.value}</div></div>;
+  const columns = row.columns ?? ["Name", "Wert"];
+  return (
+    <div className="overflow-hidden border border-[#a8752a]/25">
+      <div className="grid bg-black/35 font-bold text-[#f2ca75]" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>{columns.map((column, index) => <div key={`${row.id}-head-${index}`} className="border-r border-[#a8752a]/20 px-2 py-1 last:border-r-0">{column}</div>)}</div>
+      <div className="grid border-t border-[#a8752a]/20 text-[#cfc2aa]" style={{ gridTemplateColumns: `repeat(${Math.max(1, columns.length)}, minmax(0, 1fr))` }}>{columns.map((_, index) => <div key={`${row.id}-${index}`} className="border-r border-[#a8752a]/20 px-2 py-1 last:border-r-0">{row.cells?.[index] ?? ""}</div>)}</div>
+    </div>
+  );
+}
+
+function LayoutControls({ layout, onChange }) {
+  const current = normalizeBlockLayout(layout, 1, 1, 4, 1);
+  function patchLayout(key, value) {
+    onChange(normalizeBlockLayout({ ...current, [key]: Number(value) || 1 }, current.x, current.y, current.w, current.h));
+  }
+  return (
+    <div className="grid gap-2 md:grid-cols-4">
+      <NumberField label="Raster X" value={current.x} onChange={(value) => patchLayout("x", value)} />
+      <NumberField label="Raster Y" value={current.y} onChange={(value) => patchLayout("y", value)} />
+      <NumberField label="Breite" value={current.w} onChange={(value) => patchLayout("w", value)} />
+      <NumberField label="Hoehe" value={current.h} onChange={(value) => patchLayout("h", value)} />
+    </div>
+  );
+}
+
+function normalizeBlockLayout(layout, x = 1, y = 1, w = 4, h = 1) {
+  const next = {
+    x: Math.max(1, Math.min(12, Number(layout?.x ?? x) || x)),
+    y: Math.max(1, Number(layout?.y ?? y) || y),
+    w: Math.max(1, Math.min(12, Number(layout?.w ?? w) || w)),
+    h: Math.max(1, Number(layout?.h ?? h) || h)
+  };
+  if (next.x + next.w > 13) next.w = 13 - next.x;
+  return next;
+}
+
+function gridPlacement(layout) {
+  return {
+    gridColumn: `${layout.x} / span ${layout.w}`,
+    gridRow: `${layout.y} / span ${layout.h}`
+  };
+}
+
+function formatAttackBonus(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return /^[+-]/.test(text) ? text : `+${text}`;
 }
 
 function HandoutPagesEditor({ module, characters, onPatch }) {

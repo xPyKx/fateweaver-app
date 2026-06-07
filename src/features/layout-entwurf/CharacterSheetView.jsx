@@ -1,5 +1,5 @@
 ﻿import { useState } from "react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowLeft,
@@ -507,20 +507,71 @@ function FateCard({ name, text }) {
   );
 }
 
-function ConditionControl({ conditions, activeIds, activeConditions, open, onToggleOpen, onToggleCondition }) {
+function ConditionControl({ conditions, activeIds, activeConditions, open, onToggleOpen, onClose, onToggleCondition }) {
+  const controlRef = useRef(null);
+  const badgeRef = useRef(null);
+  const infoPanelRef = useRef(null);
+  const [query, setQuery] = useState("");
+  const [infoId, setInfoId] = useState(null);
+  const [activeInfoOpen, setActiveInfoOpen] = useState(false);
+  const [activeInfoStyle, setActiveInfoStyle] = useState({});
   const hasActiveConditions = activeConditions.length > 0;
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleConditions = conditions.filter((condition) => {
+    if (!normalizedQuery) return true;
+    return `${condition.name} ${condition.description ?? ""}`.toLowerCase().includes(normalizedQuery);
+  });
+  const infoCondition = conditions.find((condition) => condition.id === infoId);
+
+  useEffect(() => {
+    if (!open && !activeInfoOpen) return undefined;
+    function handlePointerDown(event) {
+      if (!controlRef.current?.contains(event.target) && !infoPanelRef.current?.contains(event.target)) {
+        onClose?.();
+        setActiveInfoOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open, activeInfoOpen, onClose]);
+
+  useEffect(() => {
+    if (!hasActiveConditions) setActiveInfoOpen(false);
+  }, [hasActiveConditions]);
+
+  useEffect(() => {
+    if (!activeInfoOpen) return undefined;
+    function updateInfoPosition() {
+      const rect = badgeRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setActiveInfoStyle({
+        top: `${rect.bottom + 8}px`,
+        right: `${Math.max(16, window.innerWidth - rect.right)}px`,
+        maxHeight: `calc(100vh - ${rect.bottom + 24}px)`
+      });
+    }
+    updateInfoPosition();
+    window.addEventListener("resize", updateInfoPosition);
+    window.addEventListener("scroll", updateInfoPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateInfoPosition);
+      window.removeEventListener("scroll", updateInfoPosition, true);
+    };
+  }, [activeInfoOpen]);
+
   return (
-    <div className="relative grid justify-items-end gap-2">
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onToggleOpen();
-        }}
-        className={hasActiveConditions ? "condition-badge min-h-24 min-w-36 max-w-56 p-[1px] text-center shadow-[0_0_28px_rgba(214,161,77,.16)]" : "grid h-24 min-w-28 place-items-center border border-[#d6a14d]/60 bg-black/35 px-3 text-center text-[#cfc2aa] shadow-[0_0_25px_rgba(214,161,77,.10)]"}
-      >
-        {hasActiveConditions ? (
-          <span className="condition-badge-inner grid min-h-24 content-center gap-2 px-3 py-3">
+    <div ref={controlRef} className="relative grid justify-items-end gap-2">
+      {hasActiveConditions ? (
+        <div ref={badgeRef} className="condition-badge relative min-h-24 w-80 max-w-[calc(100vw-2rem)] p-[1px] text-center shadow-[0_0_28px_rgba(214,161,77,.16)]">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setActiveInfoOpen(false);
+              onToggleOpen();
+            }}
+            className="condition-badge-inner grid min-h-24 w-full content-center gap-2 px-3 py-3"
+          >
             <span className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-white">Zustaende</span>
             <span className="grid gap-1">
               {activeConditions.slice(0, 3).map((condition) => (
@@ -530,39 +581,99 @@ function ConditionControl({ conditions, activeIds, activeConditions, open, onTog
               ))}
               {activeConditions.length > 3 && <span className="text-[0.62rem] font-bold uppercase tracking-wide text-[#ffd88c]">+{activeConditions.length - 3} weitere</span>}
             </span>
-          </span>
-        ) : (
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setActiveInfoOpen((current) => !current);
+            }}
+            className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center border border-cyan-200/45 bg-black/60 text-cyan-100 hover:border-[#ffd88c] hover:text-[#ffd88c]"
+            title="Aktive Zustaende beschreiben"
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setActiveInfoOpen(false);
+            onToggleOpen();
+          }}
+          className="grid h-24 min-w-28 place-items-center border border-[#d6a14d]/60 bg-black/35 px-3 text-center text-[#cfc2aa] shadow-[0_0_25px_rgba(214,161,77,.10)]"
+        >
           <span>
             <span className="block text-[0.65rem] font-black uppercase tracking-[0.18em] text-[#f2ca75]">Zustand</span>
             <span className="mt-1 block text-3xl font-light text-white">{activeIds.length}</span>
           </span>
-        )}
-      </button>
+        </button>
+      )}
+      {activeInfoOpen && createPortal(
+        <div ref={infoPanelRef} style={activeInfoStyle} className="fixed z-[260] grid max-h-[calc(100vh-10rem)] w-[36rem] max-w-[calc(100vw-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-3 border border-cyan-200/45 bg-[#0c111b] p-4 text-left shadow-2xl shadow-black/80" onClick={(event) => event.stopPropagation()}>
+          <div className="flex items-center justify-between border-b border-[#a8752a]/25 pb-2">
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-cyan-100">Aktive Zustaende</div>
+            <button type="button" onClick={() => setActiveInfoOpen(false)} className="grid h-7 w-7 place-items-center border border-[#a8752a]/35 text-[#cfc2aa]"><X className="h-3.5 w-3.5" /></button>
+          </div>
+          <div className="grid min-h-0 gap-3 overflow-auto pr-1">
+            {activeConditions.map((condition) => (
+              <div key={condition.id} className="border border-[#a8752a]/30 bg-black/30 p-3">
+                <div className="text-sm font-black uppercase tracking-wide text-white">{condition.name}</div>
+                <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#cfc2aa]">{condition.description || "Keine Beschreibung hinterlegt."}</div>
+              </div>
+            ))}
+          </div>
+        </div>,
+        document.body
+      )}
       {open && (
         <div className="absolute right-0 top-28 z-40 grid w-80 gap-2 border border-[#a8752a]/55 bg-[#0c111b] p-3 text-left shadow-2xl shadow-black/70" onClick={(event) => event.stopPropagation()}>
           <div className="flex items-center justify-between border-b border-[#a8752a]/25 pb-2">
             <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Zustand waehlen</div>
-            <button type="button" onClick={onToggleOpen} className="grid h-7 w-7 place-items-center border border-[#a8752a]/35 text-[#cfc2aa]"><X className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={onClose} className="grid h-7 w-7 place-items-center border border-[#a8752a]/35 text-[#cfc2aa]"><X className="h-3.5 w-3.5" /></button>
           </div>
-          {conditions.map((condition) => {
-            const active = activeIds.includes(condition.id);
-            return (
-              <button
-                key={condition.id}
-                type="button"
-                onClick={() => onToggleCondition(condition.id)}
-                className={`grid gap-1 border p-2 text-left ${active ? "border-[#ffd88c] bg-[#d6a14d]/12" : "border-[#a8752a]/30 bg-black/25"}`}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  {condition.condition?.iconUrl || condition.imageUrl ? <img src={condition.condition?.iconUrl || condition.imageUrl} alt="" className="h-7 w-7 object-contain" /> : <CircleDot className="h-4 w-4 text-[#ffd88c]" />}
-                  <span className="truncate font-bold text-white">{condition.name}</span>
-                  {active && <span className="ml-auto text-xs text-[#ffd88c]">Aktiv</span>}
-                </span>
-                {condition.description && <span className="line-clamp-2 text-xs leading-relaxed text-[#8c8170]">{condition.description}</span>}
-              </button>
-            );
-          })}
-          {!conditions.length && <div className="border border-dashed border-[#a8752a]/35 p-3 text-sm text-[#8c8170]">Noch keine fuer Spieler waehlbaren Zustaende angelegt.</div>}
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Zustand suchen..."
+            className="min-h-10 border border-[#a8752a]/35 bg-black/35 px-3 text-sm text-[#f4ead7] outline-none placeholder:text-[#8c8170] focus:border-[#ffd88c]"
+          />
+          <div className="grid max-h-72 gap-2 overflow-auto pr-1">
+            {visibleConditions.map((condition) => {
+              const active = activeIds.includes(condition.id);
+              return (
+                <div key={condition.id} className={`grid grid-cols-[1fr_auto] items-center gap-2 border p-2 ${active ? "border-[#ffd88c] bg-[#d6a14d]/12" : "border-[#a8752a]/30 bg-black/25"}`}>
+                  <button
+                    type="button"
+                    onClick={() => onToggleCondition(condition.id)}
+                    className="flex min-w-0 items-center gap-2 text-left"
+                  >
+                    {condition.condition?.iconUrl || condition.imageUrl ? <img src={condition.condition?.iconUrl || condition.imageUrl} alt="" className="h-7 w-7 object-contain" /> : <CircleDot className="h-4 w-4 shrink-0 text-[#ffd88c]" />}
+                    <span className="min-w-0">
+                      <span className="block truncate font-bold text-white">{condition.name}</span>
+                      <span className={`text-xs font-bold uppercase tracking-wide ${active ? "text-[#ffd88c]" : "text-[#8c8170]"}`}>{active ? "Aktiv" : "Inaktiv"}</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInfoId((current) => current === condition.id ? null : condition.id)}
+                    className="grid h-8 w-8 place-items-center border border-[#a8752a]/35 text-[#cfc2aa] hover:border-[#ffd88c] hover:text-[#ffd88c]"
+                    title="Zustand beschreiben"
+                  >
+                    <Info className="h-4 w-4" />
+                  </button>
+                </div>
+              );
+            })}
+            {!visibleConditions.length && <div className="border border-dashed border-[#a8752a]/35 p-3 text-sm text-[#8c8170]">{conditions.length ? "Kein Zustand passt zur Suche." : "Noch keine Zustaende angelegt."}</div>}
+          </div>
+          {infoCondition && (
+            <div className="border border-[#a8752a]/35 bg-black/35 p-3">
+              <div className="mb-1 text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">{infoCondition.name}</div>
+              <div className="max-h-36 overflow-auto text-sm leading-relaxed text-[#cfc2aa]">{infoCondition.description || "Keine Beschreibung hinterlegt."}</div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2011,7 +2122,6 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
   const sheet = buildSheetModel(character, data.catalog, ATTRIBUTES);
   const conditionOptions = data.catalog
     .filter((item) => item.type === "condition")
-    .filter((item) => item.condition?.playerSelectable !== false)
     .sort((a, b) => a.name.localeCompare(b.name, "de", { sensitivity: "base" }));
   const activeConditionIds = character.choices?.activeConditionIds ?? [];
   const weapon1 = { ...sheet.weapons[0], icon: <Sword className="h-14 w-14" /> };
@@ -2143,6 +2253,7 @@ export function CharacterSheetView({ selectedCharacter, onBack, onEditCharacter,
                     activeConditions={sheet.activeConditions ?? []}
                     open={conditionOpen}
                     onToggleOpen={() => setConditionOpen((current) => !current)}
+                    onClose={() => setConditionOpen(false)}
                     onToggleCondition={toggleCondition}
                   />
                   <LevelBadge level={sheet.level} />

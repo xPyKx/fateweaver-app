@@ -45,25 +45,50 @@ export interface BonusSource {
 
 export type PropertyEffectTarget =
   | AttributeKey
+  | "difficulty"
   | "hpBonus"
+  | "hpMax"
   | "stressBonus"
+  | "stressMax"
   | "experienceBonus"
   | "dodge"
   | "armorValue"
+  | "armorSlots"
   | "lightThreshold"
   | "heavyThreshold"
   | "attackBonus"
   | "damageBonus"
   | "damageDice"
   | "damageDiceMultiplier"
-  | "healingDuringRest";
+  | "healingDuringRest"
+  | "trainingBonus"
+  | "spellAttribute"
+  | "spellDifficulty"
+  | "spellAttack"
+  | "spellDamage"
+  | "initiative";
+
+export type PropertyEffectValueSource =
+  | AttributeKey
+  | "spellAttribute"
+  | "level"
+  | "tier"
+  | "trainingBonus"
+  | "difficulty"
+  | "dodge"
+  | "armorValue"
+  | "armorSlots"
+  | "hpMax"
+  | "stressMax"
+  | "lightThreshold"
+  | "heavyThreshold";
 
 export interface PropertyEffect {
   id: string;
   target: PropertyEffectTarget;
   value: number;
   condition?: string;
-  attributeKey?: AttributeKey | "";
+  attributeKey?: PropertyEffectValueSource | "";
   attributeOptions?: AttributeKey[];
 }
 
@@ -608,6 +633,7 @@ export interface CustomModuleStatBlock {
   attacks?: Array<{
     id: string;
     name: string;
+    attackBonus?: string;
     range?: string;
     damage?: string;
     effect?: string;
@@ -625,18 +651,32 @@ export interface CustomModuleStatBlock {
     label: string;
     value?: string;
     note?: string;
+    layout?: StatBlockLayoutData;
   }>;
   sections?: Array<{
     id: string;
     title: string;
-    kind: "text" | "fields" | "table";
+    kind: "text" | "fields" | "table" | "free";
     text?: string;
     columns?: string[];
     rows?: Array<{
       id: string;
+      kind?: "text" | "field" | "table";
+      label?: string;
+      value?: string;
+      text?: string;
+      columns?: string[];
       cells: string[];
     }>;
+    layout?: StatBlockLayoutData;
   }>;
+}
+
+export interface StatBlockLayoutData {
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
 }
 
 export interface CustomGmModule {

@@ -1243,6 +1243,7 @@ function normalizeStatBlock(statBlock: CustomGmModule["statBlock"]) {
     attacks: (statBlock.attacks ?? []).map((attack) => ({
       id: attack.id ?? crypto.randomUUID(),
       name: attack.name ?? "Angriff",
+      attackBonus: attack.attackBonus ?? "",
       range: attack.range ?? "",
       damage: attack.damage ?? "",
       effect: attack.effect ?? ""
@@ -1257,9 +1258,10 @@ function normalizeStatBlock(statBlock: CustomGmModule["statBlock"]) {
       id: row.id ?? crypto.randomUUID(),
       label: row.label ?? "Feld",
       value: row.value ?? "",
-      note: row.note ?? ""
+      note: row.note ?? "",
+      layout: normalizeStatBlockLayout(row.layout, 1, 1, 3, 1)
     })),
-    sections: (statBlock.sections ?? []).map((section) => ({
+    sections: (statBlock.sections ?? []).map((section, index) => ({
       id: section.id ?? crypto.randomUUID(),
       title: section.title ?? "Sektion",
       kind: section.kind ?? "text",
@@ -1267,9 +1269,24 @@ function normalizeStatBlock(statBlock: CustomGmModule["statBlock"]) {
       columns: section.columns ?? ["Name", "Wert"],
       rows: (section.rows ?? []).map((row) => ({
         id: row.id ?? crypto.randomUUID(),
+        kind: row.kind ?? "table",
+        label: row.label ?? "",
+        value: row.value ?? "",
+        text: row.text ?? "",
+        columns: row.columns ?? section.columns ?? ["Name", "Wert"],
         cells: row.cells ?? []
-      }))
+      })),
+      layout: normalizeStatBlockLayout(section.layout, 1, index + 2, 6, 2)
     }))
+  };
+}
+
+function normalizeStatBlockLayout(layout: { x?: number; y?: number; w?: number; h?: number } | undefined, x: number, y: number, w: number, h: number) {
+  return {
+    x: Math.max(1, Math.min(12, Number(layout?.x ?? x) || x)),
+    y: Math.max(1, Number(layout?.y ?? y) || y),
+    w: Math.max(1, Math.min(12, Number(layout?.w ?? w) || w)),
+    h: Math.max(1, Number(layout?.h ?? h) || h)
   };
 }
 

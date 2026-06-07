@@ -1,4 +1,4 @@
-import type { AttributeKey, BackgroundQuestionKind, CatalogItem, CatalogType, FateAbilityKind, GameOptionKind, MagicItemKind, PropertyEffectTarget, WeaponData } from "../../types/domain";
+import type { AttributeKey, BackgroundQuestionKind, CatalogItem, CatalogType, FateAbilityKind, GameOptionKind, MagicItemKind, PropertyEffectTarget, PropertyEffectValueSource, WeaponData } from "../../types/domain";
 
 export const catalogTypes: CatalogType[] = [
   "weapon",
@@ -33,18 +33,45 @@ export const attributes: { key: AttributeKey; label: string }[] = [
 
 export const effectTargets: { key: PropertyEffectTarget; label: string }[] = [
   ...attributes,
+  { key: "difficulty", label: "Schwierigkeit" },
   { key: "hpBonus", label: "HP" },
+  { key: "hpMax", label: "HP Maximum" },
   { key: "stressBonus", label: "Stress" },
+  { key: "stressMax", label: "Stress Maximum" },
   { key: "experienceBonus", label: "Erfahrung Bonus" },
   { key: "dodge", label: "Ausweichen" },
   { key: "armorValue", label: "Ruestungswert" },
+  { key: "armorSlots", label: "Ruestungsplaetze" },
   { key: "lightThreshold", label: "Grenzwert leicht" },
   { key: "heavyThreshold", label: "Grenzwert schwer" },
   { key: "attackBonus", label: "Angriffsbonus" },
   { key: "damageBonus", label: "Schadensbonus" },
   { key: "damageDice", label: "Schadenswuerfel" },
   { key: "damageDiceMultiplier", label: "Schadenswuerfel Multiplikator" },
-  { key: "healingDuringRest", label: "Heilung bei Rast" }
+  { key: "healingDuringRest", label: "Heilung bei Rast" },
+  { key: "trainingBonus", label: "Uebungsbonus" },
+  { key: "spellAttribute", label: "Zauberattribut" },
+  { key: "spellDifficulty", label: "Zauber-SG" },
+  { key: "spellAttack", label: "Zauberwurf" },
+  { key: "spellDamage", label: "Zauberschaden" },
+  { key: "initiative", label: "Initiative" }
+];
+
+export const valueSources: { key: PropertyEffectValueSource | ""; label: string }[] = [
+  { key: "", label: "Fester Wert" },
+  ...attributes,
+  { key: "spellAttribute", label: "Zauberattribut" },
+  { key: "level", label: "Stufe" },
+  { key: "tier", label: "Stufenbereich" },
+  { key: "trainingBonus", label: "Uebungsbonus" },
+  { key: "difficulty", label: "Schwierigkeit" },
+  { key: "dodge", label: "Ausweichen" },
+  { key: "armorValue", label: "Ruestungswert" },
+  { key: "armorSlots", label: "Ruestungsplaetze" },
+  { key: "hpMax", label: "HP Maximum" },
+  { key: "stressMax", label: "Stress Maximum" },
+  { key: "lightThreshold", label: "Grenzwert leicht" },
+  { key: "heavyThreshold", label: "Grenzwert schwer" }
 ];
 
 export const fateAbilityKinds: { key: FateAbilityKind; label: string }[] = [

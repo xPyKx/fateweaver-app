@@ -201,7 +201,7 @@ export function SupabaseStatus() {
                 </button>
                 {canManageWorkspaces && (
                   <button onClick={() => { setWorkspaceOpen(true); setMenuOpen(false); }} className="flex h-10 items-center gap-2 border border-[#a8752a]/45 bg-black/35 px-3 font-bold uppercase tracking-wide text-[#f2ca75]">
-                    <Users className="h-4 w-4" /> Spielrunde
+                    <Users className="h-4 w-4" /> Arbeitsbereich
                   </button>
                 )}
                 {canManageUsers && (

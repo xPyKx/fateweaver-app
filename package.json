@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "dev:server": "powershell -ExecutionPolicy Bypass -File scripts/dev-server.ps1 start",
+    "dev:status": "powershell -ExecutionPolicy Bypass -File scripts/dev-server.ps1 status",
+    "dev:stop": "powershell -ExecutionPolicy Bypass -File scripts/dev-server.ps1 stop",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",

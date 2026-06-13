@@ -316,6 +316,12 @@ create table if not exists public.campaigns (
   workspace_id uuid references public.workspaces(id) on delete cascade,
   name text not null,
   description text,
+  image_url text,
+  status text not null default 'active',
+  system_profile jsonb not null default '{}'::jsonb,
+  public_notes text,
+  gm_notes text,
+  next_session_id text,
   character_ids text[] not null default '{}',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -325,9 +331,20 @@ create table if not exists public.campaign_sessions (
   id uuid primary key,
   workspace_id uuid references public.workspaces(id) on delete cascade,
   campaign_id uuid not null references public.campaigns(id) on delete cascade,
+  arc_id text,
+  chapter_id text,
   name text not null,
   scheduled_at date,
+  status text not null default 'planned',
+  objective text,
+  preparation_notes text,
   notes text,
+  live_notes text,
+  recap text,
+  open_questions text[] not null default '{}',
+  next_hooks text[] not null default '{}',
+  active_scene_id text,
+  scene_ids text[] not null default '{}',
   shop_ids text[] not null default '{}',
   character_ids text[] not null default '{}',
   created_at timestamptz not null default now(),
@@ -370,11 +387,14 @@ create table if not exists public.custom_gm_modules (
   scope text not null default 'global',
   campaign_id uuid references public.campaigns(id) on delete cascade,
   session_id uuid references public.campaign_sessions(id) on delete cascade,
+  scene_id uuid,
   character_id text,
   tags text[] not null default '{}',
   summary text,
   gm_notes text,
   player_text text,
+  scene jsonb,
+  relations jsonb not null default '[]'::jsonb,
   fields jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -387,8 +407,28 @@ alter table public.custom_gm_modules add column if not exists tags text[] not nu
 alter table public.custom_gm_modules add column if not exists summary text;
 alter table public.custom_gm_modules add column if not exists gm_notes text;
 alter table public.custom_gm_modules add column if not exists player_text text;
+alter table public.custom_gm_modules add column if not exists scene_id uuid;
+alter table public.custom_gm_modules add column if not exists scene jsonb;
+alter table public.custom_gm_modules add column if not exists relations jsonb not null default '[]'::jsonb;
 alter table public.campaigns add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade;
+alter table public.campaigns add column if not exists image_url text;
+alter table public.campaigns add column if not exists status text not null default 'active';
+alter table public.campaigns add column if not exists system_profile jsonb not null default '{}'::jsonb;
+alter table public.campaigns add column if not exists public_notes text;
+alter table public.campaigns add column if not exists gm_notes text;
+alter table public.campaigns add column if not exists next_session_id text;
 alter table public.campaign_sessions add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade;
+alter table public.campaign_sessions add column if not exists arc_id text;
+alter table public.campaign_sessions add column if not exists chapter_id text;
+alter table public.campaign_sessions add column if not exists status text not null default 'planned';
+alter table public.campaign_sessions add column if not exists objective text;
+alter table public.campaign_sessions add column if not exists preparation_notes text;
+alter table public.campaign_sessions add column if not exists live_notes text;
+alter table public.campaign_sessions add column if not exists recap text;
+alter table public.campaign_sessions add column if not exists open_questions text[] not null default '{}';
+alter table public.campaign_sessions add column if not exists next_hooks text[] not null default '{}';
+alter table public.campaign_sessions add column if not exists active_scene_id text;
+alter table public.campaign_sessions add column if not exists scene_ids text[] not null default '{}';
 alter table public.custom_gm_modules add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade;
 alter table public.campaign_members add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade;
 alter table public.characters add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade;

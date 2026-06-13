@@ -6,6 +6,7 @@ import type {
   Character,
   CustomGmModule,
   GmSessionData,
+  GmTracker,
   InfoHint,
   LayoutTemplateTarget,
   LayoutTemplate,
@@ -58,6 +59,8 @@ export interface GameStore {
   deleteCampaignSession: (id: string) => void;
   upsertCustomGmModule: (module: CustomGmModule) => void;
   deleteCustomGmModule: (id: string) => void;
+  upsertGmTracker: (tracker: GmTracker) => void;
+  deleteGmTracker: (id: string) => void;
   upsertLayoutTemplate: (template: LayoutTemplate) => void;
   deleteLayoutTemplate: (id: string) => void;
   setActiveLayoutTemplate: (templateId: string, target: LayoutTemplateTarget, active: boolean) => void;

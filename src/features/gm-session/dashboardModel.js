@@ -8,12 +8,16 @@ export const BUILDER_TYPES = [
   ["location", "Ort"],
   ["faction", "Fraktion"],
   ["quest", "Quest"],
+  ["arc", "Arc"],
+  ["chapter", "Kapitel"],
+  ["scene", "Szene"],
   ["note", "Notiz"],
   ["handout", "Handout"],
   ["encounter", "Begegnung"],
   ["threat", "Bedrohung"],
   ["riddle", "Raetsel"],
-  ["rule", "Regel/Hausregel"]
+  ["rule", "Regel/Hausregel"],
+  ["reward", "Belohnung"]
 ];
 
 export const STATBLOCK_TEMPLATES = [
@@ -43,9 +47,11 @@ export function selectWorkspaceData(data, workspaceId) {
     catalog: (data.catalog ?? []).filter(inWorkspace),
     historyEvents: (data.historyEvents ?? []).filter(inWorkspace),
     messages: (data.messages ?? []).filter(inWorkspace),
+    workspaceInvites: (data.workspaceInvites ?? []).filter(inWorkspace),
     campaigns: (data.campaigns ?? []).filter(inWorkspace),
     campaignSessions: (data.campaignSessions ?? []).filter(inWorkspace),
     customGmModules: (data.customGmModules ?? []).filter(inWorkspace),
+    gmTrackers: (data.gmTrackers ?? []).filter(inWorkspace),
     layoutTemplates: (data.layoutTemplates ?? []).filter(inWorkspace),
     infoHints: (data.infoHints ?? []).filter(inWorkspace)
   };

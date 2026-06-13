@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AppData, CatalogItem } from "../../types/domain";
+import type { AppData, CatalogItem, LayoutTemplate } from "../../types/domain";
 import { createCharacter } from "../../lib/rules/characterRules";
 import { mergeAppData, normalizeLoadedData, resetFateInventoryOnFateChange } from "./GameStore";
 
@@ -9,6 +9,18 @@ const item: CatalogItem = {
   name: "R",
   description: "",
   fateAbility: { fateId: "fate-astral", kind: "fateCard", level: 1 }
+};
+
+const layoutTemplate: LayoutTemplate = {
+  id: "layout-old",
+  name: "Alter Bogen",
+  target: "character",
+  columns: 24,
+  rowHeight: 32,
+  rows: 36,
+  elements: [],
+  createdAt: "2026-06-08T10:00:00.000Z",
+  updatedAt: "2026-06-08T10:00:00.000Z"
 };
 
 function appData(partial: Partial<AppData>): AppData {
@@ -29,7 +41,7 @@ describe("game store data merge", () => {
       infoHints: [{ id: "hint-r", target: item.id, title: "R", body: "" }]
     }));
 
-    expect(normalized.catalog).toEqual([]);
+    expect(normalized.catalog.some((entry) => entry.id === item.id)).toBe(false);
     expect(normalized.infoHints).toEqual([]);
     expect(normalized.deletedCatalogItemIds).toContain(item.id);
   });
@@ -42,6 +54,32 @@ describe("game store data merge", () => {
 
     expect(merged.catalog.some((entry) => entry.id === item.id)).toBe(false);
     expect(merged.deletedCatalogItemIds).toEqual([item.id]);
+  });
+
+  it("keeps deleted layout templates removed during normalization", () => {
+    const normalized = normalizeLoadedData(appData({
+      layoutTemplates: [layoutTemplate],
+      deletedLayoutTemplateIds: [layoutTemplate.id],
+      activeLayoutTemplateIds: { character: layoutTemplate.id }
+    }));
+
+    expect(normalized.layoutTemplates).toEqual([]);
+    expect(normalized.activeLayoutTemplateIds).toBeUndefined();
+    expect(normalized.deletedLayoutTemplateIds).toEqual([layoutTemplate.id]);
+  });
+
+  it("does not restore deleted layout templates from remote data", () => {
+    const merged = mergeAppData(
+      appData({ deletedLayoutTemplateIds: [layoutTemplate.id] }),
+      appData({
+        layoutTemplates: [layoutTemplate],
+        activeLayoutTemplateIds: { character: layoutTemplate.id }
+      })
+    );
+
+    expect(merged.layoutTemplates).toEqual([]);
+    expect(merged.activeLayoutTemplateIds).toBeUndefined();
+    expect(merged.deletedLayoutTemplateIds).toEqual([layoutTemplate.id]);
   });
 
   it("keeps remote table characters visible when an old delete marker exists", () => {
@@ -68,7 +106,8 @@ describe("game store data merge", () => {
       ]
     }));
 
-    expect(normalized.catalog).toEqual([]);
+    expect(normalized.catalog.some((entry) => entry.id === "fate-flamme")).toBe(false);
+    expect(normalized.catalog.some((entry) => entry.id === "fate-schatten")).toBe(false);
     expect(normalized.deletedCatalogItemIds).toContain("fate-flamme");
     expect(normalized.deletedCatalogItemIds).toContain("fate-schatten");
   });

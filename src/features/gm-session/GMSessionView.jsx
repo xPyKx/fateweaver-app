@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { AlertTriangle, ArrowLeft, BookOpen, CalendarDays, Check, Circle, Gift, LayoutGrid, MessageSquare, MoreHorizontal, PackagePlus, Plus, Send, Store, Trash2, Upload, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, ArrowLeft, BookOpen, CalendarDays, Check, Circle, Copy, Gift, LayoutGrid, Link, MessageSquare, MoreHorizontal, PackagePlus, Plus, Send, Skull, Store, Trash2, Upload, UserPlus, X, Zap } from "lucide-react";
 import { Select } from "../../components/SelectControl";
 import { fileToPersistentImageUrl } from "../../lib/images/persistentImage";
 import { useGameStore } from "../../lib/store/GameStore";
@@ -12,20 +12,25 @@ import { LayoutTemplateBuilder } from "./LayoutTemplateBuilder";
 import { ModuleButton } from "./ModuleButton";
 
 export function GMPreparationView({ onBack }) {
-  const { data, activeWorkspace, updateGmSession, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule, upsertLayoutTemplate, deleteLayoutTemplate, setActiveLayoutTemplate } = useGameStore();
+  const { data, activeWorkspace, currentUserId, profile, updateGmSession, upsertCampaign, deleteCampaign, upsertCampaignSession, deleteCampaignSession, upsertCustomGmModule, deleteCustomGmModule, upsertLayoutTemplate, deleteLayoutTemplate, setActiveLayoutTemplate, inviteWorkspaceMember, revokeWorkspaceInvite } = useGameStore();
   const workspaceId = activeWorkspace?.id ?? data.activeWorkspaceId;
   const workspaceData = selectWorkspaceData(data, workspaceId);
   const gmSession = normalizeDashboardSession(data.gmSession);
   const [module, setModule] = useState("overview");
   const preparationModules = [
-    { key: "overview", label: "Uebersicht", description: "Was vorbereitet ist und was live genutzt wird", icon: <BookOpen className="h-4 w-4" />, count: preparationCount(workspaceData, gmSession) },
-    { key: "system", label: "Baukaesten", description: "Regeln, Kataloge und Charakterbogen", icon: <LayoutGrid className="h-4 w-4" />, count: workspaceData.catalog.length },
-    { key: "campaigns", label: "Kampagne", description: "Kampagnen, Sessions und Zuordnungen", icon: <CalendarDays className="h-4 w-4" />, count: (workspaceData.campaigns ?? []).length },
-    { key: "shops", label: "Shops", description: "Haendler, Inventar, Gruppen und Freigaben", icon: <Store className="h-4 w-4" />, count: gmSession.shops.length },
-    { key: "handouts", label: "Handouts", description: "Orte, Buecher, Seiten und Freigaben vorbereiten", icon: <BookOpen className="h-4 w-4" />, count: handoutPageCount(workspaceData.customGmModules ?? []) },
-    { key: "layouts", label: "Layouts", description: "WYSIWYG Raster-Builder fuer Charakterbogen und Gegner", icon: <LayoutGrid className="h-4 w-4" />, count: (workspaceData.layoutTemplates ?? []).length },
-    { key: "enemies", label: "Gegner", description: "Modulare Statblocks und Anzeige-Layouts", icon: <AlertTriangle className="h-4 w-4" />, count: enemyModules(workspaceData.customGmModules ?? []).length },
-    { key: "builder", label: "Baukasten", description: "NSC, Orte, Fraktionen, Quests und Notizen", icon: <LayoutGrid className="h-4 w-4" />, count: (workspaceData.customGmModules ?? []).length }
+    { key: "overview", label: "Start", description: "Stand, offene Vorbereitung und schneller Ueberblick", icon: <BookOpen className="h-4 w-4" />, count: preparationCount(workspaceData, gmSession) },
+    { key: "campaigns", label: "Kampagne & Sessions", description: "Kampagnen-Freitext, Abenteuerstruktur, Sessions und Szenen", icon: <CalendarDays className="h-4 w-4" />, count: (workspaceData.campaigns ?? []).length },
+    { key: "builder", label: "Welt & Inhalte", description: "NSC, Orte, Fraktionen, Quests, Szenen und Notizen", icon: <LayoutGrid className="h-4 w-4" />, count: (workspaceData.customGmModules ?? []).length },
+    { key: "enemies", label: "Gegner", description: "Gegner, Bedrohungen, Encounter und Statblocks", icon: <AlertTriangle className="h-4 w-4" />, count: enemyModules(workspaceData.customGmModules ?? []).length },
+    { key: "handouts", label: "Handouts", description: "Handouts, Buecher, Seiten und Spielerfreigaben", icon: <BookOpen className="h-4 w-4" />, count: handoutPageCount(workspaceData.customGmModules ?? []) },
+    { key: "shops", label: "Shops", description: "Haendler, Inventar, Gruppen und Shopfreigaben", icon: <Store className="h-4 w-4" />, count: gmSession.shops.length },
+    { key: "system", label: "Regelwerk", description: "Regeln, Kataloge, Spielwerte und Charakteroptionen", icon: <LayoutGrid className="h-4 w-4" />, count: workspaceData.catalog.length },
+    { key: "layouts", label: "Bogen & Layouts", description: "Charakterbogen- und Gegnerlayout-Vorlagen", icon: <LayoutGrid className="h-4 w-4" />, count: (workspaceData.layoutTemplates ?? []).length }
+  ];
+  const preparationGroups = [
+    { label: "1. Kampagne planen", keys: ["overview", "campaigns"] },
+    { label: "2. Inhalte vorbereiten", keys: ["builder", "enemies", "handouts", "shops"] },
+    { label: "3. System konfigurieren", keys: ["system", "layouts"] }
   ];
   const activeModule = preparationModules.find((entry) => entry.key === module) ?? preparationModules[0];
   function saveSession(patch) {
@@ -41,8 +46,18 @@ export function GMPreparationView({ onBack }) {
             <h1 className="text-4xl font-light text-white">Werkbank</h1>
           </div>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {preparationModules.map((entry) => <ModuleButton key={entry.key} module={entry} active={module === entry.key} onClick={() => setModule(entry.key)} />)}
+        <div className="grid gap-3">
+          {preparationGroups.map((group) => (
+            <div key={group.label} className="grid gap-2">
+              <div className="text-[0.65rem] font-black uppercase tracking-[0.18em] text-[#8c8170]">{group.label}</div>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {group.keys.map((key) => {
+                  const entry = preparationModules.find((item) => item.key === key);
+                  return entry ? <ModuleButton key={entry.key} module={entry} active={module === entry.key} onClick={() => setModule(entry.key)} /> : null;
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
       <section className="border border-[#a8752a]/30 bg-black/15 p-4">
@@ -57,7 +72,7 @@ export function GMPreparationView({ onBack }) {
       </section>
       {module === "overview" && <PreparationOverview data={workspaceData} gmSession={gmSession} />}
       {module === "system" && <GMSettings />}
-      {module === "campaigns" && <CampaignModule data={workspaceData} gmSession={gmSession} onSaveCampaign={upsertCampaign} onDeleteCampaign={deleteCampaign} onSaveSession={upsertCampaignSession} onDeleteSession={deleteCampaignSession} />}
+      {module === "campaigns" && <CampaignModule data={workspaceData} gmSession={gmSession} currentUserId={currentUserId} profile={profile} onSaveCampaign={upsertCampaign} onDeleteCampaign={deleteCampaign} onSaveSession={upsertCampaignSession} onDeleteSession={deleteCampaignSession} onSaveModule={upsertCustomGmModule} onInvite={inviteWorkspaceMember} onRevokeInvite={revokeWorkspaceInvite} />}
       {module === "shops" && <ShopModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} />}
       {module === "handouts" && <ReleaseCenterModule data={workspaceData} onSave={upsertCustomGmModule} />}
       {module === "layouts" && <LayoutTemplateBuilder data={workspaceData} workspaceId={workspaceId} onSave={upsertLayoutTemplate} onDelete={deleteLayoutTemplate} onSetActive={setActiveLayoutTemplate} />}
@@ -73,7 +88,7 @@ export function GMDashboardView({ onBack }) {
   const workspaceData = selectWorkspaceData(data, workspaceId);
   const gmSession = normalizeDashboardSession(data.gmSession);
   const historyEvents = buildTimelineEvents(workspaceData, gmSession.inventoryHistory);
-  const [module, setModule] = useState("players");
+  const [module, setModule] = useState("live");
 
   function saveSession(patch) {
     updateGmSession({ ...gmSession, ...patch });
@@ -128,11 +143,13 @@ export function GMDashboardView({ onBack }) {
 
   const pending = gmSession.shopRequests.filter((request) => request.status === "pending");
   const unreadMessages = (workspaceData.messages ?? []).filter((message) => message.fromRole === "player" && message.status === "unread").length;
+  const liveContext = buildLiveContext(workspaceData);
   const dashboardModules = [
+    { key: "live", label: "Live", description: "Aktive Kampagne, Session und Szene am Spieltisch", icon: <Zap className="h-4 w-4" />, count: liveContext.activeScene ? 1 : 0 },
     { key: "players", label: "Spieler", description: "Charaktere, Inventar und Kurzwerte", icon: <Gift className="h-4 w-4" />, count: workspaceData.characters.length },
     { key: "enemies", label: "Gegner", description: "Vorbereitete Statblocks fuer die aktive Szene", icon: <AlertTriangle className="h-4 w-4" />, count: enemyModules(workspaceData.customGmModules ?? []).length },
-    { key: "shops", label: "Shops", description: "Aktive Shops und Freigaben", icon: <Store className="h-4 w-4" />, count: gmSession.shops.filter((shop) => shop.active).length || gmSession.shops.length },
-    { key: "releases", label: "Freigaben", description: "Orte, Bibliotheken und Handout-Seiten", icon: <BookOpen className="h-4 w-4" />, count: handoutPageCount(workspaceData.customGmModules ?? []) },
+    { key: "shops", label: "Shops", description: "Aktive Shops und Anfragen", icon: <Store className="h-4 w-4" />, count: gmSession.shops.filter((shop) => shop.active).length || gmSession.shops.length },
+    { key: "releases", label: "Handouts", description: "Orte, Bibliotheken und Handout-Seiten", icon: <BookOpen className="h-4 w-4" />, count: handoutPageCount(workspaceData.customGmModules ?? []) },
     { key: "messages", label: "Nachrichten", description: "GM- und Spieler-Kommunikation", icon: <MessageSquare className="h-4 w-4" />, count: unreadMessages || (workspaceData.messages ?? []).length },
     { key: "history", label: "History", description: "Timeline aller Ereignisse", icon: <PackagePlus className="h-4 w-4" />, count: historyEvents.length }
   ];
@@ -166,6 +183,7 @@ export function GMDashboardView({ onBack }) {
       </section>
       {pending.length > 0 && <section className="grid gap-3 border border-[#a8752a]/45 bg-black/25 p-4"><div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Offene Shop-Anfragen</div>{pending.map((request) => <RequestRow key={request.id} request={request} data={data} onConfirm={() => confirmRequest(request.id)} onDecline={() => declineRequest(request.id)} />)}</section>}
       <div>
+        {module === "live" && <LiveSessionModule data={workspaceData} context={liveContext} onSaveSession={upsertCampaignSession} onSaveModule={upsertCustomGmModule} />}
         {module === "players" && <PlayerModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} onGive={giveItem} onCondition={toggleCharacterCondition} onMessage={sendMessage} history={historyEvents} />}
         {module === "enemies" && <EnemyDashboardModule data={workspaceData} />}
         {module === "shops" && <ShopModule data={workspaceData} gmSession={gmSession} saveSession={saveSession} />}
@@ -179,15 +197,145 @@ export function GMDashboardView({ onBack }) {
 
 export const GMSessionView = GMDashboardView;
 
+function LiveSessionModule({ data, context, onSaveSession, onSaveModule }) {
+  const campaigns = data.campaigns ?? [];
+  const sessions = data.campaignSessions ?? [];
+  const modules = data.customGmModules ?? [];
+  const [campaignId, setCampaignId] = useState(context.activeCampaign?.id ?? campaigns[0]?.id ?? "");
+  const campaign = campaigns.find((entry) => entry.id === campaignId) ?? context.activeCampaign ?? campaigns[0];
+  const campaignSessions = sessions.filter((session) => session.campaignId === campaign?.id).sort(byScheduledDate);
+  const fallbackSession = context.activeSession?.campaignId === campaign?.id ? context.activeSession : campaignSessions[0];
+  const [sessionId, setSessionId] = useState(fallbackSession?.id ?? "");
+  const session = campaignSessions.find((entry) => entry.id === sessionId) ?? fallbackSession;
+  const campaignScenes = modules.filter((module) => (module.itemType ?? "note") === "scene" && (module.campaignId === campaign?.id || module.sessionId === session?.id));
+  const sessionScenes = campaignScenes.filter((scene) => scene.sessionId === session?.id || (session?.sceneIds ?? []).includes(scene.id));
+  const fallbackScene = session?.activeSceneId ? sessionScenes.find((scene) => scene.id === session.activeSceneId) : context.activeScene;
+  const [sceneId, setSceneId] = useState(fallbackScene?.id ?? sessionScenes[0]?.id ?? "");
+  const activeScene = sessionScenes.find((scene) => scene.id === sceneId) ?? fallbackScene ?? sessionScenes[0];
+  const linked = linkedSceneModules(activeScene, modules);
+  const arc = modules.find((module) => module.id === session?.arcId);
+  const chapter = modules.find((module) => module.id === session?.chapterId);
+
+  function patchSession(patch) {
+    if (!session) return;
+    onSaveSession({ ...session, ...patch });
+  }
+
+  function setActiveScene(scene) {
+    setSceneId(scene.id);
+    patchSession({ activeSceneId: scene.id, status: session?.status === "completed" ? session.status : "active" });
+    if ((scene.status ?? "draft") !== "active") onSaveModule({ ...scene, status: "active" });
+  }
+
+  function patchScene(patch) {
+    if (!activeScene) return;
+    onSaveModule({ ...activeScene, ...patch });
+  }
+
+  if (!campaign || !session) {
+    return <section className="border border-[#a8752a]/30 bg-black/25 p-4 text-[#8c8170]">Lege in der GM-Vorbereitung zuerst eine Kampagne und Session an.</section>;
+  }
+
+  return (
+    <section className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)_340px]">
+      <aside className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
+        <div>
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Live-Kontext</div>
+          <div className="mt-1 text-sm text-[#8c8170]">Aktive Kampagne und Session. Szenen sind optional.</div>
+        </div>
+        <Select value={campaign.id} onChange={(id) => { setCampaignId(id); setSessionId(""); setSceneId(""); }} options={campaigns.map((entry) => [entry.id, entry.name])} />
+        <Select value={session.id} onChange={(id) => { setSessionId(id); setSceneId(""); }} options={campaignSessions.map((entry) => [entry.id, entry.name])} />
+        <div className="grid gap-2 border-t border-[#a8752a]/25 pt-3">
+          <Metric label="Arc" value={arc?.name ?? "-"} />
+          <Metric label="Kapitel" value={chapter?.name ?? "-"} />
+          <Metric label="Status" value={optionLabel(SESSION_STATUS_OPTIONS, session.status ?? "planned")} />
+        </div>
+        <button onClick={() => patchSession({ status: "active" })} className="min-h-10 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 text-sm font-bold uppercase text-[#ffd88c]">Session starten</button>
+        <button onClick={() => patchSession({ status: "completed" })} className="min-h-10 border border-green-300/45 px-3 text-sm font-bold uppercase text-green-200">Session abschliessen</button>
+      </aside>
+
+      <div className="grid min-w-0 content-start gap-4">
+        <div className="border border-[#a8752a]/35 bg-black/25 p-4">
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="mr-auto">
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Session-Freitext</div>
+              <h2 className="text-3xl font-light text-white">{session.name}</h2>
+              {session.objective && <p className="mt-1 text-sm text-[#cfc2aa]">{session.objective}</p>}
+            </div>
+            <Select value={session.status ?? "planned"} onChange={(status) => patchSession({ status })} options={SESSION_STATUS_OPTIONS} />
+          </div>
+          <div className="mt-4 grid gap-3">
+            <LiveTextBlock label="Ablauf / Beschreibung" value={session.notes} />
+            <LiveTextBlock label="Vorbereitung" value={session.preparationNotes} />
+            <LiveTextBlock label="GM-Notizen" value={session.liveNotes} />
+            <LiveTextBlock label="Naechste Hooks" value={(session.nextHooks ?? []).join("\n")} />
+            {!session.notes && !session.preparationNotes && !session.liveNotes && !(session.nextHooks ?? []).length && (
+              <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Noch kein Session-Freitext. Schreibe ihn in der GM-Vorbereitung direkt in der Session.</div>
+            )}
+          </div>
+        </div>
+        <div className="border border-[#a8752a]/35 bg-black/25 p-4">
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="mr-auto">
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Optionale Szene</div>
+              <h2 className="text-3xl font-light text-white">{activeScene?.name ?? "Keine Szene ausgewaehlt"}</h2>
+              {activeScene?.summary && <p className="mt-1 text-sm text-[#cfc2aa]">{activeScene.summary}</p>}
+            </div>
+            {activeScene && <Select value={activeScene.status ?? "draft"} onChange={(status) => patchScene({ status })} options={BUILDER_STATUS} />}
+          </div>
+          {activeScene ? <div className="mt-4 grid gap-3">
+            <LiveTextBlock label="Einstieg" value={activeScene.scene?.opener} />
+            <LiveTextBlock label="Vorlesetext" value={activeScene.scene?.readAloud || activeScene.playerText} />
+            <LiveTextBlock label="GM-Notizen" value={activeScene.gmNotes} />
+            <LiveTextBlock label="Geheimnisse" value={activeScene.scene?.secrets} />
+            <LiveTextBlock label="Konsequenzen" value={activeScene.scene?.consequences} />
+          </div> : <div className="mt-4 border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Keine Szene ausgewaehlt. Du kannst die Session trotzdem komplett ueber den Freitext und die GM-Notizen leiten.</div>}
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {linked.enemies.map((enemy) => <EnemyStatCard key={enemy.id} module={enemy} data={data} />)}
+          {linked.handouts.map((handout) => <LiveLinkedCard key={handout.id} module={handout} />)}
+          {linked.npcs.map((npc) => <LiveLinkedCard key={npc.id} module={npc} />)}
+          {linked.encounters.map((encounter) => <LiveLinkedCard key={encounter.id} module={encounter} />)}
+        </div>
+      </div>
+
+      <aside className="grid content-start gap-4">
+        <div className="border border-[#a8752a]/35 bg-black/25 p-4">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Agenda</div>
+          <div className="mt-3 grid gap-2">
+            {sessionScenes.map((scene) => <button key={scene.id} onClick={() => setActiveScene(scene)} className={`grid gap-1 border p-3 text-left ${activeScene?.id === scene.id ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}><span className="text-sm font-bold">{scene.name}</span><span className="text-xs text-[#8c8170]">{optionLabel(BUILDER_STATUS, scene.status ?? "draft")}</span></button>)}
+            {!sessionScenes.length && <div className="text-sm text-[#8c8170]">Keine Szenen in dieser Session.</div>}
+          </div>
+        </div>
+        <div className="border border-[#a8752a]/35 bg-black/25 p-4">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Live-Notizen</div>
+          <textarea value={session.liveNotes ?? ""} onChange={(event) => patchSession({ liveNotes: event.target.value })} className="mt-3 min-h-48 w-full border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none" />
+          <div className="mt-3 text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Offene Fragen</div>
+          <textarea value={(session.openQuestions ?? []).join("\n")} onChange={(event) => patchSession({ openQuestions: event.target.value.split("\n").map((entry) => entry.trim()).filter(Boolean) })} className="mt-2 min-h-24 w-full border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none" />
+        </div>
+      </aside>
+    </section>
+  );
+}
+
+function LiveTextBlock({ label, value }) {
+  if (!value) return null;
+  return <div className="border border-[#a8752a]/25 bg-black/20 p-3"><div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">{label}</div><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#cfc2aa]">{value}</p></div>;
+}
+
+function LiveLinkedCard({ module }) {
+  return <article className="border border-[#a8752a]/30 bg-black/25 p-3"><div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">{optionLabel(BUILDER_TYPES, module.itemType ?? "note")}</div><h3 className="mt-1 text-xl font-light text-white">{module.name}</h3>{module.summary && <p className="mt-2 text-sm text-[#cfc2aa]">{module.summary}</p>}{module.playerText && <p className="mt-2 whitespace-pre-wrap text-sm text-[#8c8170]">{module.playerText}</p>}</article>;
+}
+
 function PreparationOverview({ data, gmSession }) {
   const modules = data.customGmModules ?? [];
   const cards = [
-    ["Kampagnen", (data.campaigns ?? []).length, "Kampagnen und geplante Sessions"],
+    ["Kampagnen & Sessions", (data.campaigns ?? []).length, "Kampagnen-Freitext, Abenteuerstruktur und Sessionplanung"],
     ["Shops", gmSession.shops.length, "Haendler, Angebote und Shopgruppen"],
     ["Gegner", enemyModules(modules).length, "Modulare Statblocks fuer Begegnungen"],
     ["Handouts", handoutPageCount(modules), "Vorbereitete Seiten und Spielerfreigaben"],
-    ["Baukasten", modules.length, "NSC, Orte, Fraktionen, Quests und Notizen"],
-    ["Regel-Katalog", data.catalog.length, "Systembausteine und Charakterbogen"]
+    ["Welt & Inhalte", modules.length, "NSC, Orte, Fraktionen, Quests, Szenen und Notizen"],
+    ["Regelwerk", data.catalog.length, "Systembausteine und Charakteroptionen"]
   ];
   return (
     <section className="grid gap-4 lg:grid-cols-3">
@@ -199,11 +347,11 @@ function PreparationOverview({ data, gmSession }) {
         </div>
       ))}
       <div className="border border-[#a8752a]/35 bg-black/25 p-4 lg:col-span-3">
-        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Arbeitslogik</div>
+        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Arbeitsfluss</div>
         <div className="mt-3 grid gap-3 text-sm text-[#cfc2aa] md:grid-cols-3">
-          <div className="border border-[#a8752a]/25 bg-black/20 p-3"><strong className="text-white">Vorbereiten</strong><p className="mt-2">Kampagnen, Shops, Handouts, Gegner und Regeln werden hier gebaut und gepflegt.</p></div>
-          <div className="border border-[#a8752a]/25 bg-black/20 p-3"><strong className="text-white">Aktivieren</strong><p className="mt-2">Status, Sichtbarkeit und Freigaben bestimmen, was spaeter in der Session nutzbar ist.</p></div>
-          <div className="border border-[#a8752a]/25 bg-black/20 p-3"><strong className="text-white">Live nutzen</strong><p className="mt-2">Das GM Dashboard zeigt vorbereitete Inhalte kompakt fuer Entscheidungen am Spieltisch.</p></div>
+          <div className="border border-[#a8752a]/25 bg-black/20 p-3"><strong className="text-white">Kampagne & Sessions</strong><p className="mt-2">Kampagnen-Freitext, GM-Notizen, Abenteuerstruktur, Sessions, Recaps und Szenen.</p></div>
+          <div className="border border-[#a8752a]/25 bg-black/20 p-3"><strong className="text-white">Welt & Inhalte</strong><p className="mt-2">NSC, Orte, Fraktionen, Quests, Szenen, Notizen, Beziehungen und Vorlagen.</p></div>
+          <div className="border border-[#a8752a]/25 bg-black/20 p-3"><strong className="text-white">Live Dashboard</strong><p className="mt-2">Aktive Session leiten, Szene wechseln, Notizen schreiben und vorbereitete Inhalte nutzen.</p></div>
         </div>
       </div>
     </section>
@@ -301,16 +449,17 @@ function EnemyDashboardModule({ data }) {
         </div>
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
-        {visibleEnemies.map((enemy) => <EnemyStatCard key={enemy.id} module={enemy} />)}
+        {visibleEnemies.map((enemy) => <EnemyStatCard key={enemy.id} module={enemy} data={data} />)}
         {!visibleEnemies.length && <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Keine vorbereiteten Gegner. Lege sie in der GM-Vorbereitung unter Gegner an.</div>}
       </div>
     </section>
   );
 }
 
-function EnemyStatCard({ module }) {
+function EnemyStatCard({ module, data }) {
   const stat = module.statBlock ?? defaultStatBlock("standard");
   const boss = stat.layout === "boss" || stat.template === "boss";
+  const layout = enemyLayoutTemplates(data).find((template) => template.id === (stat.layoutTemplateId ?? data.activeLayoutTemplateIds?.enemy));
   return (
     <article className={`grid gap-3 border bg-black/25 p-4 ${boss ? "border-red-300/45" : "border-[#a8752a]/35"}`}>
       <div className="flex flex-wrap items-start gap-3">
@@ -328,11 +477,68 @@ function EnemyStatCard({ module }) {
         <Metric label="Verteidigung" value={stat.defense ?? "-"} />
       </div>
       {(stat.traits ?? []).length > 0 && <div className="flex flex-wrap gap-1">{stat.traits.map((trait) => <span key={trait} className="border border-[#a8752a]/25 px-2 py-1 text-xs text-[#cfc2aa]">{trait}</span>)}</div>}
+      {layout && <EnemyLayoutValuePreview module={module} stat={stat} layout={layout} />}
       {(stat.attacks ?? []).slice(0, boss ? 4 : 2).map((attack) => <div key={attack.id} className="border border-[#a8752a]/25 bg-black/20 p-3 text-sm"><div className="font-bold text-white">{attack.name} {attack.attackBonus && <span className="text-[#ffd88c]">{formatAttackBonus(attack.attackBonus)}</span>} <span className="text-[#8c8170]">{attack.range}</span></div><div className="text-[#ffd88c]">{attack.damage}</div>{attack.effect && <p className="mt-1 text-[#cfc2aa]">{attack.effect}</p>}</div>)}
+      {(stat.abilities ?? []).length > 0 && <EnemyAbilityList abilities={stat.abilities} />}
       {stat.tactics && <p className="border-t border-[#a8752a]/25 pt-3 text-sm text-[#cfc2aa]">{stat.tactics}</p>}
       <StatBlockSectionsPreview stat={stat} compact />
     </article>
   );
+}
+
+function EnemyLayoutValuePreview({ module, stat, layout }) {
+  const hidden = new Set(["enemy.name", "enemy.role", "enemy.difficulty", "enemy.hp", "enemy.stress", "enemy.armor", "enemy.defense", "enemy.traits", "enemy.attacks", "enemy.abilities", "enemy.tactics", "enemy.loot"]);
+  const values = enemyEditableElements(layout)
+    .filter((element) => !hidden.has(element.valueKey))
+    .map((element) => {
+      const value = enemyDisplayValue(module, stat, element.valueKey);
+      return value ? { key: element.valueKey, label: element.title || enemySourceLabel(element.valueKey), value } : null;
+    })
+    .filter(Boolean);
+  if (!values.length) return null;
+  return (
+    <div className="grid gap-2 border border-[#a8752a]/20 bg-black/15 p-3 sm:grid-cols-2">
+      {values.map((entry) => (
+        <div key={entry.key} className="grid gap-1">
+          <div className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#f2ca75]">{entry.label}</div>
+          <div className="text-sm text-[#f4ead7]">{entry.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EnemyAbilityList({ abilities }) {
+  return (
+    <div className="grid gap-4 border-t border-[#a8752a]/25 pt-3">
+      {abilities.map((ability) => (
+        <div key={ability.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 text-sm">
+          <div className="min-w-0">
+            <div className="text-base leading-snug text-white">
+              <span className="font-black">{ability.name}</span>
+              <span className="text-[#cfc2aa]"> - </span>
+              <span className="italic text-[#e8ddc8]">{abilityKindLabel(ability.kind)}</span>
+            </div>
+            {ability.text && <div className="mt-1 whitespace-pre-wrap leading-relaxed text-[#cfc2aa]">{ability.text}</div>}
+          </div>
+          <AbilityIcon icon={ability.icon} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AbilityIcon({ icon }) {
+  if (icon === "skull") return <Skull className="mt-1 h-5 w-5 text-white" />;
+  if (icon === "bolt") return <Zap className="mt-1 h-5 w-5 text-white" />;
+  return null;
+}
+
+function abilityKindLabel(kind) {
+  if (kind === "passive") return "Passiv";
+  if (kind === "reaction") return "Reaktion";
+  if (kind === "boss") return "Boss-Aktion";
+  return "Action";
 }
 
 function PlayerModule({ data, gmSession, saveSession, onGive, onCondition, onMessage, history }) {
@@ -438,6 +644,8 @@ function InventorySummary({ title, items }) {
 
 function ShopModule({ data, gmSession, saveSession }) {
   const [activeShopId, setActiveShopId] = useState(gmSession.shops.find((shop) => shop.active)?.id ?? gmSession.shops[0]?.id ?? "");
+  const [activeGroupId, setActiveGroupId] = useState((gmSession.shopGroups ?? [])[0]?.id ?? "");
+  const [editorKind, setEditorKind] = useState(gmSession.shops.length ? "shop" : "group");
   const [newName, setNewName] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupShopId, setNewGroupShopId] = useState("");
@@ -445,8 +653,9 @@ function ShopModule({ data, gmSession, saveSession }) {
   const [step, setStep] = useState(1);
   const [releaseOpen, setReleaseOpen] = useState(false);
   const activeShop = gmSession.shops.find((shop) => shop.id === activeShopId);
-  const shopItems = data.catalog.filter((item) => ["magicItem", "weapon", "armor", "equipment", "potion", "material"].includes(item.type));
   const groups = gmSession.shopGroups ?? [];
+  const activeGroup = groups.find((group) => group.id === activeGroupId);
+  const shopItems = data.catalog.filter((item) => ["magicItem", "weapon", "armor", "equipment", "potion", "material"].includes(item.type));
 
   function updateShop(patch) {
     if (!activeShop) return;
@@ -458,6 +667,7 @@ function ShopModule({ data, gmSession, saveSession }) {
     const shop = { id: crypto.randomUUID(), name, description: "", imageUrl: "", interiorDescription: "", interiorImageUrls: [], ownerName: "", ownerDescription: "", ownerImageUrls: [], releasedTo: [], active: gmSession.shops.length === 0, listings: [] };
     saveSession({ shops: [...gmSession.shops, shop] });
     setActiveShopId(shop.id);
+    setEditorKind("shop");
     setNewName("");
     setStep(1);
   }
@@ -468,10 +678,19 @@ function ShopModule({ data, gmSession, saveSession }) {
     const shops = gmSession.shops.filter((shop) => shop.id !== activeShop.id);
     saveSession({ shops, shopGroups: groups.map((group) => ({ ...group, shopIds: group.shopIds.filter((id) => id !== activeShop.id) })) });
     setActiveShopId(shops[0]?.id ?? "");
+    if (!shops.length) setEditorKind(groups.length ? "group" : "shop");
   }
   function setActive(id) {
-    setActiveShopId(id);
     saveSession({ shops: gmSession.shops.map((shop) => ({ ...shop, active: shop.id === id })) });
+  }
+  function selectShop(id) {
+    setActiveShopId(id);
+    setEditorKind("shop");
+    setStep(1);
+  }
+  function selectGroup(id) {
+    setActiveGroupId(id);
+    setEditorKind("group");
   }
   function addListing() {
     if (!activeShop || !itemId) return;
@@ -494,7 +713,10 @@ function ShopModule({ data, gmSession, saveSession }) {
   function createGroup() {
     const name = newGroupName.trim();
     if (!name) return;
-    saveSession({ shopGroups: [...groups, { id: crypto.randomUUID(), name, shopIds: newGroupShopId ? [newGroupShopId] : [], releasedTo: [] }] });
+    const group = { id: crypto.randomUUID(), name, shopIds: newGroupShopId ? [newGroupShopId] : [], releasedTo: [] };
+    saveSession({ shopGroups: [...groups, group] });
+    setActiveGroupId(group.id);
+    setEditorKind("group");
     setNewGroupName("");
     setNewGroupShopId("");
   }
@@ -510,15 +732,113 @@ function ShopModule({ data, gmSession, saveSession }) {
   }
   function dissolveGroup(groupId) {
     saveSession({ shopGroups: groups.filter((group) => group.id !== groupId) });
+    if (activeGroupId === groupId) setActiveGroupId(groups.find((group) => group.id !== groupId)?.id ?? "");
   }
 
-  return <section className="grid gap-4 lg:grid-cols-[340px_1fr]"><div className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4"><div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Shops</div>{gmSession.shops.map((shop) => <button key={shop.id} onClick={() => setActive(shop.id)} className={`flex items-center justify-between border px-3 py-2 text-left ${shop.id === activeShopId ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{shop.name}{shop.active && <Circle className="h-3 w-3 fill-current" />}</button>)}<div className="grid grid-cols-[1fr_auto] gap-2"><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Neuer Shop" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><button onClick={createShop} className="grid h-10 w-10 place-items-center border border-[#d6a14d]/60 bg-[#d6a14d]/12 text-[#ffd88c]"><Plus className="h-4 w-4" /></button></div><div className="mt-4 border-t border-[#a8752a]/25 pt-4"><div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Shopgruppen</div>{groups.map((group) => <GroupEditor key={group.id} group={group} shops={gmSession.shops} characters={data.characters} onUpdate={(patch) => updateGroup(group.id, patch)} onDissolve={() => dissolveGroup(group.id)} />)}<div className="mt-2 grid gap-2"><input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="Neue Gruppe" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><Select value={newGroupShopId} onChange={setNewGroupShopId} options={[["", "Optionalen Start-Shop waehlen"], ...gmSession.shops.map((shop) => [shop.id, shop.name])]} /><button onClick={createGroup} className="min-h-10 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 text-[#ffd88c]">Gruppe erstellen</button></div></div></div><div className="grid gap-4 border border-[#a8752a]/35 bg-black/25 p-4">{activeShop ? <><div className="flex flex-wrap items-center gap-3"><div className="mr-auto"><div className="text-2xl font-light text-white">{activeShop.name}</div><div className="text-xs font-bold uppercase tracking-[0.14em] text-[#8c8170]">{activeShop.active ? "Aktiv besucht" : "Inaktiv"}</div></div><ShopGroupSelect shop={activeShop} groups={groups} onAssign={(groupId) => assignShopToGroup(activeShop.id, groupId)} onRemove={(groupId) => removeShopFromGroup(activeShop.id, groupId)} /><button onClick={() => setReleaseOpen(true)} className="border border-[#a8752a]/45 px-3 py-2 text-sm text-[#ffd88c]">Freigeben</button><button onClick={deleteShop} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200" title="Shop loeschen"><Trash2 className="h-4 w-4" /></button>{[1, 2, 3, 4].map((entry) => <button key={entry} onClick={() => setStep(entry)} className={`h-9 w-9 border ${step === entry ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{entry}</button>)}</div>{step === 1 && <ShopBasics shop={activeShop} onPatch={updateShop} />}{step === 2 && <ShopInterior shop={activeShop} onPatch={updateShop} />}{step === 3 && <ShopOwner shop={activeShop} onPatch={updateShop} />}{step === 4 && <div className="grid gap-4"><div className="grid gap-2 md:grid-cols-[1fr_auto_auto]"><Select value={itemId} onChange={setItemId} options={[["", "Gegenstand in Shop platzieren"], ...shopItems.map((item) => [item.id, item.name])]} /><button onClick={addListing} disabled={!itemId} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Platzieren</button><button onClick={clearSoldListings} className="border border-red-300/45 px-4 py-2 font-bold uppercase text-red-200">Gekaufte entfernen</button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{activeShop.listings.map((listing) => <ShopListingCard key={listing.id} listing={listing} item={data.catalog.find((entry) => entry.id === listing.itemId)} requests={gmSession.shopRequests.filter((request) => request.listingId === listing.id)} data={data} onDelete={() => deleteListing(listing.id)} />)}</div></div>}{releaseOpen && <div className="fixed inset-0 z-[220] grid place-items-center bg-black/80 p-4" onMouseDown={(event) => event.target === event.currentTarget && setReleaseOpen(false)}><div className="w-full max-w-2xl border border-[#a8752a]/60 bg-[#070b12] p-4"><div className="mb-3 flex items-center justify-between"><div className="text-xl text-white">Shop freigeben</div><button onClick={() => setReleaseOpen(false)} className="grid h-9 w-9 place-items-center border border-[#a8752a]/45"><X className="h-4 w-4" /></button></div><ReleasePanel shop={activeShop} characters={data.characters} onToggle={toggleRelease} onAll={() => updateShop({ releasedTo: (activeShop.releasedTo ?? []).includes("all") ? [] : ["all"] })} /></div></div>}</> : <div className="p-6 text-[#8c8170]">Noch kein Shop angelegt.</div>}</div></section>;
+  return (
+    <section className="grid gap-4 xl:grid-cols-[280px_280px_minmax(0,1fr)]">
+      <div className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
+        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Shops</div>
+        <div className="grid gap-2">
+          {gmSession.shops.map((shop) => (
+            <button key={shop.id} onClick={() => selectShop(shop.id)} className={`grid grid-cols-[1fr_auto] items-center gap-2 border px-3 py-3 text-left ${editorKind === "shop" && shop.id === activeShopId ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/35 bg-black/20 text-[#cfc2aa]"}`}>
+              <span className="min-w-0 truncate">{shop.name}</span>
+              {shop.active && <Circle className="h-3 w-3 fill-current" />}
+            </button>
+          ))}
+          {!gmSession.shops.length && <div className="border border-dashed border-[#a8752a]/30 p-3 text-sm text-[#8c8170]">Noch keine Shops.</div>}
+        </div>
+        <div className="grid grid-cols-[1fr_auto] gap-2 border-t border-[#a8752a]/25 pt-3">
+          <input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Neuer Shop" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+          <button onClick={createShop} className="grid h-10 w-10 place-items-center border border-[#d6a14d]/60 bg-[#d6a14d]/12 text-[#ffd88c]"><Plus className="h-4 w-4" /></button>
+        </div>
+      </div>
+
+      <div className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
+        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Gruppen</div>
+        <div className="grid gap-2">
+          {groups.map((group) => {
+            const count = group.shopIds?.length ?? 0;
+            return (
+              <button key={group.id} onClick={() => selectGroup(group.id)} className={`grid grid-cols-[1fr_auto] gap-2 border px-3 py-3 text-left ${editorKind === "group" && group.id === activeGroupId ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/35 bg-black/20 text-[#cfc2aa]"}`}>
+                <span className="min-w-0 truncate">{group.name}</span>
+                <span className="text-xs text-[#8c8170]">{count}</span>
+              </button>
+            );
+          })}
+          {!groups.length && <div className="border border-dashed border-[#a8752a]/30 p-3 text-sm text-[#8c8170]">Noch keine Gruppen.</div>}
+        </div>
+        <div className="grid gap-2 border-t border-[#a8752a]/25 pt-3">
+          <input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="Neue Gruppe" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+          <Select value={newGroupShopId} onChange={setNewGroupShopId} options={[["", "Optionalen Start-Shop waehlen"], ...gmSession.shops.map((shop) => [shop.id, shop.name])]} />
+          <button onClick={createGroup} disabled={!newGroupName.trim()} className="min-h-10 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Gruppe erstellen</button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 border border-[#a8752a]/35 bg-black/25 p-4">
+        {editorKind === "group" ? (
+          activeGroup ? <GroupEditor group={activeGroup} shops={gmSession.shops} characters={data.characters} onUpdate={(patch) => updateGroup(activeGroup.id, patch)} onDissolve={() => dissolveGroup(activeGroup.id)} /> : <div className="p-6 text-[#8c8170]">Waehle eine Gruppe aus oder erstelle eine neue.</div>
+        ) : activeShop ? (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="mr-auto">
+                <div className="text-2xl font-light text-white">{activeShop.name}</div>
+                <div className="text-xs font-bold uppercase tracking-[0.14em] text-[#8c8170]">{activeShop.active ? "Aktiv besucht" : "Inaktiv"}</div>
+              </div>
+              <ShopGroupSelect shop={activeShop} groups={groups} onAssign={(groupId) => assignShopToGroup(activeShop.id, groupId)} onRemove={(groupId) => removeShopFromGroup(activeShop.id, groupId)} />
+              <button onClick={() => setActive(activeShop.id)} className="border border-[#a8752a]/45 px-3 py-2 text-sm text-[#ffd88c]">Als aktiv setzen</button>
+              <button onClick={() => setReleaseOpen(true)} className="border border-[#a8752a]/45 px-3 py-2 text-sm text-[#ffd88c]">Freigeben</button>
+              <button onClick={deleteShop} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200" title="Shop loeschen"><Trash2 className="h-4 w-4" /></button>
+              {[1, 2, 3, 4].map((entry) => <button key={entry} onClick={() => setStep(entry)} className={`h-9 w-9 border ${step === entry ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{entry}</button>)}
+            </div>
+            {step === 1 && <ShopBasics shop={activeShop} onPatch={updateShop} />}
+            {step === 2 && <ShopInterior shop={activeShop} onPatch={updateShop} />}
+            {step === 3 && <ShopOwner shop={activeShop} onPatch={updateShop} />}
+            {step === 4 && <div className="grid gap-4"><div className="grid gap-2 md:grid-cols-[1fr_auto_auto]"><Select value={itemId} onChange={setItemId} options={[["", "Gegenstand in Shop platzieren"], ...shopItems.map((item) => [item.id, item.name])]} /><button onClick={addListing} disabled={!itemId} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Platzieren</button><button onClick={clearSoldListings} className="border border-red-300/45 px-4 py-2 font-bold uppercase text-red-200">Gekaufte entfernen</button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{activeShop.listings.map((listing) => <ShopListingCard key={listing.id} listing={listing} item={data.catalog.find((entry) => entry.id === listing.itemId)} requests={gmSession.shopRequests.filter((request) => request.listingId === listing.id)} data={data} onDelete={() => deleteListing(listing.id)} />)}</div></div>}
+            {releaseOpen && <div className="fixed inset-0 z-[220] grid place-items-center bg-black/80 p-4" onMouseDown={(event) => event.target === event.currentTarget && setReleaseOpen(false)}><div className="w-full max-w-2xl border border-[#a8752a]/60 bg-[#070b12] p-4"><div className="mb-3 flex items-center justify-between"><div className="text-xl text-white">Shop freigeben</div><button onClick={() => setReleaseOpen(false)} className="grid h-9 w-9 place-items-center border border-[#a8752a]/45"><X className="h-4 w-4" /></button></div><ReleasePanel shop={activeShop} characters={data.characters} onToggle={toggleRelease} onAll={() => updateShop({ releasedTo: (activeShop.releasedTo ?? []).includes("all") ? [] : ["all"] })} /></div></div>}
+          </>
+        ) : <div className="p-6 text-[#8c8170]">Waehle einen Shop aus oder erstelle einen neuen.</div>}
+      </div>
+    </section>
+  );
 }
 
 function GroupEditor({ group, shops, characters, onUpdate, onDissolve }) {
   const released = group.releasedTo ?? [];
   const inGroup = shops.filter((shop) => group.shopIds.includes(shop.id));
-  return <div className="mb-3 grid gap-2 border border-[#a8752a]/30 bg-black/20 p-2"><div className="flex items-center gap-2"><input value={group.name} onChange={(event) => onUpdate({ name: event.target.value })} className="min-w-0 flex-1 bg-transparent text-[#ffd88c] outline-none" /><button onClick={onDissolve} className="text-xs text-red-200">Aufloesen</button></div><div className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#f2ca75]">In dieser Gruppe</div><div className="flex flex-wrap gap-1">{inGroup.length ? inGroup.map((shop) => <span key={shop.id} className="border border-[#ffd88c] px-2 py-1 text-xs text-[#ffd88c]">{shop.name}</span>) : <span className="text-xs text-[#8c8170]">Keine Shops in dieser Gruppe.</span>}</div><label className="flex items-center gap-2 text-xs text-[#cfc2aa]"><input type="checkbox" checked={released.includes("all")} onChange={() => onUpdate({ releasedTo: released.includes("all") ? [] : ["all"] })} /> Alle freigeben</label><div className="flex flex-wrap gap-1">{characters.map((character) => <button key={character.id} onClick={() => onUpdate({ releasedTo: released.includes(character.id) ? released.filter((id) => id !== character.id) : [...released.filter((id) => id !== "all"), character.id] })} className={`border px-2 py-1 text-xs ${released.includes("all") || released.includes(character.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{character.name}</button>)}</div></div>;
+  function toggleShop(shopId) {
+    const current = group.shopIds ?? [];
+    onUpdate({ shopIds: current.includes(shopId) ? current.filter((id) => id !== shopId) : [...current, shopId] });
+  }
+  return (
+    <div className="grid gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="mr-auto">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Gruppen-Editor</div>
+          <input value={group.name} onChange={(event) => onUpdate({ name: event.target.value })} className="mt-1 w-full bg-transparent text-3xl font-light text-white outline-none" />
+        </div>
+        <button onClick={onDissolve} className="border border-red-300/45 px-3 py-2 text-sm text-red-200">Aufloesen</button>
+      </div>
+      <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3">
+        <div>
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Shops in dieser Gruppe</div>
+          <div className="mt-1 text-sm text-[#8c8170]">{inGroup.length ? `${inGroup.length} Shops zugeordnet.` : "Keine Shops in dieser Gruppe."}</div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {shops.map((shop) => {
+            const active = group.shopIds?.includes(shop.id);
+            return <button key={shop.id} onClick={() => toggleShop(shop.id)} className={`border px-3 py-2 text-sm ${active ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{shop.name}</button>;
+          })}
+          {!shops.length && <div className="text-sm text-[#8c8170]">Noch keine Shops vorhanden.</div>}
+        </div>
+      </div>
+      <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3">
+        <div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Freigabe der Gruppe</div>
+        <label className="flex items-center gap-2 text-sm text-[#cfc2aa]"><input type="checkbox" checked={released.includes("all")} onChange={() => onUpdate({ releasedTo: released.includes("all") ? [] : ["all"] })} /> Alle freigeben</label>
+        <div className="flex flex-wrap gap-2">{characters.map((character) => <button key={character.id} onClick={() => onUpdate({ releasedTo: released.includes(character.id) ? released.filter((id) => id !== character.id) : [...released.filter((id) => id !== "all"), character.id] })} className={`border px-3 py-2 text-sm ${released.includes("all") || released.includes(character.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{character.name}</button>)}</div>
+      </div>
+    </div>
+  );
 }
 
 function ShopGroupSelect({ shop, groups, onAssign, onRemove }) {
@@ -583,25 +903,61 @@ function MessageComposerModal({ title, onSend, onClose }) {
   return <div className="fixed inset-0 z-[260] grid place-items-center bg-black/80 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="grid w-full max-w-xl gap-3 border border-[#a8752a]/60 bg-[#070b12] p-4"><div className="flex items-center justify-between gap-3"><div className="text-xl font-light text-white">{title}</div><button onClick={onClose} className="grid h-9 w-9 place-items-center border border-[#a8752a]/45"><X className="h-4 w-4" /></button></div><textarea autoFocus value={body} onChange={(event) => setBody(event.target.value)} className="min-h-36 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none" /><button onClick={() => body.trim() && onSend(body)} disabled={!body.trim()} className="flex min-h-10 items-center justify-center gap-2 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]"><Send className="h-4 w-4" /> Senden</button></div></div>;
 }
 
-function CampaignModule({ data, gmSession, onSaveCampaign, onDeleteCampaign, onSaveSession, onDeleteSession }) {
+function CampaignModule({ data, gmSession, currentUserId, profile, onSaveCampaign, onDeleteCampaign, onSaveSession, onDeleteSession, onSaveModule, onInvite, onRevokeInvite }) {
   const campaigns = data.campaigns ?? [];
   const sessions = data.campaignSessions ?? [];
+  const modules = data.customGmModules ?? [];
   const [activeCampaignId, setActiveCampaignId] = useState(campaigns[0]?.id ?? "");
   const [campaignName, setCampaignName] = useState("");
   const [campaignDescription, setCampaignDescription] = useState("");
   const [sessionName, setSessionName] = useState("");
   const [sessionDate, setSessionDate] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
+  const [sceneName, setSceneName] = useState("");
+  const [arcName, setArcName] = useState("");
+  const [chapterName, setChapterName] = useState("");
+  const [chapterArcId, setChapterArcId] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("player");
+  const [copiedInviteId, setCopiedInviteId] = useState("");
+  const [detailType, setDetailType] = useState("campaign");
+  const [detailId, setDetailId] = useState(campaigns[0]?.id ?? "");
   const activeCampaign = campaigns.find((campaign) => campaign.id === activeCampaignId) ?? campaigns[0];
   const campaignSessions = sessions.filter((session) => session.campaignId === activeCampaign?.id);
+  const selectedSession = detailType === "session" ? campaignSessions.find((session) => session.id === detailId) : null;
+  const showSessionDetail = Boolean(selectedSession);
+  const campaignModules = modules.filter((module) => module.campaignId === activeCampaign?.id || campaignSessions.some((session) => session.id === module.sessionId));
+  const campaignScenes = campaignModules.filter((module) => (module.itemType ?? "note") === "scene" && (module.status ?? "draft") !== "archived");
+  const campaignArcs = campaignModules.filter((module) => (module.itemType ?? "note") === "arc" && (module.status ?? "draft") !== "archived").sort(byUpdated);
+  const campaignChapters = campaignModules.filter((module) => (module.itemType ?? "note") === "chapter" && (module.status ?? "draft") !== "archived").sort(byUpdated);
+  const nextSession = activeCampaign?.nextSessionId
+    ? campaignSessions.find((session) => session.id === activeCampaign.nextSessionId)
+    : campaignSessions.filter((session) => (session.status ?? "planned") !== "completed" && (session.status ?? "planned") !== "archived").sort(byScheduledDate)[0];
+  const stats = campaignHubStats(campaignModules, campaignSessions);
+  const activeCampaignCharacterIds = activeCampaign?.characterIds ?? [];
+  const gmTestCharacters = data.characters.filter((character) => activeCampaignCharacterIds.includes(character.id) && isGmTestCharacter(character, currentUserId, profile));
+  const playerCharacters = data.characters.filter((character) => activeCampaignCharacterIds.includes(character.id) && !isGmTestCharacter(character, currentUserId, profile));
+  const campaignInvites = (data.workspaceInvites ?? []).filter((invite) => invite.campaignId === activeCampaign?.id && invite.status === "open");
+
+  useEffect(() => {
+    if (!activeCampaign || !profile?.isGm || !currentUserId) return;
+    const gmCharacterIds = data.characters
+      .filter((character) => isGmTestCharacter(character, currentUserId, profile))
+      .map((character) => character.id);
+    const missing = gmCharacterIds.filter((id) => !(activeCampaign.characterIds ?? []).includes(id));
+    if (!missing.length) return;
+    patchCampaign({ characterIds: unique([...(activeCampaign.characterIds ?? []), ...missing]) });
+  }, [activeCampaign?.id, activeCampaign?.characterIds?.join("|"), currentUserId, data.characters.length, profile?.isGm]);
 
   function createCampaign() {
     const name = campaignName.trim();
     if (!name) return;
     const now = new Date().toISOString();
-    const campaign = { id: crypto.randomUUID(), name, description: campaignDescription.trim(), characterIds: [], createdAt: now, updatedAt: now };
+    const campaign = { id: crypto.randomUUID(), name, description: campaignDescription.trim(), status: "planned", systemProfile: {}, publicNotes: "", gmNotes: "", characterIds: [], createdAt: now, updatedAt: now };
     onSaveCampaign(campaign);
     setActiveCampaignId(campaign.id);
+    setDetailType("campaign");
+    setDetailId(campaign.id);
     setCampaignName("");
     setCampaignDescription("");
   }
@@ -614,7 +970,10 @@ function CampaignModule({ data, gmSession, onSaveCampaign, onDeleteCampaign, onS
   function createSession() {
     if (!activeCampaign || !sessionName.trim()) return;
     const now = new Date().toISOString();
-    onSaveSession({ id: crypto.randomUUID(), campaignId: activeCampaign.id, name: sessionName.trim(), scheduledAt: sessionDate || undefined, notes: sessionNotes.trim(), shopIds: [], characterIds: [], createdAt: now, updatedAt: now });
+    const session = { id: crypto.randomUUID(), campaignId: activeCampaign.id, name: sessionName.trim(), scheduledAt: sessionDate || undefined, status: "planned", arcId: "", chapterId: "", objective: "", preparationNotes: sessionNotes.trim(), notes: "", liveNotes: "", recap: "", openQuestions: [], nextHooks: [], sceneIds: [], shopIds: [], characterIds: [], createdAt: now, updatedAt: now };
+    onSaveSession(session);
+    setDetailType("session");
+    setDetailId(session.id);
     setSessionName("");
     setSessionDate("");
     setSessionNotes("");
@@ -626,51 +985,322 @@ function CampaignModule({ data, gmSession, onSaveCampaign, onDeleteCampaign, onS
     patchCampaign({ characterIds: current.includes(characterId) ? current.filter((id) => id !== characterId) : [...current, characterId] });
   }
 
+  function inviteToCampaign() {
+    if (!activeCampaign || !inviteEmail.trim()) return;
+    onInvite?.(inviteEmail, inviteRole, activeCampaign.id);
+    setInviteEmail("");
+  }
+
+  function inviteLink(invite) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("invite", invite.code);
+    return url.toString();
+  }
+
+  async function copyInvite(invite) {
+    const text = inviteLink(invite);
+    try {
+      await navigator.clipboard?.writeText(text);
+      setCopiedInviteId(invite.id);
+      window.setTimeout(() => setCopiedInviteId(""), 1600);
+    } catch {
+      window.prompt("Einladungslink kopieren", text);
+    }
+  }
+
   function patchSession(session, patch) {
     onSaveSession({ ...session, ...patch });
+  }
+
+  function patchSystemProfile(patch) {
+    patchCampaign({ systemProfile: { ...(activeCampaign?.systemProfile ?? {}), ...patch } });
+  }
+
+  function createScene(targetSession) {
+    if (!activeCampaign || !targetSession || !sceneName.trim()) return;
+    const now = new Date().toISOString();
+    const scene = {
+      id: crypto.randomUUID(),
+      name: sceneName.trim(),
+      itemType: "scene",
+      status: "draft",
+      visibility: "gm",
+      scope: "session",
+      campaignId: activeCampaign.id,
+      sessionId: targetSession.id,
+      tags: [],
+      summary: "",
+      gmNotes: "",
+      playerText: "",
+      scene: { purpose: "", opener: "", readAloud: "", secrets: "", consequences: "", encounterIds: [], handoutIds: [], npcIds: [], enemyIds: [] },
+      fields: [],
+      createdAt: now,
+      updatedAt: now
+    };
+    onSaveModule(scene);
+    patchSession(targetSession, { sceneIds: unique([...(targetSession.sceneIds ?? []), scene.id]) });
+    setSceneName("");
+  }
+
+  function createArc() {
+    if (!activeCampaign || !arcName.trim()) return;
+    const now = new Date().toISOString();
+    const arc = { id: crypto.randomUUID(), name: arcName.trim(), itemType: "arc", status: "draft", visibility: "gm", scope: "campaign", campaignId: activeCampaign.id, tags: [], summary: "", gmNotes: "", playerText: "", relations: [], fields: [], createdAt: now, updatedAt: now };
+    onSaveModule(arc);
+    setArcName("");
+  }
+
+  function createChapter() {
+    if (!activeCampaign || !chapterName.trim()) return;
+    const now = new Date().toISOString();
+    const chapter = { id: crypto.randomUUID(), name: chapterName.trim(), itemType: "chapter", status: "draft", visibility: "gm", scope: "campaign", campaignId: activeCampaign.id, tags: [], summary: "", gmNotes: "", playerText: "", relations: chapterArcId ? [{ id: crypto.randomUUID(), kind: "belongsTo", targetModuleId: chapterArcId, label: "", private: true }] : [], fields: [], createdAt: now, updatedAt: now };
+    onSaveModule(chapter);
+    setChapterName("");
+    setChapterArcId("");
   }
 
   return (
     <section className="grid gap-4 xl:grid-cols-[340px_1fr]">
       <div className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
-        <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Kampagnen</div>
-        {campaigns.map((campaign) => <button key={campaign.id} onClick={() => setActiveCampaignId(campaign.id)} className={`border px-3 py-2 text-left ${campaign.id === activeCampaign?.id ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{campaign.name}</button>)}
+        <div>
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Kampagnenbaum</div>
+          <div className="mt-1 text-sm text-[#8c8170]">Kampagne auswaehlen, darunter einzelne Sessions bearbeiten.</div>
+        </div>
+        <div className="grid gap-2">
+          {campaigns.map((campaign) => {
+            const campaignSessionList = sessions.filter((session) => session.campaignId === campaign.id).sort(byScheduledDate);
+            const campaignSelected = campaign.id === activeCampaign?.id && !showSessionDetail;
+            return (
+              <div key={campaign.id} className="grid gap-1">
+                <button onClick={() => { setActiveCampaignId(campaign.id); setDetailType("campaign"); setDetailId(campaign.id); }} className={`grid grid-cols-[1fr_auto] gap-2 border px-3 py-2 text-left ${campaignSelected ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/35 bg-black/20 text-[#cfc2aa]"}`}>
+                  <span className="min-w-0 truncate">{campaign.name}</span>
+                  <span className="text-xs text-[#8c8170]">{campaignSessionList.length}</span>
+                </button>
+                {campaignSessionList.length > 0 && (
+                  <div className="ml-3 grid gap-1 border-l border-[#a8752a]/25 pl-3">
+                    {campaignSessionList.map((session) => {
+                      const sessionSelected = selectedSession?.id === session.id;
+                      return (
+                        <button key={session.id} onClick={() => { setActiveCampaignId(campaign.id); setDetailType("session"); setDetailId(session.id); }} className={`grid grid-cols-[1fr_auto] gap-2 border px-3 py-2 text-left text-sm ${sessionSelected ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/25 bg-black/15 text-[#cfc2aa]"}`}>
+                          <span className="min-w-0 truncate">{session.name}</span>
+                          <span className="text-xs text-[#8c8170]">{session.scheduledAt || optionLabel(SESSION_STATUS_OPTIONS, session.status ?? "planned")}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {!campaigns.length && <div className="border border-dashed border-[#a8752a]/30 p-3 text-sm text-[#8c8170]">Noch keine Kampagne.</div>}
+        </div>
         <input value={campaignName} onChange={(event) => setCampaignName(event.target.value)} placeholder="Neue Kampagne" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
         <textarea value={campaignDescription} onChange={(event) => setCampaignDescription(event.target.value)} placeholder="Kurznotiz" className="min-h-24 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none" />
         <button onClick={createCampaign} disabled={!campaignName.trim()} className="min-h-10 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Kampagne erstellen</button>
       </div>
       <div className="grid gap-4 border border-[#a8752a]/35 bg-black/25 p-4">
-        {activeCampaign ? <>
-          <div className="flex flex-wrap items-start gap-3">
+        {activeCampaign ? showSessionDetail ? <>
+          <div className="flex flex-wrap items-center gap-3 border-b border-[#a8752a]/25 pb-3">
+            <button onClick={() => { setDetailType("campaign"); setDetailId(activeCampaign.id); }} className="border border-[#a8752a]/40 px-3 py-2 text-sm text-[#ffd88c]">Zur Kampagne</button>
             <div className="mr-auto">
-              <input value={activeCampaign.name} onChange={(event) => patchCampaign({ name: event.target.value })} className="w-full bg-transparent text-2xl font-light text-white outline-none" />
-              <textarea value={activeCampaign.description ?? ""} onChange={(event) => patchCampaign({ description: event.target.value })} placeholder="Beschreibung" className="mt-2 min-h-20 w-full border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" />
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Session vorbereiten</div>
+              <div className="mt-1 text-sm text-[#8c8170]">{activeCampaign.name}</div>
             </div>
-            <button onClick={() => onDeleteCampaign(activeCampaign.id)} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200" title="Kampagne loeschen"><Trash2 className="h-4 w-4" /></button>
           </div>
+          <div className="grid gap-3 border border-[#a8752a]/30 bg-black/20 p-3">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Szene in dieser Session erstellen</div>
+              <div className="mt-1 text-sm text-[#8c8170]">Optionaler Baustein fuer einen konkreten Moment innerhalb dieser Session.</div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+              <input value={sceneName} onChange={(event) => setSceneName(event.target.value)} placeholder="Neue Szene, z. B. Verhandlung im Thronsaal" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+              <button onClick={() => createScene(selectedSession)} disabled={!sceneName.trim()} className="min-h-10 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Szene erstellen</button>
+            </div>
+          </div>
+          <CampaignSessionCard session={selectedSession} characters={data.characters} shops={gmSession.shops} campaign={activeCampaign} arcs={campaignArcs} chapters={campaignChapters} scenes={campaignScenes} currentUserId={currentUserId} profile={profile} onPatch={(patch) => patchSession(selectedSession, patch)} onSetNext={() => patchCampaign({ nextSessionId: selectedSession.id })} onDelete={() => { onDeleteSession(selectedSession.id); setDetailType("campaign"); setDetailId(activeCampaign.id); }} />
+        </> : <>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="grid gap-3">
+              <div className="flex flex-wrap items-start gap-3">
+                <div className="mr-auto">
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Kampagnen-Hub</div>
+                  <input value={activeCampaign.name} onChange={(event) => patchCampaign({ name: event.target.value })} className="mt-1 w-full bg-transparent text-3xl font-light text-white outline-none" />
+                </div>
+                <Select value={activeCampaign.status ?? "active"} onChange={(status) => patchCampaign({ status })} options={[["planned", "Geplant"], ["active", "Aktiv"], ["paused", "Pausiert"], ["completed", "Abgeschlossen"], ["archived", "Archiviert"]]} />
+                <button onClick={() => onDeleteCampaign(activeCampaign.id)} className="grid h-10 w-10 place-items-center border border-red-300/45 text-red-200" title="Kampagne loeschen"><Trash2 className="h-4 w-4" /></button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="Spielsystem" value={activeCampaign.systemProfile?.name ?? ""} onChange={(name) => patchSystemProfile({ name })} />
+                <Field label="Regelprofil" value={activeCampaign.systemProfile?.ruleset ?? ""} onChange={(ruleset) => patchSystemProfile({ ruleset })} />
+                <Field label="Genre" value={activeCampaign.systemProfile?.genre ?? ""} onChange={(genre) => patchSystemProfile({ genre })} />
+                <Field label="Ton" value={activeCampaign.systemProfile?.tone ?? ""} onChange={(tone) => patchSystemProfile({ tone })} />
+              </div>
+              <ImageField label="Kampagnenbild" value={activeCampaign.imageUrl ?? ""} onChange={(imageUrl) => patchCampaign({ imageUrl })} />
+              <TextArea label="Kampagnen-Freitext" value={activeCampaign.description ?? ""} onChange={(description) => patchCampaign({ description })} />
+              <div className="grid gap-3 lg:grid-cols-2">
+                <TextArea label="Kampagnen-Text fuer Spieler" value={activeCampaign.publicNotes ?? ""} onChange={(publicNotes) => patchCampaign({ publicNotes })} />
+                <TextArea label="Private Kampagnen-Notizen" value={activeCampaign.gmNotes ?? ""} onChange={(gmNotes) => patchCampaign({ gmNotes })} />
+              </div>
+            </div>
+            <aside className="grid content-start gap-3">
+              <div className="grid grid-cols-2 gap-2">
+                {stats.map(([label, value]) => <div key={label} className="border border-[#a8752a]/30 bg-black/25 p-3"><div className="text-xs font-black uppercase tracking-[0.14em] text-[#f2ca75]">{label}</div><div className="mt-2 text-3xl font-light text-white">{value}</div></div>)}
+              </div>
+              <div className="border border-[#a8752a]/30 bg-black/25 p-3">
+                <div className="text-xs font-black uppercase tracking-[0.14em] text-[#f2ca75]">Naechste Session</div>
+                {nextSession ? <><div className="mt-2 text-xl text-white">{nextSession.name}</div><div className="text-sm text-[#8c8170]">{nextSession.scheduledAt || "Kein Datum"} · {optionLabel(SESSION_STATUS_OPTIONS, nextSession.status ?? "planned")}</div><button onClick={() => patchCampaign({ nextSessionId: nextSession.id })} className="mt-3 border border-[#a8752a]/40 px-3 py-2 text-sm text-[#ffd88c]">Als naechste Session setzen</button></> : <div className="mt-2 text-sm text-[#8c8170]">Noch keine geplante Session.</div>}
+              </div>
+            </aside>
+          </div>
+          <AdventureStructurePanel arcs={campaignArcs} chapters={campaignChapters} sessions={campaignSessions} scenes={campaignScenes} onCreateArc={createArc} arcName={arcName} setArcName={setArcName} onCreateChapter={createChapter} chapterName={chapterName} setChapterName={setChapterName} chapterArcId={chapterArcId} setChapterArcId={setChapterArcId} onPatchSession={patchSession} />
           <div className="grid gap-3">
             <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Charaktere in Kampagne</div>
-            <div className="flex flex-wrap gap-2">{data.characters.map((character) => <button key={character.id} onClick={() => toggleCampaignCharacter(character.id)} className={`border px-3 py-2 text-sm ${activeCampaign.characterIds?.includes(character.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{character.name}</button>)}</div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="grid content-start gap-2 border border-[#a8752a]/25 bg-black/20 p-3">
+                <div className="text-xs font-black uppercase tracking-[0.14em] text-[#f2ca75]">Aktive Spielercharaktere</div>
+                <div className="flex flex-wrap gap-2">
+                  {playerCharacters.map((character) => <button key={character.id} onClick={() => toggleCampaignCharacter(character.id)} className="border border-[#ffd88c] px-3 py-2 text-sm text-[#ffd88c]">{character.name}</button>)}
+                  {!playerCharacters.length && <div className="text-sm text-[#8c8170]">Noch keine Spielercharaktere in dieser Kampagne.</div>}
+                </div>
+              </div>
+              <div className="grid content-start gap-2 border border-[#a8752a]/25 bg-black/20 p-3">
+                <div className="text-xs font-black uppercase tracking-[0.14em] text-[#f2ca75]">GM-Testcharaktere</div>
+                <div className="flex flex-wrap gap-2">
+                  {gmTestCharacters.map((character) => <span key={character.id} className="border border-[#a8752a]/35 px-3 py-2 text-sm text-[#cfc2aa]">{character.name}</span>)}
+                  {!gmTestCharacters.length && <div className="text-sm text-[#8c8170]">GM-Charaktere werden automatisch hier gefuehrt.</div>}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {data.characters.filter((character) => !activeCampaign.characterIds?.includes(character.id) && !isGmTestCharacter(character, currentUserId, profile)).map((character) => <button key={character.id} onClick={() => toggleCampaignCharacter(character.id)} className="border border-[#a8752a]/35 px-3 py-2 text-sm text-[#cfc2aa]">{character.name} hinzufuegen</button>)}
+            </div>
+          </div>
+          <div className="grid gap-3 border-t border-[#a8752a]/25 pt-4">
+            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]"><UserPlus className="h-4 w-4" /> Spieler in diese Kampagne einladen</div>
+            <div className="grid gap-2 md:grid-cols-[1fr_150px_auto]">
+              <input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="Spieler-E-Mail" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+              <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none">
+                <option value="player">Spieler</option>
+                <option value="assistant_gm">Co-GM</option>
+                <option value="gm">GM</option>
+              </select>
+              <button onClick={inviteToCampaign} disabled={!inviteEmail.trim()} className="flex min-h-10 items-center justify-center gap-2 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]"><Link className="h-4 w-4" /> Einladen</button>
+            </div>
+            <div className="grid gap-2">
+              {campaignInvites.map((invite) => (
+                <div key={invite.id} className="flex flex-wrap items-center gap-2 border border-[#a8752a]/25 bg-black/20 px-3 py-2 text-sm text-[#cfc2aa]">
+                  <span className="min-w-0 flex-1 truncate">{invite.email}</span>
+                  <span className="border border-[#ffd88c]/45 px-2 py-1 text-xs text-[#ffd88c]">{invite.code}</span>
+                  <span className="border border-[#a8752a]/30 px-2 py-1 text-xs text-[#8c8170]">{invite.role}</span>
+                  <button onClick={() => copyInvite(invite)} className="flex items-center gap-1 text-xs text-[#ffd88c]"><Copy className="h-3.5 w-3.5" /> {copiedInviteId === invite.id ? "Kopiert" : "Link"}</button>
+                  <button onClick={() => onRevokeInvite?.(invite.id)} className="text-xs text-red-200">Widerrufen</button>
+                </div>
+              ))}
+              {!campaignInvites.length && <div className="text-sm text-[#8c8170]">Noch keine offenen Kampagnen-Einladungen.</div>}
+            </div>
           </div>
           <div className="grid gap-3 border-t border-[#a8752a]/25 pt-4">
             <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Session erstellen</div>
             <div className="grid gap-2 md:grid-cols-[1fr_180px_auto]"><input value={sessionName} onChange={(event) => setSessionName(event.target.value)} placeholder="Session Name" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><input type="date" value={sessionDate} onChange={(event) => setSessionDate(event.target.value)} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><button onClick={createSession} disabled={!sessionName.trim()} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Erstellen</button></div>
-            <textarea value={sessionNotes} onChange={(event) => setSessionNotes(event.target.value)} placeholder="Notizen fuer diese Session" className="min-h-24 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none" />
+            <textarea value={sessionNotes} onChange={(event) => setSessionNotes(event.target.value)} placeholder="Vorbereitung fuer diese Session" className="min-h-24 border border-[#a8752a]/35 bg-black/30 p-3 text-[#f4ead7] outline-none" />
           </div>
-          <div className="grid gap-3">{campaignSessions.map((session) => <CampaignSessionCard key={session.id} session={session} characters={data.characters} shops={gmSession.shops} campaign={activeCampaign} onPatch={(patch) => patchSession(session, patch)} onDelete={() => onDeleteSession(session.id)} />)}{!campaignSessions.length && <div className="border border-[#a8752a]/25 bg-black/20 p-4 text-[#8c8170]">Noch keine Sessions.</div>}</div>
+          {!campaignSessions.length && <div className="border border-dashed border-[#a8752a]/25 bg-black/20 p-4 text-[#8c8170]">Noch keine Sessions. Erstelle hier eine Session; sie erscheint links unter der Kampagne.</div>}
         </> : <div className="p-6 text-[#8c8170]">Lege zuerst eine Kampagne an.</div>}
       </div>
     </section>
   );
 }
 
-function CampaignSessionCard({ session, characters, shops, campaign, onPatch, onDelete }) {
+const SESSION_STATUS_OPTIONS = [["planned", "Geplant"], ["prepared", "Vorbereitet"], ["active", "Aktiv"], ["completed", "Abgeschlossen"], ["cancelled", "Ausgefallen"], ["archived", "Archiviert"]];
+
+function AdventureStructurePanel({ arcs, chapters, sessions, scenes, onCreateArc, arcName, setArcName, onCreateChapter, chapterName, setChapterName, chapterArcId, setChapterArcId, onPatchSession }) {
+  const unassignedSessions = sessions.filter((session) => !session.arcId && !session.chapterId);
+  const chaptersForArc = (arcId) => chapters.filter((chapter) => (chapter.relations ?? []).some((relation) => relation.kind === "belongsTo" && relation.targetModuleId === arcId));
+  const chapterSessions = (chapterId) => sessions.filter((session) => session.chapterId === chapterId);
+  const arcSessions = (arcId) => sessions.filter((session) => session.arcId === arcId && !session.chapterId);
+  const sessionScenes = (session) => scenes.filter((scene) => scene.sessionId === session.id || (session.sceneIds ?? []).includes(scene.id));
+
+  return (
+    <section className="grid gap-4 border border-[#a8752a]/30 bg-black/20 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="mr-auto">
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Abenteuerstruktur</div>
+          <div className="mt-1 text-sm text-[#8c8170]">Kampagne in Arcs, Kapitel, Sessions und Szenen gliedern.</div>
+        </div>
+        <span className="border border-[#a8752a]/35 px-3 py-2 text-sm text-[#cfc2aa]">{arcs.length} Arcs · {chapters.length} Kapitel</span>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-2 border border-[#a8752a]/25 bg-black/20 p-3">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Arc erstellen</div>
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto]"><input value={arcName} onChange={(event) => setArcName(event.target.value)} placeholder="Neuer Arc" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><button onClick={onCreateArc} disabled={!arcName.trim()} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 text-sm font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Erstellen</button></div>
+        </div>
+        <div className="grid gap-2 border border-[#a8752a]/25 bg-black/20 p-3">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Kapitel erstellen</div>
+          <div className="grid gap-2 sm:grid-cols-[1fr_180px_auto]"><input value={chapterName} onChange={(event) => setChapterName(event.target.value)} placeholder="Neues Kapitel" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><Select value={chapterArcId} onChange={setChapterArcId} options={[["", "Optionaler Arc"], ...arcs.map((arc) => [arc.id, arc.name])]} /><button onClick={onCreateChapter} disabled={!chapterName.trim()} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 text-sm font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Erstellen</button></div>
+        </div>
+      </div>
+      <div className="grid gap-3">
+        {arcs.map((arc) => {
+          const arcChapters = chaptersForArc(arc.id);
+          const directSessions = arcSessions(arc.id);
+          return (
+            <div key={arc.id} className="grid gap-3 border border-[#a8752a]/25 bg-black/15 p-3">
+              <div className="text-xl font-light text-white">{arc.name}</div>
+              {arc.summary && <p className="text-sm text-[#cfc2aa]">{arc.summary}</p>}
+              {arcChapters.map((chapter) => <AdventureChapter key={chapter.id} chapter={chapter} sessions={chapterSessions(chapter.id)} scenesForSession={sessionScenes} />)}
+              {directSessions.length > 0 && <AdventureSessionList label="Sessions direkt im Arc" sessions={directSessions} scenesForSession={sessionScenes} />}
+            </div>
+          );
+        })}
+        {chapters.filter((chapter) => !(chapter.relations ?? []).some((relation) => relation.kind === "belongsTo" && arcs.some((arc) => arc.id === relation.targetModuleId))).map((chapter) => <AdventureChapter key={chapter.id} chapter={chapter} sessions={chapterSessions(chapter.id)} scenesForSession={sessionScenes} />)}
+        {unassignedSessions.length > 0 && <AdventureSessionList label="Ohne Arc/Kapitel" sessions={unassignedSessions} scenesForSession={sessionScenes} />}
+        {!arcs.length && !chapters.length && !sessions.length && <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170]">Noch keine Abenteuerstruktur angelegt.</div>}
+      </div>
+    </section>
+  );
+}
+
+function AdventureChapter({ chapter, sessions, scenesForSession }) {
+  return <div className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-3"><div className="text-xs font-black uppercase tracking-[0.14em] text-[#f2ca75]">Kapitel</div><div className="text-lg text-white">{chapter.name}</div>{chapter.summary && <p className="text-sm text-[#cfc2aa]">{chapter.summary}</p>}<AdventureSessionList label="Sessions" sessions={sessions} scenesForSession={scenesForSession} /></div>;
+}
+
+function AdventureSessionList({ label, sessions, scenesForSession }) {
+  return <div className="grid gap-2"><div className="text-xs font-black uppercase tracking-[0.14em] text-[#f2ca75]">{label}</div>{sessions.map((session) => <div key={session.id} className="grid gap-1 border border-[#a8752a]/20 bg-black/15 p-2"><div className="flex flex-wrap gap-2"><span className="text-sm font-bold text-white">{session.name}</span><span className="text-xs text-[#8c8170]">{session.scheduledAt || "Kein Datum"}</span><span className="text-xs text-[#8c8170]">{optionLabel(SESSION_STATUS_OPTIONS, session.status ?? "planned")}</span></div><div className="flex flex-wrap gap-1">{scenesForSession(session).map((scene) => <span key={scene.id} className="border border-[#a8752a]/25 px-2 py-0.5 text-xs text-[#cfc2aa]">{scene.name}</span>)}</div></div>)}{!sessions.length && <div className="text-sm text-[#8c8170]">Keine Sessions.</div>}</div>;
+}
+
+function CampaignSessionCard({ session, characters, shops, campaign, arcs, chapters, scenes, currentUserId, profile, onPatch, onSetNext, onDelete }) {
   const campaignCharacters = characters.filter((character) => campaign.characterIds?.includes(character.id));
+  const playerCharacters = campaignCharacters.filter((character) => !isGmTestCharacter(character, currentUserId, profile));
+  const gmTestCharacters = campaignCharacters.filter((character) => isGmTestCharacter(character, currentUserId, profile));
+  const sessionScenes = scenes.filter((scene) => (session.sceneIds ?? []).includes(scene.id) || scene.sessionId === session.id);
+  const chapterArcId = (chapterId) => chapters.find((chapter) => chapter.id === chapterId)?.relations?.find((relation) => relation.kind === "belongsTo")?.targetModuleId;
   function toggleList(key, id) {
     const current = session[key] ?? [];
     onPatch({ [key]: current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id] });
   }
-  return <div className="grid gap-3 border border-[#a8752a]/30 bg-black/25 p-3"><div className="flex flex-wrap gap-3"><input value={session.name} onChange={(event) => onPatch({ name: event.target.value })} className="min-w-0 flex-1 bg-transparent text-xl text-white outline-none" /><input type="date" value={session.scheduledAt ?? ""} onChange={(event) => onPatch({ scheduledAt: event.target.value || undefined })} className="min-h-9 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200"><Trash2 className="h-4 w-4" /></button></div><textarea value={session.notes ?? ""} onChange={(event) => onPatch({ notes: event.target.value })} placeholder="Session-Notizen" className="min-h-24 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" /><div className="grid gap-2"><div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Charaktere</div><div className="flex flex-wrap gap-2">{campaignCharacters.map((character) => <button key={character.id} onClick={() => toggleList("characterIds", character.id)} className={`border px-2 py-1 text-xs ${session.characterIds?.includes(character.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{character.name}</button>)}</div></div><div className="grid gap-2"><div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Shops vorbereiten</div><div className="flex flex-wrap gap-2">{shops.map((shop) => <button key={shop.id} onClick={() => toggleList("shopIds", shop.id)} className={`border px-2 py-1 text-xs ${session.shopIds?.includes(shop.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{shop.name}</button>)}</div></div></div>;
+  return <div className="grid gap-3 border border-[#a8752a]/30 bg-black/25 p-3"><div className="flex flex-wrap gap-3"><input value={session.name} onChange={(event) => onPatch({ name: event.target.value })} className="min-w-0 flex-1 bg-transparent text-xl text-white outline-none" /><input type="date" value={session.scheduledAt ?? ""} onChange={(event) => onPatch({ scheduledAt: event.target.value || undefined })} className="min-h-9 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" /><Select value={session.status ?? "planned"} onChange={(status) => onPatch({ status })} options={SESSION_STATUS_OPTIONS} /><button onClick={onSetNext} className="border border-[#a8752a]/40 px-3 py-2 text-sm text-[#ffd88c]">Naechste</button><button onClick={onDelete} className="grid h-9 w-9 place-items-center border border-red-300/45 text-red-200"><Trash2 className="h-4 w-4" /></button></div><div className="grid gap-2 md:grid-cols-2"><Select value={session.arcId ?? ""} onChange={(arcId) => onPatch({ arcId: arcId || undefined, chapterId: arcId ? session.chapterId : undefined })} options={[["", "Arc waehlen"], ...arcs.map((arc) => [arc.id, arc.name])]} /><Select value={session.chapterId ?? ""} onChange={(chapterId) => onPatch({ chapterId: chapterId || undefined, arcId: chapterId ? chapterArcId(chapterId) ?? session.arcId : session.arcId })} options={[["", "Kapitel waehlen"], ...chapters.map((chapter) => [chapter.id, chapter.name])]} /></div><Field label="Ziel der Session" value={session.objective ?? ""} onChange={(objective) => onPatch({ objective })} /><TextArea label="Session-Freitext / Ablauf" value={session.notes ?? ""} onChange={(notes) => onPatch({ notes })} /><div className="grid gap-3 lg:grid-cols-2"><TextArea label="Vorbereitung / GM-Plan" value={session.preparationNotes ?? ""} onChange={(preparationNotes) => onPatch({ preparationNotes })} /><TextArea label="GM-Notizen live" value={session.liveNotes ?? ""} onChange={(liveNotes) => onPatch({ liveNotes })} /><TextArea label="Recap" value={session.recap ?? ""} onChange={(recap) => onPatch({ recap })} /><TextArea label="Naechste Hooks" value={(session.nextHooks ?? []).join("\n")} onChange={(value) => onPatch({ nextHooks: value.split("\n").map((entry) => entry.trim()).filter(Boolean) })} /></div><div className="grid gap-2"><div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Szenen optional</div><div className="flex flex-wrap gap-2">{scenes.map((scene) => <button key={scene.id} onClick={() => toggleList("sceneIds", scene.id)} className={`border px-2 py-1 text-xs ${sessionScenes.some((entry) => entry.id === scene.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{scene.name}</button>)}</div>{sessionScenes.length > 0 && <Select value={session.activeSceneId ?? ""} onChange={(activeSceneId) => onPatch({ activeSceneId: activeSceneId || undefined })} options={[["", "Aktive Szene waehlen"], ...sessionScenes.map((scene) => [scene.id, scene.name])]} />}</div><div className="grid gap-2"><div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Aktive Spielercharaktere</div><div className="flex flex-wrap gap-2">{playerCharacters.map((character) => <button key={character.id} onClick={() => toggleList("characterIds", character.id)} className={`border px-2 py-1 text-xs ${session.characterIds?.includes(character.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{character.name}</button>)}</div>{gmTestCharacters.length > 0 && <><div className="text-xs font-black uppercase tracking-[0.16em] text-[#8c8170]">GM-Test optional</div><div className="flex flex-wrap gap-2">{gmTestCharacters.map((character) => <button key={character.id} onClick={() => toggleList("characterIds", character.id)} className={`border px-2 py-1 text-xs ${session.characterIds?.includes(character.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{character.name}</button>)}</div></>}</div><div className="grid gap-2"><div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">Shops vorbereiten</div><div className="flex flex-wrap gap-2">{shops.map((shop) => <button key={shop.id} onClick={() => toggleList("shopIds", shop.id)} className={`border px-2 py-1 text-xs ${session.shopIds?.includes(shop.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{shop.name}</button>)}</div></div></div>;
+}
+
+function campaignHubStats(modules, sessions) {
+  const count = (type) => modules.filter((module) => (module.itemType ?? "note") === type && (module.status ?? "draft") !== "archived").length;
+  return [
+    ["Sessions", sessions.length],
+    ["Szenen", count("scene")],
+    ["Quests", count("quest")],
+    ["Orte", count("location")],
+    ["Fraktionen", count("faction")],
+    ["Bedrohungen", count("threat")]
+  ];
+}
+
+function byScheduledDate(left, right) {
+  const leftTime = Date.parse(left.scheduledAt ?? left.createdAt ?? "");
+  const rightTime = Date.parse(right.scheduledAt ?? right.createdAt ?? "");
+  return (Number.isNaN(leftTime) ? Number.MAX_SAFE_INTEGER : leftTime) - (Number.isNaN(rightTime) ? Number.MAX_SAFE_INTEGER : rightTime);
+}
+
+function isGmTestCharacter(character, currentUserId, profile) {
+  return Boolean(profile?.isGm && currentUserId && character.ownerId === currentUserId);
 }
 
 function ReleaseCenterModule({ data, onSave }) {
@@ -736,8 +1366,8 @@ function ReleaseCenterModule({ data, onSave }) {
     <section className="grid gap-4 xl:grid-cols-[300px_minmax(280px,0.75fr)_minmax(420px,1.2fr)]">
       <div className="grid content-start gap-3 border border-[#a8752a]/35 bg-black/25 p-4">
         <div>
-          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Freigabe-Orte</div>
-          <div className="mt-1 text-sm text-[#8c8170]">Bibliotheken, Laeden, Orte oder andere Szenen fuer schnelle Handout-Freigaben.</div>
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Handout-Orte</div>
+          <div className="mt-1 text-sm text-[#8c8170]">Bibliotheken, Laeden, Orte oder andere Szenen fuer schnelle Handout-Ausgabe.</div>
         </div>
         <button onClick={() => setSelectedLocationId("all")} className={`border px-3 py-3 text-left ${selectedLocationId === "all" ? "border-[#ffd88c] bg-[#d6a14d]/12 text-[#ffd88c]" : "border-[#a8752a]/30 bg-black/25 text-[#cfc2aa]"}`}>Alle Handouts</button>
         {locations.map((location) => {
@@ -829,9 +1459,11 @@ function CustomModulesModule({ data, onSave, onDelete }) {
     ? (data.campaigns ?? []).map((campaign) => [campaign.id, campaign.name])
     : scope === "session"
       ? (data.campaignSessions ?? []).map((session) => [session.id, session.name])
-      : scope === "character"
-        ? data.characters.map((character) => [character.id, character.name])
-        : [];
+      : scope === "scene"
+        ? modules.filter((module) => (module.itemType ?? "note") === "scene").map((scene) => [scene.id, scene.name])
+        : scope === "character"
+          ? data.characters.map((character) => [character.id, character.name])
+          : [];
   const filteredModules = modules
     .filter((module) => typeFilter === "all" || (module.itemType ?? "note") === typeFilter)
     .filter((module) => statusFilter === "all" || (module.status ?? "draft") === statusFilter)
@@ -841,7 +1473,30 @@ function CustomModulesModule({ data, onSave, onDelete }) {
   function createModule() {
     if (!name.trim()) return;
     const now = new Date().toISOString();
-    const module = { id: crypto.randomUUID(), name: name.trim(), itemType, status: "draft", visibility: "gm", scope, campaignId: scope === "campaign" ? targetId : undefined, sessionId: scope === "session" ? targetId : undefined, characterId: scope === "character" ? targetId : undefined, tags: [], summary: "", gmNotes: "", playerText: "", fields: [], statBlock: ["enemy", "threat", "encounter"].includes(itemType) ? defaultStatBlock(itemType === "threat" ? "hazard" : "standard") : undefined, createdAt: now, updatedAt: now };
+    const targetScene = modules.find((module) => module.id === targetId && (module.itemType ?? "note") === "scene");
+    const targetSession = data.campaignSessions?.find((session) => session.id === targetScene?.sessionId);
+    const module = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      itemType,
+      status: "draft",
+      visibility: "gm",
+      scope,
+      campaignId: scope === "campaign" ? targetId : scope === "scene" ? targetScene?.campaignId ?? targetSession?.campaignId : undefined,
+      sessionId: scope === "session" ? targetId : scope === "scene" ? targetScene?.sessionId : undefined,
+      sceneId: scope === "scene" ? targetId : undefined,
+      characterId: scope === "character" ? targetId : undefined,
+      tags: [],
+      summary: "",
+      gmNotes: "",
+      playerText: "",
+      scene: itemType === "scene" ? defaultSceneData() : undefined,
+      relations: [],
+      fields: [],
+      statBlock: ["enemy", "threat", "encounter"].includes(itemType) ? defaultStatBlock(itemType === "threat" ? "hazard" : "standard") : undefined,
+      createdAt: now,
+      updatedAt: now
+    };
     onSave(module);
     setActiveId(module.id);
     setName("");
@@ -861,7 +1516,7 @@ function CustomModulesModule({ data, onSave, onDelete }) {
         <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">GM-Baukasten</div>
         <Select value={itemType} onChange={setItemType} options={BUILDER_TYPES} />
         <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name des Bausteins" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
-        <Select value={scope} onChange={(value) => { setScope(value); setTargetId(""); }} options={[["global", "Global"], ["campaign", "Kampagne"], ["session", "Session"], ["character", "Charakter"]]} />
+        <Select value={scope} onChange={(value) => { setScope(value); setTargetId(""); }} options={[["global", "Global"], ["campaign", "Kampagne"], ["session", "Session"], ["scene", "Szene"], ["character", "Charakter"]]} />
         {scope !== "global" && <Select value={targetId} onChange={setTargetId} options={[["", "Zuordnung waehlen"], ...targetOptions]} />}
         <button onClick={createModule} disabled={!name.trim() || (scope !== "global" && !targetId)} className="min-h-10 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Baustein erstellen</button>
         <div className="mt-3 grid gap-2 border-t border-[#a8752a]/25 pt-3">
@@ -922,6 +1577,7 @@ function CustomModuleCard({ module, data, onSave, onDelete, onDuplicate }) {
     patch({ fields: (module.fields ?? []).filter((field) => field.id !== fieldId) });
   }
   const isHandout = (module.itemType ?? "note") === "handout";
+  const isScene = (module.itemType ?? "note") === "scene";
   const hasStatBlock = ["enemy", "threat", "encounter"].includes(module.itemType ?? "note");
   return (
     <div className="grid gap-4 border border-[#a8752a]/30 bg-black/25 p-4">
@@ -937,7 +1593,9 @@ function CustomModuleCard({ module, data, onSave, onDelete, onDuplicate }) {
         <Select value={module.visibility ?? "gm"} onChange={(visibility) => patch({ visibility })} options={BUILDER_VISIBILITY} />
       </div>
       {isHandout && <HandoutPagesEditor module={module} characters={data.characters} onPatch={patch} />}
-      {hasStatBlock && <StatBlockEditor statBlock={module.statBlock ?? defaultStatBlock(module.itemType === "threat" ? "hazard" : "standard")} onChange={(statBlock) => patch({ statBlock })} />}
+      {isScene && <SceneModuleEditor module={module} data={data} onPatch={patch} />}
+      {hasStatBlock && <EnemyLayoutDataEditor module={module} data={data} onPatch={patch} />}
+      <ModuleRelationsEditor module={module} data={data} onPatch={patch} />
       <input value={(module.tags ?? []).join(", ")} onChange={(event) => patch({ tags: event.target.value.split(",").map((entry) => entry.trim()).filter(Boolean) })} placeholder="Tags, durch Komma getrennt" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
       <TextArea label="Kurzbeschreibung" value={module.summary ?? ""} onChange={(summary) => patch({ summary })} />
       <TextArea label="GM-Notizen" value={module.gmNotes ?? ""} onChange={(gmNotes) => patch({ gmNotes })} />
@@ -959,6 +1617,260 @@ function CustomModuleCard({ module, data, onSave, onDelete, onDuplicate }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+const RELATION_KIND_OPTIONS = [
+  ["belongsTo", "Gehoert zu"],
+  ["locatedIn", "Befindet sich in"],
+  ["appearsIn", "Tritt auf in"],
+  ["controls", "Kontrolliert"],
+  ["alliedWith", "Verbuendet mit"],
+  ["opposedTo", "Feindlich mit"],
+  ["questGiver", "Questgeber"],
+  ["questTarget", "Questziel"],
+  ["secretAbout", "Geheimnis ueber"],
+  ["leadsTo", "Fuehrt zu"],
+  ["consequenceOf", "Konsequenz von"]
+];
+
+function SceneModuleEditor({ module, data, onPatch }) {
+  const scene = module.scene ?? defaultSceneData();
+  const modules = data.customGmModules ?? [];
+  const locations = modules.filter((entry) => (entry.itemType ?? "note") === "location");
+  const npcs = modules.filter((entry) => (entry.itemType ?? "note") === "npc");
+  const enemies = modules.filter((entry) => ["enemy", "threat"].includes(entry.itemType ?? "note"));
+  const encounters = modules.filter((entry) => (entry.itemType ?? "note") === "encounter");
+  const handouts = modules.filter((entry) => (entry.itemType ?? "note") === "handout");
+  const patchScene = (patchData) => onPatch({ scene: { ...scene, ...patchData } });
+
+  return (
+    <div className="grid gap-3 border border-[#a8752a]/25 bg-black/20 p-3">
+      <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Szenenstruktur</div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <TextArea label="Zweck / Ziel" value={scene.purpose ?? ""} onChange={(purpose) => patchScene({ purpose })} />
+        <TextArea label="Einstieg" value={scene.opener ?? ""} onChange={(opener) => patchScene({ opener })} />
+        <TextArea label="Vorlesetext" value={scene.readAloud ?? ""} onChange={(readAloud) => patchScene({ readAloud })} />
+        <TextArea label="Geheimnisse" value={scene.secrets ?? ""} onChange={(secrets) => patchScene({ secrets })} />
+      </div>
+      <TextArea label="Moegliche Konsequenzen" value={scene.consequences ?? ""} onChange={(consequences) => patchScene({ consequences })} />
+      <Select value={scene.locationId ?? ""} onChange={(locationId) => patchScene({ locationId: locationId || undefined })} options={[["", "Ort waehlen"], ...locations.map((location) => [location.id, location.name])]} />
+      <LinkedModulePicker label="NSC" modules={npcs} selectedIds={scene.npcIds ?? []} onChange={(npcIds) => patchScene({ npcIds })} />
+      <LinkedModulePicker label="Gegner / Bedrohungen" modules={enemies} selectedIds={scene.enemyIds ?? []} onChange={(enemyIds) => patchScene({ enemyIds })} />
+      <LinkedModulePicker label="Encounter" modules={encounters} selectedIds={scene.encounterIds ?? []} onChange={(encounterIds) => patchScene({ encounterIds })} />
+      <LinkedModulePicker label="Handouts" modules={handouts} selectedIds={scene.handoutIds ?? []} onChange={(handoutIds) => patchScene({ handoutIds })} />
+    </div>
+  );
+}
+
+function LinkedModulePicker({ label, modules, selectedIds, onChange }) {
+  function toggle(id) {
+    onChange(selectedIds.includes(id) ? selectedIds.filter((entry) => entry !== id) : [...selectedIds, id]);
+  }
+  return (
+    <div className="grid gap-2">
+      <div className="text-xs font-black uppercase tracking-[0.16em] text-[#f2ca75]">{label}</div>
+      <div className="flex flex-wrap gap-2">
+        {modules.map((module) => <button key={module.id} onClick={() => toggle(module.id)} className={`border px-2 py-1 text-xs ${selectedIds.includes(module.id) ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>{module.name}</button>)}
+        {!modules.length && <span className="text-sm text-[#8c8170]">Keine passenden Bausteine.</span>}
+      </div>
+    </div>
+  );
+}
+
+function ModuleRelationsEditor({ module, data, onPatch }) {
+  const modules = (data.customGmModules ?? []).filter((entry) => entry.id !== module.id);
+  const relations = module.relations ?? [];
+  const [kind, setKind] = useState("belongsTo");
+  const [targetId, setTargetId] = useState("");
+  const [label, setLabel] = useState("");
+
+  function addRelation() {
+    if (!targetId) return;
+    onPatch({ relations: [...relations, { id: crypto.randomUUID(), kind, targetModuleId: targetId, label: label.trim(), private: true }] });
+    setKind("belongsTo");
+    setTargetId("");
+    setLabel("");
+  }
+
+  function patchRelation(id, patchData) {
+    onPatch({ relations: relations.map((relation) => relation.id === id ? { ...relation, ...patchData } : relation) });
+  }
+
+  function deleteRelation(id) {
+    onPatch({ relations: relations.filter((relation) => relation.id !== id) });
+  }
+
+  return (
+    <div className="grid gap-3 border border-[#a8752a]/25 bg-black/20 p-3">
+      <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Beziehungen</div>
+      <div className="grid gap-2 lg:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)_auto]">
+        <Select value={kind} onChange={setKind} options={RELATION_KIND_OPTIONS} />
+        <Select value={targetId} onChange={setTargetId} options={[["", "Ziel waehlen"], ...modules.map((entry) => [entry.id, `${optionLabel(BUILDER_TYPES, entry.itemType ?? "note")} · ${entry.name}`])]} />
+        <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Optionale Notiz" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+        <button onClick={addRelation} disabled={!targetId} className="min-h-10 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-3 text-sm font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Hinzufuegen</button>
+      </div>
+      <div className="grid gap-2">
+        {relations.map((relation) => {
+          const target = modules.find((entry) => entry.id === relation.targetModuleId);
+          return (
+            <div key={relation.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-2 lg:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+              <Select value={relation.kind ?? "belongsTo"} onChange={(nextKind) => patchRelation(relation.id, { kind: nextKind })} options={RELATION_KIND_OPTIONS} />
+              <div className="min-h-10 border border-[#a8752a]/25 bg-black/20 px-3 py-2 text-sm text-[#f4ead7]">{target ? `${optionLabel(BUILDER_TYPES, target.itemType ?? "note")} · ${target.name}` : "Unbekannter Baustein"}</div>
+              <input value={relation.label ?? ""} onChange={(event) => patchRelation(relation.id, { label: event.target.value })} className="min-h-10 border border-[#a8752a]/25 bg-black/20 px-3 text-sm text-[#cfc2aa] outline-none" />
+              <label className="flex min-h-10 items-center gap-2 text-sm text-[#cfc2aa]"><input type="checkbox" checked={relation.private ?? false} onChange={(event) => patchRelation(relation.id, { private: event.target.checked })} /> GM</label>
+              <button onClick={() => deleteRelation(relation.id)} className="grid h-10 w-10 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+            </div>
+          );
+        })}
+        {!relations.length && <div className="text-sm text-[#8c8170]">Noch keine Beziehungen gepflegt.</div>}
+      </div>
+    </div>
+  );
+}
+
+function EnemyLayoutDataEditor({ module, data, onPatch }) {
+  const statBlock = module.statBlock ?? defaultStatBlock(module.itemType === "threat" ? "hazard" : "standard");
+  const layouts = enemyLayoutTemplates(data);
+  const activeLayoutId = data.activeLayoutTemplateIds?.enemy ?? "";
+  const selectedLayoutId = statBlock.layoutTemplateId ?? activeLayoutId;
+  const selectedLayout = layouts.find((layout) => layout.id === selectedLayoutId);
+  const fields = selectedLayout ? enemyEditableElements(selectedLayout) : defaultEnemyEditorElements();
+
+  function patchStatBlock(patchData) {
+    onPatch({ statBlock: { ...statBlock, ...patchData } });
+  }
+
+  function patchEnemyValue(valueKey, value) {
+    if (valueKey === "enemy.name") {
+      onPatch({ name: value });
+      return;
+    }
+    if (valueKey === "enemy.role") return patchStatBlock({ role: value });
+    if (valueKey === "enemy.difficulty") return patchStatBlock({ difficulty: value });
+    if (valueKey === "enemy.tactics") return patchStatBlock({ tactics: value });
+    if (valueKey === "enemy.loot") return patchStatBlock({ loot: value });
+    if (valueKey === "enemy.traits") return patchStatBlock({ traits: splitList(value) });
+    if (["enemy.hp", "enemy.stress", "enemy.armor", "enemy.defense"].includes(valueKey)) {
+      const key = valueKey.replace("enemy.", "");
+      patchStatBlock({ [key]: value === "" ? undefined : Math.max(0, Number(value) || 0) });
+      return;
+    }
+    patchStatBlock({ customValues: { ...(statBlock.customValues ?? {}), [valueKey]: value } });
+  }
+
+  function valueFor(valueKey) {
+    if (valueKey === "enemy.name") return module.name;
+    if (valueKey === "enemy.role") return statBlock.role ?? "";
+    if (valueKey === "enemy.difficulty") return statBlock.difficulty ?? "";
+    if (valueKey === "enemy.tactics") return statBlock.tactics ?? "";
+    if (valueKey === "enemy.loot") return statBlock.loot ?? "";
+    if (valueKey === "enemy.traits") return (statBlock.traits ?? []).join(", ");
+    if (valueKey === "enemy.hp") return statBlock.hp ?? "";
+    if (valueKey === "enemy.stress") return statBlock.stress ?? "";
+    if (valueKey === "enemy.armor") return statBlock.armor ?? "";
+    if (valueKey === "enemy.defense") return statBlock.defense ?? "";
+    return statBlock.customValues?.[valueKey] ?? "";
+  }
+
+  return (
+    <div className="grid gap-4 border border-[#a8752a]/25 bg-black/20 p-4">
+      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px]">
+        <div>
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">Gegnerdaten aus Layout</div>
+          <div className="mt-1 text-sm text-[#8c8170]">{selectedLayout ? `Dieses Formular folgt "${selectedLayout.name}".` : "Waehle ein Gegnerlayout oder nutze die Basisfelder."}</div>
+        </div>
+        <Select value={selectedLayoutId} onChange={(layoutTemplateId) => patchStatBlock({ layoutTemplateId })} options={[["", "Kein Layout"], ...layouts.map((layout) => [layout.id, layout.name])]} />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {fields.map((element) => {
+          const valueKey = element.valueKey;
+          if (!valueKey) return null;
+          if (valueKey === "enemy.abilities") return <EnemyAbilitiesEditor key={element.id} statBlock={statBlock} onChange={patchStatBlock} title={element.title || "Faehigkeiten"} />;
+          if (valueKey === "enemy.attacks") return <EnemyAttacksEditor key={element.id} statBlock={statBlock} onChange={patchStatBlock} title={element.title || "Angriffe"} />;
+          const multiline = ["enemy.tactics", "enemy.loot", "enemy.motivation"].includes(valueKey) || element.h >= 4;
+          const label = element.title || enemySourceLabel(valueKey);
+          const value = valueFor(valueKey);
+          const fieldClass = multiline ? "md:col-span-2" : "";
+          return (
+            <div key={`${element.id}-${valueKey}`} className={fieldClass}>
+              {multiline ? (
+                <TextArea label={label} value={value} onChange={(nextValue) => patchEnemyValue(valueKey, nextValue)} />
+              ) : (
+                <Field label={label} value={value} onChange={(nextValue) => patchEnemyValue(valueKey, nextValue)} />
+              )}
+            </div>
+          );
+        })}
+        {!fields.length && <div className="border border-dashed border-[#a8752a]/35 p-4 text-sm text-[#8c8170] md:col-span-2">Das gewaehlte Layout enthaelt keine bearbeitbaren Gegnerquellen.</div>}
+      </div>
+    </div>
+  );
+}
+
+function EnemyAttacksEditor({ statBlock, onChange, title }) {
+  function addAttack() {
+    onChange({ attacks: [...(statBlock.attacks ?? []), { id: crypto.randomUUID(), name: "Neuer Angriff", attackBonus: "", range: "", damage: "", effect: "" }] });
+  }
+  function patchAttack(id, patchData) {
+    onChange({ attacks: (statBlock.attacks ?? []).map((attack) => attack.id === id ? { ...attack, ...patchData } : attack) });
+  }
+  function removeAttack(id) {
+    onChange({ attacks: (statBlock.attacks ?? []).filter((attack) => attack.id !== id) });
+  }
+  return (
+    <div className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-3 md:col-span-2">
+      <div className="flex items-center gap-2">
+        <div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">{title}</div>
+        <button onClick={addAttack} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Angriff +</button>
+      </div>
+      {(statBlock.attacks ?? []).map((attack) => (
+        <div key={attack.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-3">
+          <div className="grid gap-2 md:grid-cols-[1fr_110px_140px_140px_auto]">
+            <input value={attack.name ?? ""} onChange={(event) => patchAttack(attack.id, { name: event.target.value })} placeholder="Name" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+            <input value={attack.attackBonus ?? ""} onChange={(event) => patchAttack(attack.id, { attackBonus: event.target.value })} placeholder="Angriff +" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+            <input value={attack.range ?? ""} onChange={(event) => patchAttack(attack.id, { range: event.target.value })} placeholder="Reichweite" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+            <input value={attack.damage ?? ""} onChange={(event) => patchAttack(attack.id, { damage: event.target.value })} placeholder="Schaden" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+            <button onClick={() => removeAttack(attack.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+          </div>
+          <textarea value={attack.effect ?? ""} onChange={(event) => patchAttack(attack.id, { effect: event.target.value })} placeholder="Effekt, Besonderheit oder Trigger" className="min-h-16 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" />
+        </div>
+      ))}
+      {!(statBlock.attacks ?? []).length && <div className="border border-dashed border-[#a8752a]/25 p-3 text-sm text-[#8c8170]">Noch keine Angriffe.</div>}
+    </div>
+  );
+}
+
+function EnemyAbilitiesEditor({ statBlock, onChange, title }) {
+  function addAbility() {
+    onChange({ abilities: [...(statBlock.abilities ?? []), { id: crypto.randomUUID(), name: "Neue Faehigkeit", kind: "active", icon: "none", text: "" }] });
+  }
+  function patchAbility(id, patchData) {
+    onChange({ abilities: (statBlock.abilities ?? []).map((ability) => ability.id === id ? { ...ability, ...patchData } : ability) });
+  }
+  function removeAbility(id) {
+    onChange({ abilities: (statBlock.abilities ?? []).filter((ability) => ability.id !== id) });
+  }
+  return (
+    <div className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-3 md:col-span-2">
+      <div className="flex items-center gap-2">
+        <div className="mr-auto text-xs font-black uppercase tracking-[0.18em] text-[#f2ca75]">{title}</div>
+        <button onClick={addAbility} className="border border-[#a8752a]/40 px-3 py-1 text-sm text-[#ffd88c]">Faehigkeit +</button>
+      </div>
+      {(statBlock.abilities ?? []).map((ability) => (
+        <div key={ability.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-3">
+          <div className="grid gap-2 md:grid-cols-[1fr_160px_130px_auto]">
+            <input value={ability.name ?? ""} onChange={(event) => patchAbility(ability.id, { name: event.target.value })} placeholder="Name" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
+            <Select value={ability.kind ?? "active"} onChange={(kind) => patchAbility(ability.id, { kind })} options={[["passive", "Passiv"], ["active", "Aktion"], ["reaction", "Reaktion"], ["boss", "Boss-Aktion"]]} />
+            <Select value={ability.icon ?? "none"} onChange={(icon) => patchAbility(ability.id, { icon })} options={[["none", "Kein Icon"], ["skull", "Totenkopf"], ["bolt", "Blitz"]]} />
+            <button onClick={() => removeAbility(ability.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
+          </div>
+          <textarea value={ability.text ?? ""} onChange={(event) => patchAbility(ability.id, { text: event.target.value })} placeholder="Regeltext oder Ausloeser" className="min-h-20 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" />
+        </div>
+      ))}
+      {!(statBlock.abilities ?? []).length && <div className="border border-dashed border-[#a8752a]/25 p-3 text-sm text-[#8c8170]">Noch keine Faehigkeiten.</div>}
     </div>
   );
 }
@@ -988,7 +1900,7 @@ function StatBlockEditor({ statBlock, onChange }) {
     patch({ attacks: (stat.attacks ?? []).filter((attack) => attack.id !== id) });
   }
   function addAbility() {
-    patch({ abilities: [...(stat.abilities ?? []), { id: crypto.randomUUID(), name: "Neue Faehigkeit", kind: "active", text: "" }] });
+    patch({ abilities: [...(stat.abilities ?? []), { id: crypto.randomUUID(), name: "Neue Faehigkeit", kind: "active", icon: "none", text: "" }] });
   }
   function patchAbility(id, patchData) {
     patch({ abilities: (stat.abilities ?? []).map((ability) => ability.id === id ? { ...ability, ...patchData } : ability) });
@@ -1075,9 +1987,10 @@ function StatBlockEditor({ statBlock, onChange }) {
         </div>
         {(stat.abilities ?? []).map((ability) => (
           <div key={ability.id} className="grid gap-2 border border-[#a8752a]/20 bg-black/20 p-3">
-            <div className="grid gap-2 md:grid-cols-[1fr_160px_auto]">
+            <div className="grid gap-2 md:grid-cols-[1fr_160px_130px_auto]">
               <input value={ability.name ?? ""} onChange={(event) => patchAbility(ability.id, { name: event.target.value })} placeholder="Name" className="min-h-9 border border-[#a8752a]/25 bg-black/20 px-2 text-sm text-[#f4ead7] outline-none" />
-              <Select value={ability.kind ?? "active"} onChange={(kind) => patchAbility(ability.id, { kind })} options={[["passive", "Passiv"], ["active", "Aktiv"], ["reaction", "Reaktion"], ["boss", "Boss-Aktion"]]} />
+              <Select value={ability.kind ?? "active"} onChange={(kind) => patchAbility(ability.id, { kind })} options={[["passive", "Passiv"], ["active", "Aktion"], ["reaction", "Reaktion"], ["boss", "Boss-Aktion"]]} />
+              <Select value={ability.icon ?? "none"} onChange={(icon) => patchAbility(ability.id, { icon })} options={[["none", "Kein Icon"], ["skull", "Totenkopf"], ["bolt", "Blitz"]]} />
               <button onClick={() => removeAbility(ability.id)} className="grid h-9 w-9 place-items-center border border-red-300/35 text-red-200"><Trash2 className="h-4 w-4" /></button>
             </div>
             <textarea value={ability.text ?? ""} onChange={(event) => patchAbility(ability.id, { text: event.target.value })} placeholder="Regeltext oder Ausloeser" className="min-h-16 border border-[#a8752a]/25 bg-black/20 p-2 text-sm text-[#cfc2aa] outline-none" />
@@ -1364,6 +2277,39 @@ function normalizeDashboardSession(session) {
   };
 }
 
+function buildLiveContext(data) {
+  const campaigns = data.campaigns ?? [];
+  const sessions = data.campaignSessions ?? [];
+  const modules = data.customGmModules ?? [];
+  const activeSession = sessions.find((session) => session.status === "active")
+    ?? sessions.filter((session) => (session.status ?? "planned") !== "completed" && (session.status ?? "planned") !== "archived").sort(byScheduledDate)[0]
+    ?? sessions[0];
+  const activeCampaign = campaigns.find((campaign) => campaign.id === activeSession?.campaignId)
+    ?? campaigns.find((campaign) => campaign.status === "active")
+    ?? campaigns[0];
+  const sessionScenes = modules.filter((module) => (module.itemType ?? "note") === "scene" && (module.sessionId === activeSession?.id || (activeSession?.sceneIds ?? []).includes(module.id)));
+  const activeScene = sessionScenes.find((scene) => scene.id === activeSession?.activeSceneId)
+    ?? sessionScenes.find((scene) => scene.status === "active")
+    ?? sessionScenes[0];
+  return { activeCampaign, activeSession, activeScene };
+}
+
+function linkedSceneModules(scene, modules) {
+  const byIds = (ids) => (ids ?? []).map((id) => modules.find((module) => module.id === id)).filter(Boolean);
+  if (!scene) return { npcs: [], enemies: [], encounters: [], handouts: [] };
+  const relationTargets = byIds((scene.relations ?? []).map((relation) => relation.targetModuleId));
+  const sceneData = scene.scene ?? {};
+  const npcs = uniqueModules([...byIds(sceneData.npcIds), ...relationTargets.filter((module) => (module.itemType ?? "note") === "npc")]);
+  const enemies = uniqueModules([...byIds(sceneData.enemyIds), ...relationTargets.filter((module) => ["enemy", "threat"].includes(module.itemType ?? "note"))]);
+  const encounters = uniqueModules([...byIds(sceneData.encounterIds), ...relationTargets.filter((module) => (module.itemType ?? "note") === "encounter")]);
+  const handouts = uniqueModules([...byIds(sceneData.handoutIds), ...relationTargets.filter((module) => (module.itemType ?? "note") === "handout")]);
+  return { npcs, enemies, encounters, handouts };
+}
+
+function uniqueModules(modules) {
+  return Array.from(new Map(modules.filter(Boolean).map((module) => [module.id, module])).values());
+}
+
 function optionLabel(options, value) {
   return options.find(([optionValue]) => optionValue === value)?.[1] ?? value;
 }
@@ -1371,8 +2317,122 @@ function optionLabel(options, value) {
 function moduleTargetLabel(module, data) {
   if (module.scope === "campaign") return data.campaigns?.find((entry) => entry.id === module.campaignId)?.name ?? "Kampagne";
   if (module.scope === "session") return data.campaignSessions?.find((entry) => entry.id === module.sessionId)?.name ?? "Session";
+  if (module.scope === "scene") return data.customGmModules?.find((entry) => entry.id === module.sceneId)?.name ?? "Szene";
   if (module.scope === "character") return data.characters.find((entry) => entry.id === module.characterId)?.name ?? "Charakter";
   return "Global";
+}
+
+function enemyLayoutTemplates(data) {
+  return [...(data.layoutTemplates ?? [])]
+    .filter((template) => template.target === "enemy" || template.target === "both")
+    .sort((left, right) => Date.parse(right.updatedAt ?? "") - Date.parse(left.updatedAt ?? "") || byName(left, right));
+}
+
+function enemyEditableElements(template) {
+  const seen = new Set();
+  const elements = [];
+  [...(template.elements ?? [])]
+    .sort((left, right) => (left.y ?? 0) - (right.y ?? 0) || (left.x ?? 0) - (right.x ?? 0))
+    .forEach((element) => {
+      elements.push({ ...element, valueKey: element.repeatSource || element.valueKey });
+      if (element.type === "statGrid" && element.displayMode === "thresholds") {
+        (element.columns ?? []).forEach((column, index) => {
+          if (String(column).startsWith("enemy.")) {
+            elements.push({ ...element, id: `${element.id}-column-${index}`, valueKey: column, title: enemySourceLabel(column), h: 2 });
+          }
+        });
+      }
+    });
+  return elements
+    .filter((element) => {
+      if (!element.valueKey) return false;
+      if (!element.valueKey.startsWith("enemy.")) return false;
+      if (seen.has(element.valueKey)) return false;
+      seen.add(element.valueKey);
+      return true;
+    });
+}
+
+function defaultEnemyEditorElements() {
+  return [
+    ["enemy.name", "Name"],
+    ["enemy.role", "Rolle"],
+    ["enemy.difficulty", "Schwierigkeit"],
+    ["enemy.hp", "HP"],
+    ["enemy.stress", "Stress"],
+    ["enemy.armor", "Ruestung"],
+    ["enemy.defense", "Verteidigung"],
+    ["enemy.traits", "Merkmale"],
+    ["enemy.attacks", "Angriffe"],
+    ["enemy.abilities", "Faehigkeiten"],
+    ["enemy.tactics", "Taktik"],
+    ["enemy.loot", "Beute"]
+  ].map(([valueKey, title], index) => ({ id: `default-enemy-${valueKey}`, valueKey, title, x: 1 + (index % 2) * 6, y: 1 + Math.floor(index / 2), h: ["enemy.tactics", "enemy.loot"].includes(valueKey) ? 4 : 2 }));
+}
+
+function enemySourceLabel(valueKey) {
+  const key = String(valueKey || "").replace(/^enemy\./, "");
+  const labels = {
+    name: "Name",
+    type: "Typ",
+    level: "Level / HG",
+    role: "Rolle",
+    tier: "Tier",
+    size: "Groesse",
+    alignment: "Gesinnung",
+    difficulty: "Schwierigkeit",
+    attackBonus: "Angriffswert",
+    weapon: "Waffe / Angriff",
+    cr: "Challenge Rating",
+    xp: "XP",
+    hp: "HP",
+    stress: "Stress",
+    armor: "Ruestung",
+    ac: "Armor Class",
+    defense: "Verteidigung",
+    speed: "Bewegung",
+    perception: "Wahrnehmung",
+    saves: "Rettungswuerfe",
+    skills: "Fertigkeiten",
+    resistances: "Resistenzen",
+    weaknesses: "Schwaechen",
+    immunities: "Immunitaeten",
+    languages: "Sprachen",
+    traits: "Merkmale",
+    attacks: "Angriffe",
+    abilities: "Faehigkeiten",
+    reactions: "Reaktionen",
+    legendary: "Legendary Actions",
+    thresholds: "Schadensschwellen",
+    thresholdLight: "Grenzwert gering",
+    thresholdMedium: "Grenzwert mittel",
+    thresholdHeavy: "Grenzwert schwer",
+    tactics: "Taktik",
+    motivation: "Motiv",
+    experience: "Erfahrungen",
+    loot: "Beute"
+  };
+  return labels[key] ?? key;
+}
+
+function enemyDisplayValue(module, statBlock, valueKey) {
+  if (valueKey === "enemy.name") return module.name;
+  if (valueKey === "enemy.role") return statBlock.role ?? "";
+  if (valueKey === "enemy.difficulty") return statBlock.difficulty ?? "";
+  if (valueKey === "enemy.tactics") return statBlock.tactics ?? "";
+  if (valueKey === "enemy.loot") return statBlock.loot ?? "";
+  if (valueKey === "enemy.traits") return (statBlock.traits ?? []).join(", ");
+  if (valueKey === "enemy.hp") return statBlock.hp ?? "";
+  if (valueKey === "enemy.stress") return statBlock.stress ?? "";
+  if (valueKey === "enemy.armor") return statBlock.armor ?? "";
+  if (valueKey === "enemy.defense") return statBlock.defense ?? "";
+  if (valueKey === "enemy.attacks") return (statBlock.attacks ?? []).map((attack) => attack.name).filter(Boolean).join(", ");
+  if (valueKey === "enemy.abilities") return (statBlock.abilities ?? []).map((ability) => ability.name).filter(Boolean).join(", ");
+  return statBlock.customValues?.[valueKey] ?? "";
+}
+
+function splitList(value) {
+  return String(value || "").split(",").map((entry) => entry.trim()).filter(Boolean);
 }
 
 function Field({ label, value, onChange }) {
@@ -1474,11 +2534,26 @@ function defaultStatBlock(template = "standard") {
   };
   if (template === "minion") return { ...base, hp: 1, attacks: [{ id: crypto.randomUUID(), name: "Schwaecher Angriff", range: "Nah", damage: "1", effect: "" }] };
   if (template === "elite") return { ...base, hp: 12, stress: 4, armor: 1, defense: 1, role: "Elite" };
-  if (template === "boss") return { ...base, hp: 24, stress: 8, armor: 2, defense: 2, role: "Boss", layout: "boss", abilities: [{ id: crypto.randomUUID(), name: "Boss-Aktion", kind: "boss", text: "" }] };
+  if (template === "boss") return { ...base, hp: 24, stress: 8, armor: 2, defense: 2, role: "Boss", layout: "boss", abilities: [{ id: crypto.randomUUID(), name: "Boss-Aktion", kind: "boss", icon: "skull", text: "" }] };
   if (template === "social") return { ...base, hp: 0, stress: 6, role: "Sozialer Gegner", attacks: [] };
   if (template === "hazard") return { ...base, hp: 0, stress: 0, role: "Gefahr", attacks: [{ id: crypto.randomUUID(), name: "Ausloeser", range: "Zone", damage: "", effect: "" }] };
   return base;
 }
+
+function defaultSceneData() {
+  return {
+    purpose: "",
+    opener: "",
+    readAloud: "",
+    secrets: "",
+    consequences: "",
+    encounterIds: [],
+    handoutIds: [],
+    npcIds: [],
+    enemyIds: []
+  };
+}
+
 function cloneModuleAsTemplate(module) {
   const now = new Date().toISOString();
   return cloneModule(module, {
@@ -1507,6 +2582,16 @@ function cloneModule(module, overrides) {
     ...overrides,
     id: crypto.randomUUID(),
     tags: [...(module.tags ?? [])],
+    relations: (module.relations ?? []).map((relation) => ({ ...relation, id: crypto.randomUUID() })),
+    scene: module.scene
+      ? {
+          ...module.scene,
+          encounterIds: [...(module.scene.encounterIds ?? [])],
+          handoutIds: [...(module.scene.handoutIds ?? [])],
+          npcIds: [...(module.scene.npcIds ?? [])],
+          enemyIds: [...(module.scene.enemyIds ?? [])]
+        }
+      : undefined,
     fields: (module.fields ?? []).map((field) => ({ ...field, id: crypto.randomUUID() })),
     handoutPages: (module.handoutPages ?? []).map((page) => ({ ...page, id: crypto.randomUUID(), releasedToCharacterIds: [...(page.releasedToCharacterIds ?? [])] })),
     statBlock: module.statBlock

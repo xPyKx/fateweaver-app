@@ -27,22 +27,22 @@ export function WorkspaceManager({ onClose }) {
   const canDeleteWorkspace = (data.workspaces ?? []).length > 1;
 
   function confirmDeleteWorkspace(workspace) {
-    const confirmation = window.prompt(`Spielrunde "${workspace.name}" loeschen? Gib exakt "Loeschen" ein.`);
+    const confirmation = window.prompt(`Arbeitsbereich "${workspace.name}" loeschen? Gib exakt "Loeschen" ein.`);
     if (confirmation !== "Loeschen") return;
     deleteWorkspace(workspace.id);
     if (workspaceFilterId === workspace.id) setWorkspaceFilterId("all");
   }
 
   if (!currentUserId || !(profile?.isGm || profile?.isAdmin)) {
-    return <div className="border border-[#a8752a]/30 bg-black/25 p-4 text-sm text-[#8c8170]">Nur GM/Admins koennen Spielrunden verwalten.</div>;
+    return <div className="border border-[#a8752a]/30 bg-black/25 p-4 text-sm text-[#8c8170]">Nur GM/Admins koennen Arbeitsbereiche verwalten.</div>;
   }
 
   return (
     <div className="grid gap-4">
       <div className="flex items-start justify-between gap-3 border-b border-[#a8752a]/30 pb-3">
         <div>
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-[#f2ca75]"><Users className="h-4 w-4" /> Spielrunde</div>
-          <div className="mt-1 text-sm text-[#8c8170]">Spielrunden wechseln, erstellen, Mitglieder verwalten und Spieler einladen.</div>
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-[#f2ca75]"><Users className="h-4 w-4" /> Arbeitsbereich</div>
+          <div className="mt-1 text-sm text-[#8c8170]">Technischen Arbeitsbereich wechseln, erstellen und Mitglieder verwalten. Spieler werden in der Kampagne eingeladen.</div>
         </div>
         {onClose && <button onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center border border-[#a8752a]/45 text-[#f4ead7]">x</button>}
       </div>
@@ -54,13 +54,13 @@ export function WorkspaceManager({ onClose }) {
             {(data.workspaces ?? []).map((workspace) => (
               <span key={workspace.id} className={`inline-grid grid-cols-[1fr_auto] border text-sm ${workspaceFilterId !== "all" && workspace.id === activeWorkspaceId ? "border-[#ffd88c] text-[#ffd88c]" : "border-[#a8752a]/35 text-[#cfc2aa]"}`}>
                 <button onClick={() => { setWorkspaceFilterId(workspace.id); setActiveWorkspace(workspace.id); }} className="min-w-0 px-3 py-2 text-left">{workspace.name}</button>
-                {canDeleteWorkspace && <button onClick={() => confirmDeleteWorkspace(workspace)} className="grid w-9 place-items-center border-l border-[#a8752a]/35 text-red-200" title="Spielrunde loeschen"><Trash2 className="h-4 w-4" /></button>}
+                {canDeleteWorkspace && <button onClick={() => confirmDeleteWorkspace(workspace)} className="grid w-9 place-items-center border-l border-[#a8752a]/35 text-red-200" title="Arbeitsbereich loeschen"><Trash2 className="h-4 w-4" /></button>}
               </span>
             ))}
           </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-[220px_auto]">
-          <input value={newWorkspaceName} onChange={(event) => setNewWorkspaceName(event.target.value)} placeholder="Neue Spielrunde" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
+          <input value={newWorkspaceName} onChange={(event) => setNewWorkspaceName(event.target.value)} placeholder="Neuer Arbeitsbereich" className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none" />
           <button onClick={() => { createWorkspace(newWorkspaceName); setNewWorkspaceName(""); }} disabled={!newWorkspaceName.trim()} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Erstellen</button>
         </div>
       </div>
@@ -92,7 +92,7 @@ export function WorkspaceManager({ onClose }) {
               <button onClick={() => { inviteWorkspaceMember(inviteEmail, inviteRole, inviteCampaignId || undefined); setInviteEmail(""); }} disabled={!inviteEmail.trim()} className="border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 py-2 font-bold uppercase text-[#ffd88c] disabled:border-[#a8752a]/20 disabled:text-[#8c8170]">Einladen</button>
             </div>
             <select value={inviteCampaignId} onChange={(event) => setInviteCampaignId(event.target.value)} className="min-h-10 border border-[#a8752a]/35 bg-black/30 px-3 text-[#f4ead7] outline-none">
-              <option value="">Nur Spielrunde</option>
+              <option value="">Nur Arbeitsbereich</option>
               {workspaceCampaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}
             </select>
             <div className="grid gap-2">

@@ -4,6 +4,7 @@ dist/
 .vercel/
 .codex_prompt*/
 .codex_*.log
+.devserver.*
 *.tsbuildinfo
 ~$*
 *.docx

@@ -468,6 +468,10 @@ const calculationSources: { key: CalculationSourceKind; label: string }[] = [
   { key: "bonusSourceSum", label: "Bonusliste" },
   { key: "armorField", label: "Ruestungsfeld" },
   { key: "levelHalfCeil", label: "Level/2 aufgerundet" },
+  { key: "abilityScore", label: "Attributswert" },
+  { key: "abilityModifier", label: "Attributsmodifikator" },
+  { key: "proficiencyBonus", label: "Uebungs-/Proficiency-Bonus" },
+  { key: "taggedItemField", label: "Ausrüstung mit Tag" },
   { key: "calculation", label: "Andere Berechnung" }
 ];
 
@@ -479,7 +483,12 @@ const calculationTargets = [
   { key: "hpMax", label: "HP Maximum", description: "Wird als maximales HP-Feld des Charakters verwendet." },
   { key: "stressMax", label: "Stress Maximum", description: "Wird als maximales Stress-Feld des Charakters verwendet." },
   { key: "lightThreshold", label: "Grenzwert leicht", description: "Wird fuer die leichte Schadensschwelle genutzt." },
-  { key: "heavyThreshold", label: "Grenzwert schwer", description: "Wird fuer die schwere Schadensschwelle genutzt." }
+  { key: "heavyThreshold", label: "Grenzwert schwer", description: "Wird fuer die schwere Schadensschwelle genutzt." },
+  { key: "dnd.armorClass", label: "D&D Ruestungsklasse", description: "Basiswert plus Attributsmodifikator, getragene Ruestung, Schild und Effekte." },
+  { key: "dnd.proficiencyBonus", label: "D&D Uebungsbonus", description: "Uebungsbonus fuer Skills, Rettungswuerfe und Angriffe." },
+  { key: "dnd.int.modifier", label: "D&D INT Modifikator", description: "Attributsmodifikator aus dem Intelligenzwert." },
+  { key: "dnd.int.save", label: "D&D INT Rettungswurf", description: "INT Modifikator plus Uebungsbonus, wenn geuebt." },
+  { key: "dnd.skill.arcana", label: "D&D Arkane Kunde", description: "Skillwert aus INT Modifikator plus Uebung/Expertise und Boni." }
 ];
 
 function CalculationFields({ item, catalog, savePatch }: SpecificEditorProps & { catalog: CatalogItem[] }) {
@@ -582,6 +591,10 @@ function CalculationLegend() {
     ["Bonusliste", "Addiert manuelle Bonusquellen des Charakters, aktuell fuer Ausweichen."],
     ["Ruestungsfeld", "Liest Werte der getragenen Ruestung, z. B. Ruestungswert oder Grenzwerte."],
     ["Level/2 aufgerundet", "Nimmt die Charakterstufe, halbiert sie und rundet auf."],
+    ["Attributswert", "Liest einen systemneutralen Wert wie dnd.int.score oder dsa.mu."],
+    ["Attributsmodifikator", "Rechnet aus einem Attributswert den Modifikator, z. B. D&D floor((Wert - 10) / 2)."],
+    ["Uebungs-/Proficiency-Bonus", "Liest einen hinterlegten Proficiency-Bonus oder nutzt den Uebungsbonus."],
+    ["Ausrüstung mit Tag", "Liest ein Feld aus ausgeruesteten Gegenstaenden, z. B. armor.equipped.acBonus."],
     ["Andere Berechnung", "Verwendet das Ergebnis einer anderen Berechnung als Baustein."]
   ];
   return (
@@ -610,6 +623,17 @@ function CalculationTermInput({ term, calculations, saveTerm }: { term: GameCalc
   if (term.source === "armorField") {
     return <Select label="Ruestungsfeld" value={term.armorField ?? "armorValue"} onChange={(armorField) => saveTerm({ ...term, armorField: armorField as GameCalculationTerm["armorField"] })} options={[["armorValue", "Ruestungswert"], ["baseThresholdLight", "Grenzwert leicht"], ["baseThresholdHeavy", "Grenzwert schwer"], ["baseThresholdHeavyOrLight", "Schwer sonst leicht"]]} />;
   }
+  if (term.source === "abilityScore" || term.source === "abilityModifier" || term.source === "proficiencyBonus") {
+    return <Field label="Datenschluessel" value={term.dataKey ?? ""} onChange={(dataKey) => saveTerm({ ...term, dataKey })} />;
+  }
+  if (term.source === "taggedItemField") {
+    return (
+      <div className="grid gap-2 md:grid-cols-2">
+        <Field label="Tag" value={term.itemTag ?? ""} onChange={(itemTag) => saveTerm({ ...term, itemTag })} />
+        <Field label="Feld" value={term.itemField ?? ""} onChange={(itemField) => saveTerm({ ...term, itemField })} />
+      </div>
+    );
+  }
   if (term.source === "calculation") {
     return <Select label="Berechnung" value={term.calculationKey ?? ""} onChange={(calculationKey) => saveTerm({ ...term, calculationKey })} options={[["", "Berechnung waehlen"], ...calculations.map((entry) => [entry.calculation?.key ?? entry.id, entry.name] as [string, string])]} />;
   }
@@ -623,6 +647,10 @@ function defaultTermForSource(term: GameCalculationTerm): GameCalculationTerm {
   if (term.source === "characterBonus" || term.source === "levelUpBonus") return { id: term.id, source: term.source, sign: term.sign, bonusKey: "hp" };
   if (term.source === "effectSum") return { id: term.id, source: term.source, sign: term.sign, effectTarget: "dodge" };
   if (term.source === "armorField") return { id: term.id, source: term.source, sign: term.sign, armorField: "armorValue" };
+  if (term.source === "abilityScore") return { id: term.id, source: term.source, sign: term.sign, dataKey: "dnd.int.score" };
+  if (term.source === "abilityModifier") return { id: term.id, source: term.source, sign: term.sign, dataKey: "dnd.int.score" };
+  if (term.source === "proficiencyBonus") return { id: term.id, source: term.source, sign: term.sign, dataKey: "dnd.proficiencyBonus" };
+  if (term.source === "taggedItemField") return { id: term.id, source: term.source, sign: term.sign, itemTag: "armor.equipped", itemField: "acBonus" };
   if (term.source === "calculation") return { id: term.id, source: term.source, sign: term.sign, calculationKey: "" };
   return { id: term.id, source: term.source, sign: term.sign };
 }

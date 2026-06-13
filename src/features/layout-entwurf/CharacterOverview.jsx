@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Edit3, LayoutGrid, Plus, ScrollText, Settings, Sparkles, Trash2 } from "lucide-react";
 import { DeleteCharacterDialog } from "./DeleteCharacterDialog";
 import { SupabaseStatus } from "./SupabaseStatus";
@@ -72,6 +72,7 @@ export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMPreparati
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [confirmation, setConfirmation] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [acceptedUrlInvite, setAcceptedUrlInvite] = useState("");
   const [joinCampaignId, setJoinCampaignId] = useState("");
   const joinedCampaigns = (data.campaigns ?? []).filter((campaign) => campaign.members?.some((member) => member.userId === currentUserId && member.status === "active"));
   const characters = data.characters.filter((character) => currentUserId && (!character.ownerId || character.ownerId === currentUserId));
@@ -92,6 +93,18 @@ export function CharacterOverview({ onOpenCharacter, onOpenGM, onOpenGMPreparati
     onCreateCharacter ? onCreateCharacter(persistImmediately ? character.id : undefined) : onOpenCharacter(character.id);
     return character;
   }
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("invite")?.trim().toUpperCase() ?? "";
+    if (!code) return;
+    setInviteCode(code);
+    if (!currentUserId || acceptedUrlInvite === code) return;
+    acceptWorkspaceInvite(code);
+    setAcceptedUrlInvite(code);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("invite");
+    window.history.replaceState({}, "", url.toString());
+  }, [currentUserId, acceptedUrlInvite, acceptWorkspaceInvite]);
 
   function confirmDelete() {
     if (!deleteTarget || confirmation !== "Löschen") return;

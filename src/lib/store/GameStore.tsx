@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import type { AppData, AppMessage, Campaign, CampaignSession, CatalogItem, Character, CustomGmModule, GmSessionData, GmShop, InfoHint, LayoutElementData, LayoutTemplate, LayoutTemplateTarget, NewMessageInput, SessionState, UserProfile, Workspace, WorkspaceInvite, WorkspaceMemberRole } from "../../types/domain";
+import type { AppData, AppMessage, Campaign, CampaignSession, CatalogItem, Character, CustomGmModule, GmSessionData, GmShop, GmTracker, InfoHint, LayoutElementData, LayoutTemplate, LayoutTemplateTarget, NewMessageInput, SessionState, UserProfile, Workspace, WorkspaceInvite, WorkspaceMemberRole } from "../../types/domain";
 import { loadCachedData, saveCachedData } from "../cache/indexedDb";
 import { createSeedData } from "../../data/seeds";
 import { appendCharacterHistory, createHistoryEvent as historyEvent } from "./historyEvents";
@@ -387,7 +387,8 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
           ...current,
           campaigns: (current.campaigns ?? []).filter((campaign) => campaign.id !== id),
           campaignSessions: (current.campaignSessions ?? []).filter((session) => session.campaignId !== id),
-          customGmModules: (current.customGmModules ?? []).filter((module) => module.campaignId !== id)
+          customGmModules: (current.customGmModules ?? []).filter((module) => module.campaignId !== id),
+          gmTrackers: (current.gmTrackers ?? []).filter((tracker) => tracker.campaignId !== id)
         })),
       upsertCampaignSession: (session) =>
         setData((current) => upsertCampaignSessionInData(current, { ...session, workspaceId: session.workspaceId ?? currentWorkspaceId(current, currentUserId) }, currentUserId)),
@@ -395,20 +396,35 @@ export function GameStoreProvider({ children }: { children: React.ReactNode }) {
         setData((current) => ({
           ...current,
           campaignSessions: (current.campaignSessions ?? []).filter((session) => session.id !== id),
-          customGmModules: (current.customGmModules ?? []).filter((module) => module.sessionId !== id)
+          customGmModules: (current.customGmModules ?? []).filter((module) => module.sessionId !== id),
+          gmTrackers: (current.gmTrackers ?? []).filter((tracker) => tracker.sessionId !== id)
         })),
       upsertCustomGmModule: (module) =>
         setData((current) => upsertCustomGmModuleInData(current, { ...module, workspaceId: module.workspaceId ?? currentWorkspaceId(current, currentUserId) }, currentUserId)),
       deleteCustomGmModule: (id) =>
         setData((current) => ({
           ...current,
-          customGmModules: (current.customGmModules ?? []).filter((module) => module.id !== id)
+          customGmModules: (current.customGmModules ?? [])
+            .filter((module) => module.id !== id)
+            .map((module) => ({
+              ...module,
+              relations: (module.relations ?? []).filter((relation) => relation.targetModuleId !== id)
+            })),
+          gmTrackers: (current.gmTrackers ?? []).filter((tracker) => tracker.sceneId !== id)
+        })),
+      upsertGmTracker: (tracker) =>
+        setData((current) => upsertGmTrackerInData(current, { ...tracker, workspaceId: tracker.workspaceId ?? currentWorkspaceId(current, currentUserId) })),
+      deleteGmTracker: (id) =>
+        setData((current) => ({
+          ...current,
+          gmTrackers: (current.gmTrackers ?? []).filter((tracker) => tracker.id !== id)
         })),
       upsertLayoutTemplate: (template) =>
         setData((current) => upsertLayoutTemplateInData(current, { ...template, workspaceId: template.workspaceId ?? currentWorkspaceId(current, currentUserId) })),
       deleteLayoutTemplate: (id) =>
         setData((current) => ({
           ...current,
+          deletedLayoutTemplateIds: unique([...(current.deletedLayoutTemplateIds ?? []), id]),
           layoutTemplates: (current.layoutTemplates ?? []).filter((template) => template.id !== id),
           activeLayoutTemplateIds: removeActiveLayoutTemplateId(current.activeLayoutTemplateIds, id)
         })),
@@ -444,6 +460,8 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
   catalog = withMissingSystemCalculations(catalog, deletedCatalogItemSet);
   const deletedCharacterIds = unique(data.deletedCharacterIds ?? []);
   const deletedCharacterSet = new Set(deletedCharacterIds);
+  const deletedLayoutTemplateIds = unique(data.deletedLayoutTemplateIds ?? []);
+  const deletedLayoutTemplateSet = new Set(deletedLayoutTemplateIds);
   const catalogIds = new Set(catalog.map((item) => item.id));
   const catalogHas = (id: string | undefined, type?: string) => Boolean(id && catalog.some((item) => item.id === id && (!type || item.type === type)));
   const cleanIds = (ids: string[] | undefined, type?: string) => unique(ids ?? []).filter((id) => catalogHas(id, type));
@@ -519,6 +537,9 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
     ? data.activeCharacterId
     : characters[0]?.id;
   const gmSession = normalizeGmSession(data.gmSession);
+  const layoutTemplates = normalizeLayoutTemplates(data.layoutTemplates, activeWorkspaceId)
+    .filter((template) => !deletedLayoutTemplateSet.has(template.id))
+    .filter((template) => !template.workspaceId || !deletedWorkspaceSet.has(template.workspaceId));
   return {
     ...data,
     workspaces,
@@ -528,13 +549,15 @@ export function normalizeLoadedData(data: AppData, userId?: string): AppData {
     catalog,
     deletedCatalogItemIds,
     deletedCharacterIds,
+    deletedLayoutTemplateIds,
     historyEvents: (data.historyEvents ?? []).filter((entry) => !entry.workspaceId || !deletedWorkspaceSet.has(entry.workspaceId)).filter((entry) => !entry.characterId || !deletedCharacterSet.has(entry.characterId)).map((entry) => ({ ...entry, workspaceId: entry.workspaceId ?? activeWorkspaceId })),
     messages: cleanMessages(data.messages, deletedCharacterSet).filter((message) => !message.workspaceId || !deletedWorkspaceSet.has(message.workspaceId)).map((message) => ({ ...message, workspaceId: message.workspaceId ?? activeWorkspaceId })),
     campaigns: cleanCampaigns(data.campaigns, deletedCharacterSet).filter((campaign) => !campaign.workspaceId || !deletedWorkspaceSet.has(campaign.workspaceId)).map((campaign) => ({ ...campaign, workspaceId: campaign.workspaceId ?? activeWorkspaceId })),
     campaignSessions: cleanCampaignSessions(data.campaignSessions, data.campaigns).filter((session) => !session.workspaceId || !deletedWorkspaceSet.has(session.workspaceId)).map((session) => ({ ...session, workspaceId: session.workspaceId ?? activeWorkspaceId })),
     customGmModules: cleanCustomGmModules(data.customGmModules, deletedCharacterSet).filter((module) => !module.workspaceId || !deletedWorkspaceSet.has(module.workspaceId)).map((module) => ({ ...module, workspaceId: module.workspaceId ?? activeWorkspaceId })),
-    layoutTemplates: normalizeLayoutTemplates(data.layoutTemplates, activeWorkspaceId).filter((template) => !template.workspaceId || !deletedWorkspaceSet.has(template.workspaceId)),
-    activeLayoutTemplateIds: normalizeActiveLayoutTemplateIds(data.activeLayoutTemplateIds, data.layoutTemplates),
+    gmTrackers: normalizeGmTrackers(data.gmTrackers).filter((tracker) => !tracker.workspaceId || !deletedWorkspaceSet.has(tracker.workspaceId)).map((tracker) => ({ ...tracker, workspaceId: tracker.workspaceId ?? activeWorkspaceId })),
+    layoutTemplates,
+    activeLayoutTemplateIds: normalizeActiveLayoutTemplateIds(data.activeLayoutTemplateIds, layoutTemplates),
     infoHints: normalizeInfoHints((data.infoHints ?? []).filter((hint) => !deletedCatalogItemSet.has(hint.target)).map((hint) => ({ ...hint, workspaceId: hint.workspaceId ?? activeWorkspaceId }))),
     activeCharacterId,
     characters,
@@ -592,8 +615,11 @@ function normalizeLayoutElement(element: LayoutElementData, columns: number, row
     w,
     h,
     title: element.title ?? defaultLayoutElementTitle(element.type),
-    columns: element.type === "table" ? (element.columns?.length ? element.columns : ["Name", "Wert"]) : element.columns,
-    rows: element.type === "table" ? (element.rows?.length ? element.rows : [["", ""]]) : element.rows
+    columns: element.type === "table" || element.type === "statGrid" ? (element.columns?.length ? element.columns : ["Name", "Wert"]) : element.type === "abilityList" ? (element.columns?.length ? element.columns : ["Name", "Typ", "Kosten", "Effekt"]) : element.type === "abilitySkillBlock" ? (element.columns?.length ? element.columns : ["Name", "Berechnung", "Art", "Geuebt"]) : element.columns,
+    rows: element.type === "table" || element.type === "statGrid" ? (element.rows?.length ? element.rows : [["", ""]]) : element.type === "abilityList" ? (element.rows?.length ? element.rows : [["Faehigkeit", "Aktion", "-", "Beschreibung"]]) : element.type === "abilitySkillBlock" ? (element.rows?.length ? element.rows : [["Rettungswurf", "dnd.int.save", "save", "1"], ["Arkane Kunde", "dnd.skill.arcana", "skill", "1"]]) : element.rows,
+    sourceKeys: element.sourceKeys ?? [],
+    dependencyKeys: element.dependencyKeys ?? [],
+    displayMode: element.displayMode ?? defaultLayoutDisplayMode(element.type)
   };
 }
 
@@ -605,7 +631,20 @@ function defaultLayoutElementTitle(type?: string) {
   if (type === "resource") return "Ressource";
   if (type === "conditions") return "Zustaende";
   if (type === "image") return "Bild";
+  if (type === "formula") return "Formel";
+  if (type === "tags") return "Tags";
+  if (type === "track") return "Leiste";
+  if (type === "abilityList") return "Faehigkeiten";
+  if (type === "statGrid") return "Werteblock";
+  if (type === "abilitySkillBlock") return "Attribut + Skills";
   return "Text";
+}
+
+function defaultLayoutDisplayMode(type?: string) {
+  if (type === "track" || type === "resource") return "boxes";
+  if (type === "abilityList") return "full";
+  if (type === "tags") return "compact";
+  return undefined;
 }
 
 function normalizeActiveLayoutTemplateIds(activeIds: AppData["activeLayoutTemplateIds"], templates: LayoutTemplate[] | undefined): AppData["activeLayoutTemplateIds"] {
@@ -819,7 +858,7 @@ function normalizeWorkspaces(workspaces: Workspace[] | undefined, activeWorkspac
   const id = activeWorkspaceId && isUuid(activeWorkspaceId) ? activeWorkspaceId : crypto.randomUUID();
   return [{
     id,
-    name: "Meine Spielrunde",
+    name: "Mein Arbeitsbereich",
     ownerId: userId,
     members: userId ? [{ userId, role: "owner" as const, status: "active" as const }] : [],
     presetPackIds: ["fateweaver-standard"],
@@ -912,7 +951,7 @@ function inviteWorkspaceMemberInData(data: AppData, email: string, role: Workspa
   const normalizedEmail = email.trim().toLowerCase();
   if (!workspaceId || !normalizedEmail) return data;
   const now = new Date().toISOString();
-  const existing = (data.workspaceInvites ?? []).find((invite) => invite.workspaceId === workspaceId && invite.email.toLowerCase() === normalizedEmail && invite.status === "open");
+  const existing = (data.workspaceInvites ?? []).find((invite) => invite.workspaceId === workspaceId && invite.campaignId === campaignId && invite.email.toLowerCase() === normalizedEmail && invite.status === "open");
   if (existing) return data;
   const invite: WorkspaceInvite = {
     id: crypto.randomUUID(),
@@ -1080,6 +1119,12 @@ export function mergeAppData(local: AppData, remote: AppData): AppData {
   const deletedCharacterSet = new Set(deletedCharacterIds);
   const deletedCatalogItemIds = unique([...(local.deletedCatalogItemIds ?? []), ...(remote.deletedCatalogItemIds ?? [])]);
   const deletedCatalogItemSet = new Set(deletedCatalogItemIds);
+  const deletedLayoutTemplateIds = unique([...(local.deletedLayoutTemplateIds ?? []), ...(remote.deletedLayoutTemplateIds ?? [])]);
+  const deletedLayoutTemplateSet = new Set(deletedLayoutTemplateIds);
+  const layoutTemplates = mergeById(
+    (local.layoutTemplates ?? []).filter((template) => !deletedLayoutTemplateSet.has(template.id)),
+    (remote.layoutTemplates ?? []).filter((template) => !deletedLayoutTemplateSet.has(template.id))
+  ).filter((template) => !template.workspaceId || !deletedWorkspaceSet.has(template.workspaceId));
   return {
     ...remote,
     catalog: mergeCatalog(
@@ -1093,6 +1138,7 @@ export function mergeAppData(local: AppData, remote: AppData): AppData {
     activeWorkspaceId: deletedWorkspaceSet.has(local.activeWorkspaceId ?? "") ? remote.activeWorkspaceId : local.activeWorkspaceId ?? remote.activeWorkspaceId,
     deletedCharacterIds,
     deletedCatalogItemIds,
+    deletedLayoutTemplateIds,
     historyEvents: mergeById(
       (local.historyEvents ?? []).filter((entry) => !entry.workspaceId || !deletedWorkspaceSet.has(entry.workspaceId)).filter((entry) => !entry.characterId || !deletedCharacterSet.has(entry.characterId)),
       (remote.historyEvents ?? []).filter((entry) => !entry.workspaceId || !deletedWorkspaceSet.has(entry.workspaceId)).filter((entry) => !entry.characterId || !deletedCharacterSet.has(entry.characterId))
@@ -1113,11 +1159,12 @@ export function mergeAppData(local: AppData, remote: AppData): AppData {
       cleanCustomGmModules(local.customGmModules, deletedCharacterSet),
       cleanCustomGmModules(remote.customGmModules, deletedCharacterSet)
     ).filter((module) => !module.workspaceId || !deletedWorkspaceSet.has(module.workspaceId)),
-    layoutTemplates: mergeById(
-      local.layoutTemplates ?? [],
-      remote.layoutTemplates ?? []
-    ).filter((template) => !template.workspaceId || !deletedWorkspaceSet.has(template.workspaceId)),
-    activeLayoutTemplateIds: normalizeActiveLayoutTemplateIds({ ...(remote.activeLayoutTemplateIds ?? {}), ...(local.activeLayoutTemplateIds ?? {}) }, [...(local.layoutTemplates ?? []), ...(remote.layoutTemplates ?? [])]),
+    gmTrackers: mergeById(
+      normalizeGmTrackers(local.gmTrackers),
+      normalizeGmTrackers(remote.gmTrackers)
+    ).filter((tracker) => !tracker.workspaceId || !deletedWorkspaceSet.has(tracker.workspaceId)),
+    layoutTemplates,
+    activeLayoutTemplateIds: normalizeActiveLayoutTemplateIds({ ...(remote.activeLayoutTemplateIds ?? {}), ...(local.activeLayoutTemplateIds ?? {}) }, layoutTemplates),
     characters: mergeCharacters(
       (local.characters ?? []).filter((character) => !deletedCharacterSet.has(character.id)),
       (remote.characters ?? []).filter((character) => !deletedCharacterSet.has(character.id))
@@ -1247,6 +1294,17 @@ function cleanMessages(messages: AppMessage[] | undefined, deletedCharacterSet: 
 function cleanCampaigns(campaigns: Campaign[] | undefined, deletedCharacterSet: Set<string>) {
   return (campaigns ?? []).map((campaign) => ({
     ...campaign,
+    status: campaign.status ?? "active",
+    systemProfile: {
+      name: campaign.systemProfile?.name ?? "",
+      ruleset: campaign.systemProfile?.ruleset ?? "",
+      genre: campaign.systemProfile?.genre ?? "",
+      tone: campaign.systemProfile?.tone ?? "",
+      safetyTools: campaign.systemProfile?.safetyTools ?? "",
+      trackerPresetIds: unique(campaign.systemProfile?.trackerPresetIds ?? [])
+    },
+    publicNotes: campaign.publicNotes ?? "",
+    gmNotes: campaign.gmNotes ?? "",
     characterIds: unique(campaign.characterIds ?? []).filter((id) => !deletedCharacterSet.has(id)),
     members: (campaign.members ?? []).map((member) => ({
       ...member,
@@ -1262,6 +1320,16 @@ function cleanCampaignSessions(sessions: CampaignSession[] | undefined, campaign
     .filter((session) => !campaignIds.size || campaignIds.has(session.campaignId))
     .map((session) => ({
       ...session,
+      status: session.status ?? "planned",
+      arcId: session.arcId,
+      chapterId: session.chapterId,
+      objective: session.objective ?? "",
+      preparationNotes: session.preparationNotes ?? "",
+      liveNotes: session.liveNotes ?? "",
+      recap: session.recap ?? "",
+      openQuestions: unique(session.openQuestions ?? []),
+      nextHooks: unique(session.nextHooks ?? []),
+      sceneIds: unique(session.sceneIds ?? []),
       shopIds: unique(session.shopIds ?? []),
       characterIds: unique(session.characterIds ?? [])
     }));
@@ -1275,9 +1343,12 @@ function cleanCustomGmModules(modules: CustomGmModule[] | undefined, deletedChar
       itemType: module.itemType ?? "note",
       status: module.status ?? "draft",
       visibility: module.visibility ?? "gm",
+      scope: module.scope ?? "global",
       isTemplate: module.isTemplate ?? false,
       tags: unique(module.tags ?? []),
       statBlock: normalizeStatBlock(module.statBlock),
+      scene: normalizeSceneData(module.scene),
+      relations: normalizeModuleRelations(module.relations),
       handoutPages: (module.handoutPages ?? []).map((page, index) => ({
         id: page.id ?? crypto.randomUUID(),
         title: page.title ?? `Seite ${index + 1}`,
@@ -1288,10 +1359,62 @@ function cleanCustomGmModules(modules: CustomGmModule[] | undefined, deletedChar
     }));
 }
 
+function normalizeSceneData(scene: CustomGmModule["scene"]) {
+  if (!scene) return undefined;
+  return {
+    purpose: scene.purpose ?? "",
+    opener: scene.opener ?? "",
+    readAloud: scene.readAloud ?? "",
+    secrets: scene.secrets ?? "",
+    consequences: scene.consequences ?? "",
+    encounterIds: unique(scene.encounterIds ?? []),
+    handoutIds: unique(scene.handoutIds ?? []),
+    npcIds: unique(scene.npcIds ?? []),
+    enemyIds: unique(scene.enemyIds ?? []),
+    locationId: scene.locationId
+  };
+}
+
+function normalizeModuleRelations(relations: CustomGmModule["relations"]) {
+  return (relations ?? [])
+    .filter((relation) => relation.targetModuleId)
+    .map((relation) => ({
+      id: relation.id ?? crypto.randomUUID(),
+      kind: relation.kind ?? "belongsTo",
+      targetModuleId: relation.targetModuleId,
+      label: relation.label ?? "",
+      private: relation.private ?? false
+    }));
+}
+
+function normalizeGmTrackers(trackers: GmTracker[] | undefined) {
+  const now = new Date().toISOString();
+  return (trackers ?? []).map((tracker) => ({
+    ...tracker,
+    name: tracker.name?.trim() || "Tracker",
+    kind: tracker.kind ?? "resource",
+    visibility: tracker.visibility ?? "gm",
+    status: tracker.status ?? "draft",
+    current: Math.max(0, Number(tracker.current ?? 0) || 0),
+    max: tracker.max === undefined ? undefined : Math.max(0, Number(tracker.max) || 0),
+    segments: tracker.segments === undefined ? undefined : Math.max(0, Number(tracker.segments) || 0),
+    order: (tracker.order ?? []).map((entry) => ({
+      id: entry.id ?? crypto.randomUUID(),
+      label: entry.label ?? "Eintrag",
+      actorType: entry.actorType ?? "custom",
+      actorId: entry.actorId,
+      value: entry.value === undefined ? undefined : Number(entry.value) || 0
+    })),
+    tags: unique(tracker.tags ?? []),
+    createdAt: tracker.createdAt ?? now,
+    updatedAt: tracker.updatedAt ?? tracker.createdAt ?? now
+  }));
+}
+
 function upsertCampaignInData(data: AppData, campaign: Campaign, actorUserId?: string): AppData {
   const now = new Date().toISOString();
   const exists = (data.campaigns ?? []).some((entry) => entry.id === campaign.id);
-  const next = { ...campaign, characterIds: unique(campaign.characterIds ?? []), updatedAt: now, createdAt: campaign.createdAt ?? now };
+  const next = cleanCampaigns([{ ...campaign, updatedAt: now, createdAt: campaign.createdAt ?? now }], new Set())[0];
   return {
     ...data,
     campaigns: exists ? (data.campaigns ?? []).map((entry) => entry.id === next.id ? next : entry) : [...(data.campaigns ?? []), next],
@@ -1312,7 +1435,7 @@ function upsertCampaignInData(data: AppData, campaign: Campaign, actorUserId?: s
 function upsertCampaignSessionInData(data: AppData, session: CampaignSession, actorUserId?: string): AppData {
   const now = new Date().toISOString();
   const exists = (data.campaignSessions ?? []).some((entry) => entry.id === session.id);
-  const next = { ...session, shopIds: unique(session.shopIds ?? []), characterIds: unique(session.characterIds ?? []), updatedAt: now, createdAt: session.createdAt ?? now };
+  const next = cleanCampaignSessions([{ ...session, updatedAt: now, createdAt: session.createdAt ?? now }], data.campaigns)[0];
   return {
     ...data,
     campaignSessions: exists ? (data.campaignSessions ?? []).map((entry) => entry.id === next.id ? next : entry) : [...(data.campaignSessions ?? []), next],
@@ -1334,7 +1457,7 @@ function upsertCampaignSessionInData(data: AppData, session: CampaignSession, ac
 function upsertCustomGmModuleInData(data: AppData, module: CustomGmModule, actorUserId?: string): AppData {
   const now = new Date().toISOString();
   const exists = (data.customGmModules ?? []).some((entry) => entry.id === module.id);
-  const next = { ...module, itemType: module.itemType ?? "note", status: module.status ?? "draft", visibility: module.visibility ?? "gm", isTemplate: module.isTemplate ?? false, tags: unique(module.tags ?? []), statBlock: normalizeStatBlock(module.statBlock), fields: module.fields ?? [], updatedAt: now, createdAt: module.createdAt ?? now };
+  const next = cleanCustomGmModules([{ ...module, updatedAt: now, createdAt: module.createdAt ?? now }], new Set())[0];
   return {
     ...data,
     customGmModules: exists ? (data.customGmModules ?? []).map((entry) => entry.id === next.id ? next : entry) : [...(data.customGmModules ?? []), next],
@@ -1352,6 +1475,16 @@ function upsertCustomGmModuleInData(data: AppData, module: CustomGmModule, actor
   };
 }
 
+function upsertGmTrackerInData(data: AppData, tracker: GmTracker): AppData {
+  const now = new Date().toISOString();
+  const exists = (data.gmTrackers ?? []).some((entry) => entry.id === tracker.id);
+  const next = normalizeGmTrackers([{ ...tracker, updatedAt: now, createdAt: tracker.createdAt ?? now }])[0];
+  return {
+    ...data,
+    gmTrackers: exists ? (data.gmTrackers ?? []).map((entry) => entry.id === next.id ? next : entry) : [...(data.gmTrackers ?? []), next]
+  };
+}
+
 function upsertLayoutTemplateInData(data: AppData, template: LayoutTemplate): AppData {
   const now = new Date().toISOString();
   const existing = (data.layoutTemplates ?? []).find((entry) => entry.id === template.id);
@@ -1363,6 +1496,7 @@ function upsertLayoutTemplateInData(data: AppData, template: LayoutTemplate): Ap
   const exists = (data.layoutTemplates ?? []).some((entry) => entry.id === template.id);
   return {
     ...data,
+    deletedLayoutTemplateIds: (data.deletedLayoutTemplateIds ?? []).filter((id) => id !== next.id),
     layoutTemplates: exists ? (data.layoutTemplates ?? []).map((entry) => entry.id === next.id ? next : entry) : [...(data.layoutTemplates ?? []), next]
   };
 }
@@ -1372,7 +1506,9 @@ function normalizeStatBlock(statBlock: CustomGmModule["statBlock"]) {
   return {
     ...statBlock,
     template: statBlock.template ?? "standard",
+    layoutTemplateId: statBlock.layoutTemplateId,
     layout: statBlock.layout ?? "compact",
+    customValues: statBlock.customValues ?? {},
     traits: unique(statBlock.traits ?? []),
     attacks: (statBlock.attacks ?? []).map((attack) => ({
       id: attack.id ?? crypto.randomUUID(),
@@ -1386,6 +1522,7 @@ function normalizeStatBlock(statBlock: CustomGmModule["statBlock"]) {
       id: ability.id ?? crypto.randomUUID(),
       name: ability.name ?? "Faehigkeit",
       kind: ability.kind ?? "active",
+      icon: ability.icon ?? "none",
       text: ability.text ?? ""
     })),
     rows: (statBlock.rows ?? []).map((row) => ({

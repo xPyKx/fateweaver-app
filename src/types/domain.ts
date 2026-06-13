@@ -269,6 +269,10 @@ export type CalculationSourceKind =
   | "bonusSourceSum"
   | "armorField"
   | "levelHalfCeil"
+  | "abilityScore"
+  | "abilityModifier"
+  | "proficiencyBonus"
+  | "taggedItemField"
   | "calculation";
 
 export type CalculationClampMode = "none" | "min" | "max" | "range";
@@ -283,6 +287,9 @@ export interface GameCalculationTerm {
   bonusKey?: "hp" | "stress" | "evasion" | "proficiency";
   effectTarget?: PropertyEffectTarget;
   armorField?: "armorValue" | "baseThresholdLight" | "baseThresholdHeavy" | "baseThresholdHeavyOrLight";
+  dataKey?: string;
+  itemTag?: string;
+  itemField?: string;
   calculationKey?: string;
   label?: string;
 }
@@ -570,11 +577,28 @@ export interface GmSessionData {
   attunementLimit?: number;
 }
 
+export type CampaignStatus = "planned" | "active" | "paused" | "completed" | "archived";
+
+export interface CampaignSystemProfile {
+  name?: string;
+  ruleset?: string;
+  genre?: string;
+  tone?: string;
+  safetyTools?: string;
+  trackerPresetIds?: string[];
+}
+
 export interface Campaign {
   id: string;
   workspaceId?: string;
   name: string;
   description?: string;
+  imageUrl?: string;
+  status?: CampaignStatus;
+  systemProfile?: CampaignSystemProfile;
+  publicNotes?: string;
+  gmNotes?: string;
+  nextSessionId?: string;
   characterIds: string[];
   members?: Array<{
     userId: string;
@@ -587,24 +611,71 @@ export interface Campaign {
   updatedAt: string;
 }
 
+export type CampaignSessionStatus = "planned" | "prepared" | "active" | "completed" | "cancelled" | "archived";
+
 export interface CampaignSession {
   id: string;
   workspaceId?: string;
   campaignId: string;
+  arcId?: string;
+  chapterId?: string;
   name: string;
   scheduledAt?: string;
+  status?: CampaignSessionStatus;
+  objective?: string;
+  preparationNotes?: string;
   notes?: string;
+  liveNotes?: string;
+  recap?: string;
+  openQuestions?: string[];
+  nextHooks?: string[];
+  activeSceneId?: string;
+  sceneIds?: string[];
   shopIds: string[];
   characterIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
 
-export type CustomModuleScope = "global" | "campaign" | "session" | "character";
+export type CustomModuleScope = "global" | "campaign" | "session" | "scene" | "character";
 export type CustomModuleFieldType = "text" | "textarea" | "number" | "checkbox";
-export type GmBuilderItemType = "npc" | "enemy" | "location" | "faction" | "quest" | "note" | "handout" | "encounter" | "threat" | "riddle" | "rule";
+export type GmBuilderItemType = "npc" | "enemy" | "location" | "faction" | "quest" | "arc" | "chapter" | "scene" | "note" | "handout" | "encounter" | "threat" | "riddle" | "rule" | "reward";
 export type GmBuilderItemStatus = "draft" | "active" | "done" | "archived";
 export type GmBuilderVisibility = "gm" | "players";
+export type GmModuleRelationKind =
+  | "belongsTo"
+  | "locatedIn"
+  | "appearsIn"
+  | "controls"
+  | "alliedWith"
+  | "opposedTo"
+  | "questGiver"
+  | "questTarget"
+  | "secretAbout"
+  | "leadsTo"
+  | "consequenceOf"
+  | (string & {});
+
+export interface GmModuleRelation {
+  id: string;
+  kind: GmModuleRelationKind;
+  targetModuleId: string;
+  label?: string;
+  private?: boolean;
+}
+
+export interface CustomModuleSceneData {
+  purpose?: string;
+  opener?: string;
+  readAloud?: string;
+  secrets?: string;
+  consequences?: string;
+  encounterIds?: string[];
+  handoutIds?: string[];
+  npcIds?: string[];
+  enemyIds?: string[];
+  locationId?: string;
+}
 
 export interface CustomModuleField {
   id: string;
@@ -622,6 +693,7 @@ export interface CustomModuleHandoutPage {
 
 export interface CustomModuleStatBlock {
   template?: "minion" | "standard" | "elite" | "boss" | "social" | "hazard";
+  layoutTemplateId?: string;
   role?: string;
   difficulty?: string;
   layout?: "compact" | "full" | "boss";
@@ -642,10 +714,12 @@ export interface CustomModuleStatBlock {
     id: string;
     name: string;
     kind?: "passive" | "active" | "reaction" | "boss";
+    icon?: "none" | "skull" | "bolt";
     text?: string;
   }>;
   tactics?: string;
   loot?: string;
+  customValues?: Record<string, string>;
   rows?: Array<{
     id: string;
     label: string;
@@ -680,7 +754,7 @@ export interface StatBlockLayoutData {
 }
 
 export type LayoutTemplateTarget = "character" | "enemy" | "both";
-export type LayoutElementType = "text" | "value" | "input" | "section" | "table" | "resource" | "conditions" | "image";
+export type LayoutElementType = "text" | "staticValue" | "value" | "input" | "section" | "table" | "resource" | "conditions" | "image" | "formula" | "tags" | "track" | "abilityList" | "statGrid" | "abilitySkillBlock";
 
 export interface LayoutElementData {
   id: string;
@@ -691,14 +765,41 @@ export interface LayoutElementData {
   h: number;
   title?: string;
   text?: string;
+  fixedValue?: string;
   valueKey?: string;
+  calculationKey?: string;
+  scoreKey?: string;
+  modifierKey?: string;
+  proficiencyKey?: string;
+  formula?: string;
+  formulaScope?: "character" | "enemy" | "session" | "custom";
+  sourceKeys?: string[];
+  dependencyKeys?: string[];
+  calculationDraft?: {
+    key?: string;
+    terms?: Array<{
+      id: string;
+      sign?: 1 | -1;
+      source: "number" | "attribute" | "abilityScore" | "abilityModifier" | "proficiencyBonus" | "calculation";
+      value?: number;
+      sourceKey?: string;
+    }>;
+    round?: "none" | "floor" | "ceil" | "round";
+  };
+  skillCalculationDrafts?: Record<string, LayoutElementData["calculationDraft"]>;
+  automationTarget?: string;
+  repeatSource?: string;
+  displayMode?: "boxes" | "bar" | "number" | "pips" | "compact" | "full" | "thresholds";
   editable?: boolean;
   columns?: string[];
+  columnTypes?: Array<"text" | "description" | "value" | "calculation">;
   rows?: string[][];
   imageUrl?: string;
   style?: {
     tone?: "default" | "accent" | "danger" | "quiet";
     align?: "left" | "center" | "right";
+    showTitle?: boolean;
+    fontSize?: "auto" | "small" | "medium" | "large";
   };
 }
 
@@ -726,6 +827,7 @@ export interface CustomGmModule {
   scope: CustomModuleScope;
   campaignId?: string;
   sessionId?: string;
+  sceneId?: string;
   characterId?: string;
   releaseLocationId?: string;
   tags?: string[];
@@ -734,9 +836,38 @@ export interface CustomGmModule {
   playerText?: string;
   handoutPages?: CustomModuleHandoutPage[];
   statBlock?: CustomModuleStatBlock;
+  scene?: CustomModuleSceneData;
+  relations?: GmModuleRelation[];
   isTemplate?: boolean;
   templateSourceId?: string;
   fields: CustomModuleField[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type GmTrackerKind = "resource" | "clock" | "front" | "initiative" | "tag";
+export type GmTrackerVisibility = "gm" | "players";
+export type GmTrackerStatus = "draft" | "active" | "resolved" | "archived";
+
+export interface GmTracker {
+  id: string;
+  workspaceId?: string;
+  campaignId?: string;
+  sessionId?: string;
+  sceneId?: string;
+  name: string;
+  kind: GmTrackerKind;
+  visibility: GmTrackerVisibility;
+  status: GmTrackerStatus;
+  current?: number;
+  max?: number;
+  segments?: number;
+  escalation?: string;
+  trigger?: string;
+  consequence?: string;
+  notes?: string;
+  order?: Array<{ id: string; label: string; actorType?: "character" | "module" | "custom"; actorId?: string; value?: number }>;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -842,7 +973,9 @@ export interface AppData {
   campaigns?: Campaign[];
   campaignSessions?: CampaignSession[];
   customGmModules?: CustomGmModule[];
+  gmTrackers?: GmTracker[];
   layoutTemplates?: LayoutTemplate[];
+  deletedLayoutTemplateIds?: string[];
   activeLayoutTemplateIds?: Partial<Record<LayoutTemplateTarget, string>>;
   activeCharacterId?: string;
   catalog: CatalogItem[];

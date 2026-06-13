@@ -4,6 +4,7 @@ import { missingSeedCatalogItems } from "../../data/seeds";
 import { useGameStore } from "../../lib/store/GameStore";
 import type { BackgroundQuestionKind, CatalogItem, CatalogType, FateAbilityKind, FateAbilityCategoryData, GameOptionKind, InfoHint, MagicItemKind } from "../../types/domain";
 import { CharacterSheetView } from "../layout-entwurf/CharacterSheetView";
+import { LayoutTemplateBuilder } from "../gm-session/LayoutTemplateBuilder";
 import { Select } from "./GMControls";
 import { Editor, EntryRow, FateAbilityColumn, FateAbilityKindColumn, HintDialog } from "./GMSettingsEditors";
 import {
@@ -20,10 +21,10 @@ import {
 } from "./gmCatalogMeta";
 
 const HIDDEN_GAME_OPTION_KINDS = new Set<string>();
-type GMSection = CatalogType | "characterSheet";
+type GMSection = CatalogType | "characterSheet" | "layouts";
 
 export function GMSettings() {
-  const { data, activeCharacter, upsertCatalogItem, importCatalogItems, deleteCatalogItem, upsertHint, deleteHint } = useGameStore();
+  const { data, activeWorkspace, activeCharacter, upsertCatalogItem, importCatalogItems, deleteCatalogItem, upsertHint, deleteHint, upsertLayoutTemplate, deleteLayoutTemplate, setActiveLayoutTemplate } = useGameStore();
   const [type, setType] = useState<GMSection>("weapon");
   const [selectedId, setSelectedId] = useState<string>();
   const [activeFateId, setActiveFateId] = useState<string>();
@@ -35,11 +36,13 @@ export function GMSettings() {
   const [hintTarget, setHintTarget] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const isCharacterSheetSection = type === "characterSheet";
-  const catalogType = isCharacterSheetSection ? "weapon" : type;
+  const isLayoutSection = type === "layouts";
+  const workspaceId = activeWorkspace?.id ?? data.activeWorkspaceId;
+  const catalogType: CatalogType = isCharacterSheetSection || isLayoutSection ? "weapon" : type;
   const selected = useMemo(() => data.catalog.find((item) => item.id === selectedId), [data.catalog, selectedId]);
   const activeFate = useMemo(() => data.catalog.find((item) => item.id === activeFateId && item.type === "fate"), [data.catalog, activeFateId]);
   const items = data.catalog
-    .filter((item) => !isCharacterSheetSection && (item.type === catalogType || (catalogType === "gameOption" && item.type === "range")))
+    .filter((item) => !isCharacterSheetSection && !isLayoutSection && (item.type === catalogType || (catalogType === "gameOption" && item.type === "range")))
     .filter((item) => catalogType !== "magicItem" || (item.magicItemKind ?? "item") === magicKindFilter)
     .filter((item) => catalogType !== "gameOption" || optionKind(item) === gameOptionKindFilter)
     .filter((item) => catalogType !== "backgroundQuestion" || (item.backgroundQuestion?.kind ?? "appearance") === backgroundKindFilter)
@@ -53,9 +56,11 @@ export function GMSettings() {
   const fateAbilities = data.catalog.filter((item) => item.type === "fateAbility" && item.fateAbility?.fateId === activeFateId).sort(compareFateAbilities);
   const activeFateCategories = activeFate?.fate?.abilityCategories ?? [];
   const filteredFateAbilities = fateAbilities.filter((item) => item.fateAbility?.kind === activeFateAbilityKind || item.fateAbility?.categoryId === activeFateAbilityKind);
-  const hasSubcategoryColumn = catalogType === "magicItem" || catalogType === "gameOption" || catalogType === "backgroundQuestion";
+  const hasSubcategoryColumn = !isLayoutSection && (catalogType === "magicItem" || catalogType === "gameOption" || catalogType === "backgroundQuestion");
   const gridColumns = isCharacterSheetSection
     ? "xl:grid-cols-[minmax(180px,0.36fr)_minmax(560px,1fr)]"
+    : isLayoutSection
+    ? "xl:grid-cols-[minmax(180px,0.22fr)_minmax(720px,1fr)]"
     : type === "fate" && activeFate
     ? "xl:grid-cols-[minmax(170px,0.75fr)_minmax(220px,0.95fr)_minmax(190px,0.85fr)_minmax(230px,1fr)]"
     : hasSubcategoryColumn
@@ -63,6 +68,7 @@ export function GMSettings() {
       : "xl:grid-cols-[minmax(180px,0.85fr)_minmax(260px,1fr)]";
 
   function createItem() {
+    if (isLayoutSection) return;
     if (isCharacterSheetSection) {
       const hint = newSheetHint(data.infoHints);
       upsertHint(hint);
@@ -170,16 +176,16 @@ export function GMSettings() {
       <header className="flex flex-col gap-4 border-b border-[#a8752a]/30 pb-5 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="mb-2 text-xs font-black uppercase tracking-[0.28em] text-[#f2ca75]">GM-Verwaltung</div>
-          <h1 className="text-4xl font-light text-white">Katalogdaten</h1>
-          <p className="mt-2 text-[#cfc2aa]">Kategorien links, Eintraege in der Mitte, Bearbeitung rechts.</p>
+          <h1 className="text-4xl font-light text-white">{isLayoutSection ? "Layouts" : "Katalogdaten"}</h1>
+          <p className="mt-2 text-[#cfc2aa]">{isLayoutSection ? "Charakterboegen und Gegnerlayouts bauen, aktivieren und verwalten." : "Kategorien links, Eintraege in der Mitte, Bearbeitung rechts."}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={importMissingDefaults} className="inline-flex h-11 items-center justify-center gap-2 border border-[#a8752a]/45 bg-black/30 px-4 text-sm font-bold uppercase tracking-wide text-[#cfc2aa] transition hover:border-[#f2ca75] hover:text-[#ffd88c]">
+          {!isLayoutSection && <button onClick={importMissingDefaults} className="inline-flex h-11 items-center justify-center gap-2 border border-[#a8752a]/45 bg-black/30 px-4 text-sm font-bold uppercase tracking-wide text-[#cfc2aa] transition hover:border-[#f2ca75] hover:text-[#ffd88c]">
             Standarddaten ergaenzen
-          </button>
-          <button onClick={createItem} className="inline-flex h-11 items-center justify-center gap-2 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 text-sm font-bold uppercase tracking-wide text-[#ffd88c] transition hover:border-[#f2ca75]">
+          </button>}
+          {!isLayoutSection && <button onClick={createItem} className="inline-flex h-11 items-center justify-center gap-2 border border-[#d6a14d]/60 bg-[#d6a14d]/12 px-4 text-sm font-bold uppercase tracking-wide text-[#ffd88c] transition hover:border-[#f2ca75]">
             <Plus size={18} /> Neuer Eintrag
-          </button>
+          </button>}
         </div>
       </header>
 
@@ -192,7 +198,7 @@ export function GMSettings() {
       <section className={`grid min-w-0 gap-4 ${gridColumns}`}>
         <aside className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
           <div className="grid gap-2">
-            {[...catalogTypes, "characterSheet" as const].map((entry) => (
+            {[...catalogTypes, "characterSheet" as const, "layouts" as const].map((entry) => (
               <button
                 key={entry}
                 className={`min-w-0 whitespace-normal break-words border px-3 py-3 text-left text-xs font-black uppercase tracking-[0.1em] transition ${type === entry ? "border-[#d6a14d]/70 bg-[#d6a14d]/14 text-[#ffd88c]" : "border-[#a8752a]/25 bg-black/25 text-[#cfc2aa] hover:border-[#d6a14d]/55 hover:text-[#ffd88c]"}`}
@@ -270,7 +276,7 @@ export function GMSettings() {
           </aside>
         )}
 
-        {!isCharacterSheetSection && (
+        {!isCharacterSheetSection && !isLayoutSection && (
           <aside className="min-w-0 border border-[#a8752a]/35 bg-black/24 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-xl font-light text-white">{sectionLabel(type)}</h2>
@@ -308,6 +314,18 @@ export function GMSettings() {
             onDelete={deleteHint}
             notice={showNotice}
           />
+        )}
+
+        {isLayoutSection && (
+          <div className="min-w-0">
+            <LayoutTemplateBuilder
+              data={data}
+              workspaceId={workspaceId}
+              onSave={upsertLayoutTemplate}
+              onDelete={deleteLayoutTemplate}
+              onSetActive={setActiveLayoutTemplate}
+            />
+          </div>
         )}
 
         {type === "fate" && activeFate && (
@@ -387,6 +405,7 @@ function specializationTierOrder(item: CatalogItem) {
 
 function sectionLabel(section: GMSection) {
   if (section === "characterSheet") return "Charakterbogen";
+  if (section === "layouts") return "Layouts";
   return labelForType(section);
 }
 

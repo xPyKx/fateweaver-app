@@ -51,8 +51,17 @@ function termValue(term: GameCalculationTerm, context: CalculationContext, stack
   if (term.source === "bonusSourceSum") return (context.dodgeBonuses ?? []).reduce((sum, bonus) => sum + Number(bonus.value ?? 0), 0);
   if (term.source === "armorField") return armorField(context.armorData, term.armorField);
   if (term.source === "levelHalfCeil") return Math.ceil(Number(context.character.level ?? 1) / 2);
+  if (term.source === "abilityScore") return keyedValue(context, term.dataKey);
+  if (term.source === "abilityModifier") return Math.floor((keyedValue(context, term.dataKey) - 10) / 2);
+  if (term.source === "proficiencyBonus") return keyedValue(context, term.dataKey) || effectiveTrainingBonus(context.character);
+  if (term.source === "taggedItemField") return keyedValue(context, [term.itemTag, term.itemField].filter(Boolean).join("."));
   if (term.source === "calculation") return term.calculationKey ? evaluateByKey(term.calculationKey, context, stack) : 0;
   return 0;
+}
+
+function keyedValue(context: CalculationContext, key?: string) {
+  if (!key) return 0;
+  return Number(context.fallback?.[key] ?? 0);
 }
 
 function characterBonus(character: Character, key?: string) {
